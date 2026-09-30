@@ -1,7 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import sharp from 'sharp';
+
+const aiSdk = vi.hoisted(() => ({
+  googleContent: vi.fn(),
+  googleImage: vi.fn(),
+}));
+
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: class {
+    models = { generateContent: aiSdk.googleContent };
+    interactions = { create: aiSdk.googleImage };
+    constructor(config: unknown) { void config; }
+  },
+}));
 import {
-  AI_MODELS_REGISTRY,
-  getModelConfig,
   getModelsForTask,
 } from '@/config/ai-models';
 import {
@@ -13,16 +25,29 @@ import { executeSummarize } from '@/server/ai/summarize';
 import { executeGenerateImage } from '@/server/ai/generate-image';
 import { buildImageIllustrationPrompt } from '@/server/ai/prompts/image';
 
-describe('AI Config and Separation', () => {
-  beforeEach(() => {
-    process.env.AI_TRANSLATION_MODEL = 'google:gemini-3.5-flash-lite';
-    process.env.AI_SUMMARY_MODEL = 'google:gemini-3.8-flash';
-    process.env.AI_IMAGE_MODEL = 'google:gemini-3.1-flash-image';
-    delete process.env.GOOGLE_API_KEY;
-    delete process.env.SUMMARY_GOOGLE_API_KEY;
-    delete process.env.OPENAI_API_KEY;
+beforeEach(async () => {
+  process.env.AI_TRANSLATION_MODEL = 'google:gemini-3.5-flash-lite';
+  process.env.AI_SUMMARY_MODEL = 'google:gemini-3.8-flash';
+  process.env.AI_IMAGE_MODEL = 'google:gemini-3.1-flash-image';
+  process.env.GOOGLE_API_KEY = 'test-google-key';
+  delete process.env.SUMMARY_GOOGLE_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  const png = await sharp({
+    create: { width: 40, height: 30, channels: 4, background: '#4a82c3' },
+  }).png().toBuffer();
+  aiSdk.googleContent.mockResolvedValue({
+    text: JSON.stringify({
+      title: 'Tóm tắt bài học', overview: 'Nội dung đã tóm tắt.',
+      sections: [{ heading: 'Nội dung', bullets: ['Điểm chính'], captionIds: [1] }],
+    }),
   });
+  aiSdk.googleImage.mockResolvedValue({
+    status: 'completed',
+    output_image: { type: 'image', mime_type: 'image/png', data: png.toString('base64') },
+  });
+});
 
+describe('AI Config and Separation', () => {
   it('strictly rejects identical models for translation and summary with AI_MODEL_ROLE_CONFLICT', () => {
     process.env.AI_TRANSLATION_MODEL = 'google:gemini-3.8-flash';
     process.env.AI_SUMMARY_MODEL = 'google:gemini-3.8-flash';

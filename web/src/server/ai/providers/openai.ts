@@ -5,13 +5,6 @@ import type { ProviderCallParams } from './google';
 
 export async function* streamOpenAiText(params: ProviderCallParams): AsyncIterable<string> {
   if (!params.apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      const mockWords = ['[OpenAI mock]: ', params.userPrompt.slice(0, 30)];
-      for (const word of mockWords) {
-        yield word;
-      }
-      return;
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình OPENAI_API_KEY cho OpenAI model.');
   }
 
@@ -32,30 +25,23 @@ export async function* streamOpenAiText(params: ProviderCallParams): AsyncIterab
     { signal: params.signal }
   );
 
+  let receivedContent = false;
   for await (const chunk of stream) {
     if (params.signal?.aborted) break;
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) {
+      receivedContent = true;
       yield delta;
     }
+  }
+
+  if (!params.signal?.aborted && !receivedContent) {
+    throw new Error('OpenAI không trả về nội dung văn bản.');
   }
 }
 
 export async function generateOpenAiText(params: ProviderCallParams): Promise<string> {
   if (!params.apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      return JSON.stringify({
-        title: 'Tóm tắt bài học (OpenAI Mock)',
-        overview: 'Đây là bài tóm tắt tổng quan được tạo ở chế độ kiểm thử tự động.',
-        sections: [
-          {
-            heading: 'Nội dung chính',
-            bullets: ['Điểm quan trọng thứ nhất', 'Điểm quan trọng thứ hai'],
-            captionIds: [1],
-          },
-        ],
-      });
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình OPENAI_API_KEY cho OpenAI model.');
   }
 
@@ -76,7 +62,11 @@ export async function generateOpenAiText(params: ProviderCallParams): Promise<st
     { signal: params.signal }
   );
 
-  return response.choices[0]?.message?.content || '';
+  const content = response.choices[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('OpenAI không trả về nội dung văn bản.');
+  }
+  return content;
 }
 
 export async function generateOpenAiImage(
@@ -85,12 +75,6 @@ export async function generateOpenAiImage(
   apiKey?: string
 ): Promise<Buffer> {
   if (!apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      return Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        'base64'
-      );
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình API key cho OpenAI Image.');
   }
 

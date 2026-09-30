@@ -100,6 +100,8 @@ export interface AppSettings {
   mode: ClassroomMode;
   context: string;
   glossary: string;
+  pauseMs: number;
+  readingPauseMs: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -112,6 +114,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'lecture',
   context: '',
   glossary: '',
+  pauseMs: 900,
+  readingPauseMs: 900,
 };
 
 export interface WebExportBundle {

@@ -38,7 +38,7 @@ declare global {
 }
 
 export interface SpeechRecognitionCallbacks {
-  onTranscript: (text: string, isFinal: boolean, epoch: number) => void;
+  onTranscript: (text: string, isFinal: boolean, epoch: number, providerItemId: string, revision: number) => void;
   onError: (error: string, epoch: number) => void;
   onStateChange: (state: 'idle' | 'listening' | 'reconnecting' | 'stopped') => void;
 }
@@ -50,6 +50,9 @@ export class WebSpeechRecognizer {
   private shouldRestart = false;
   private lang = 'ja-JP';
   private callbacks: SpeechRecognitionCallbacks;
+  private revisionsByResult = new Map<number, number>();
+  private stopWaiter: (() => void) | null = null;
+  private recognitionCounter = 0;
 
   constructor(callbacks: SpeechRecognitionCallbacks, lang = 'ja-JP') {
     this.callbacks = callbacks;
@@ -64,6 +67,7 @@ export class WebSpeechRecognizer {
   public start(epoch: number, lang?: string): void {
     if (lang) this.lang = lang;
     this.currentEpoch = epoch;
+    this.revisionsByResult.clear();
     this.shouldRestart = true;
     this.initAndStart(epoch);
   }
@@ -82,6 +86,8 @@ export class WebSpeechRecognizer {
       if (!RecognitionConstructor) return;
 
       const recognition = new RecognitionConstructor();
+      const recognitionId = ++this.recognitionCounter;
+      this.revisionsByResult.clear();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = this.lang;
@@ -100,17 +106,29 @@ export class WebSpeechRecognizer {
         if (epoch !== this.currentEpoch) return;
 
         let interimText = '';
+        let interimResultIndex: number | null = null;
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           const transcript = res[0]?.transcript || '';
           if (res.isFinal) {
-            this.callbacks.onTranscript(transcript.trim(), true, epoch);
+            const revision = (this.revisionsByResult.get(i) || 0) + 1;
+            this.revisionsByResult.set(i, revision);
+            this.callbacks.onTranscript(transcript.trim(), true, epoch, `speech-${epoch}-${recognitionId}-${i}`, revision);
           } else {
             interimText += transcript;
+            interimResultIndex = i;
           }
         }
-        if (interimText.trim()) {
-          this.callbacks.onTranscript(interimText.trim(), false, epoch);
+        if (interimText.trim() && interimResultIndex !== null) {
+          const revision = (this.revisionsByResult.get(interimResultIndex) || 0) + 1;
+          this.revisionsByResult.set(interimResultIndex, revision);
+          this.callbacks.onTranscript(
+            interimText.trim(),
+            false,
+            epoch,
+            `speech-${epoch}-${recognitionId}-${interimResultIndex}`,
+            revision
+          );
         }
       };
 
@@ -133,6 +151,11 @@ export class WebSpeechRecognizer {
         this.isRunning = false;
         if (epoch !== this.currentEpoch || !this.shouldRestart) {
           this.callbacks.onStateChange('stopped');
+          if (epoch === this.currentEpoch) {
+            this.currentEpoch++;
+            this.stopWaiter?.();
+            this.stopWaiter = null;
+          }
           return;
         }
 
@@ -159,22 +182,37 @@ export class WebSpeechRecognizer {
     }
   }
 
-  public stop(): void {
+  public async stop(timeoutMs = 900): Promise<void> {
     this.shouldRestart = false;
-    this.currentEpoch++; // advance epoch to invalidate any pending callbacks
-    if (this.recognition) {
-      try {
-        this.recognition.stop();
-      } catch {
-        try {
-          this.recognition.abort();
-        } catch {
-          // ignore
-        }
-      }
+    const recognition = this.recognition;
+    if (!recognition) {
+      this.currentEpoch++;
       this.recognition = null;
+      this.isRunning = false;
+      this.callbacks.onStateChange('stopped');
+      return;
     }
-    this.isRunning = false;
     this.callbacks.onStateChange('stopped');
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        this.currentEpoch++;
+        this.recognition = null;
+        this.isRunning = false;
+        this.stopWaiter = null;
+        resolve();
+      };
+      const timeout = setTimeout(finish, timeoutMs);
+      this.stopWaiter = finish;
+      try {
+        recognition.stop();
+      } catch {
+        try { recognition.abort(); } catch { /* ignore */ }
+        finish();
+      }
+    });
   }
 }

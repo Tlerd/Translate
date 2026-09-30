@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { type EntityTable, type Table } from 'dexie';
 import type {
   RecordingItem,
   AudioChunk,
@@ -15,7 +15,10 @@ export interface SettingRecord {
 export class AppDatabase extends Dexie {
   recordings!: EntityTable<RecordingItem, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'id'>;
-  captions!: EntityTable<CaptionItem, 'id'>;
+  // Caption numbers restart in each recording, so both fields form its identity.
+  get captions(): Table<CaptionItem, [string, number]> {
+    return this.table('captionItems');
+  }
   summaries!: EntityTable<SummaryItem, 'id'>;
   images!: EntityTable<ImageItem, 'id'>;
   settings!: EntityTable<SettingRecord, 'key'>;
@@ -31,6 +34,16 @@ export class AppDatabase extends Dexie {
       images: 'id, recordingId, summaryId',
       settings: 'key',
     });
+
+    // Dexie cannot change an existing store's primary key in place. Copy it
+    // while the old store is still available, then remove it in the next version.
+    this.version(2).stores({
+      captionItems: '[recordingId+id], id, recordingId, blockId, startMs',
+    }).upgrade(async (transaction) => {
+      const previous = await transaction.table<CaptionItem>('captions').toArray();
+      await transaction.table<CaptionItem>('captionItems').bulkPut(previous);
+    });
+    this.version(3).stores({ captions: null });
   }
 }
 

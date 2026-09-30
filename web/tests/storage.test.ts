@@ -15,8 +15,6 @@ import {
   getCaptions,
   saveSummary,
   getSummary,
-  saveImage,
-  getImage,
   loadSettings,
   saveSettings,
 } from '@/storage/recordings';
@@ -214,7 +212,7 @@ describe('Storage Layer', () => {
   });
 
   it('exports and imports web session bundle', async () => {
-    const rec = await createRecording({
+    await createRecording({
       id: 'rec_export_test',
       title: 'Buổi export web',
       mode: 'lecture',
@@ -301,14 +299,28 @@ describe('Storage Layer', () => {
   it('loads and saves settings', async () => {
     const initial = await loadSettings();
     expect(initial.translationModel).toBe('google:gemini-3.5-flash-lite');
+    expect(initial.pauseMs).toBe(900);
+    expect(initial.readingPauseMs).toBe(900);
 
     await saveSettings({
       translationModel: 'openai:gpt-4o-mini',
       glossary: 'AI=Trí tuệ nhân tạo',
+      pauseMs: 1400,
+      readingPauseMs: 7600,
     });
 
     const updated = await loadSettings();
     expect(updated.translationModel).toBe('openai:gpt-4o-mini');
     expect(updated.glossary).toBe('AI=Trí tuệ nhân tạo');
+    expect(updated.pauseMs).toBe(1400);
+    expect(updated.readingPauseMs).toBe(7600);
+  });
+
+  it('clamps saved pause settings to the supported range', async () => {
+    await saveSettings({ pauseMs: 100, readingPauseMs: 12000 });
+
+    const updated = await loadSettings();
+    expect(updated.pauseMs).toBe(600);
+    expect(updated.readingPauseMs).toBe(10000);
   });
 });

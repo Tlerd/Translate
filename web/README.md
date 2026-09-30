@@ -9,13 +9,16 @@
    - Ưu tiên model chi phí thấp, phản hồi nhanh theo từng cụm câu nói.
    - Nhận giọng bằng **Web Speech API** (SpeechRecognition) trên trình duyệt.
    - Ghi âm đồng thời từng chunk vào IndexedDB (Dexie) bằng **MediaRecorder**.
-   - Live scheduler kiểm soát: tối đa 1 request dịch đang chạy + 1 snapshot mới nhất chờ; tự động loại bỏ snapshot cũ quá hạn; đối chiếu nghĩa tương đương để không gọi dịch lại vô ích.
-   - Hai chế độ thu: `lecture` (giảng bài: ngắt câu theo ngữ đoạn) và `readingPractice` (luyện đọc: ghép các quãng dừng 1–3 giây không ngắt hàng mới).
+   - Chữ gốc hiện ngay; các delta SSE cập nhật bản dịch khi request còn chạy. Scheduler giữ tối đa 1 request dịch đang chạy, gộp các bản chữ tạm và giữ hàng đợi câu đã chốt. Chỉ chữ tạm bị thay thế/quá hạn; các câu đã chốt được xử lý đầy đủ theo thứ tự.
+   - Hai chế độ thu: `lecture` (giảng bài: ngắt câu theo ngữ đoạn) và `readingPractice` (luyện đọc: ghép các đoạn nhận giọng đến khi hết khoảng nghỉ đã chọn).
+   - **Khoảng nghỉ để chốt câu:** mặc định 0,9 giây ở cả hai chế độ theo lựa chọn người dùng; điều chỉnh 0,6–2 giây khi giảng bài, 0,6–10 giây khi luyện đọc. Giá trị được lưu cục bộ qua lần tải lại.
+   - Khi bấm **Kết thúc buổi**, micro dừng và ứng dụng chờ dữ liệu âm thanh/chữ cuối cùng, dịch nốt câu đã chốt rồi lưu. Nút báo **Đang kết thúc…** trong thời gian chờ. Lỗi dịch giữ chữ gốc và bản dịch tạm, hiển thị trạng thái lỗi.
 
 2. **Phần B: Tóm tắt rồi tạo ảnh (Summary & Image Generation):**
    - Dùng model phân tích chất lượng cao, **bắt buộc khác model dịch của Phần A** (server kiểm tra và trả lỗi `AI_MODEL_ROLE_CONFLICT` nếu cấu hình trùng model).
    - Chỉ chạy khi người dùng bấm nút **Tóm tắt**; chỉ hỗ trợ một preset **Mặc định** duy nhất.
    - Trích xuất tiêu đề, đoạn tổng quan và các đề mục có dẫn nguồn `captionIds` chuẩn xác từ transcript đã lưu.
+   - Nút **Chỉnh sửa kịch bản** mở popup sửa từng dòng và tìm/thay thế. **Hủy** không ghi dữ liệu; **Lưu** giữ số câu và thời gian, đánh dấu bản dịch cũ cần cập nhật. Tóm tắt cũ hiển thị cảnh báo và nút **Tạo lại** dùng bản ghi đã sửa. Ảnh minh họa cũ chỉ hiện nếu khớp nguồn hiện tại.
    - **Tạo ảnh:** Bước sau của phần B, có model sinh ảnh riêng (Google Gemini Flash Image / OpenAI Images). Chỉ tạo ảnh khi người dùng chủ động bấm sau khi đã có bản tóm tắt.
 
 ## 2. Hướng dẫn chạy và kiểm thử Local
@@ -40,6 +43,26 @@ npm test
 # Build production
 npm run build
 ```
+
+### Kiểm thử trình duyệt bằng Playwright
+
+```powershell
+# Terminal 1
+npm run dev -- --hostname 127.0.0.1 --port 3100
+
+# Terminal 2
+npm run test:browser
+```
+
+Script sử dụng Playwright có trong project hoặc runtime Codex. Nếu máy khác chưa có:
+
+```powershell
+npm install --save-dev playwright
+npx playwright install chromium
+npm run test:browser
+```
+
+Có thể đặt `BASE_URL` nếu dùng cổng khác; `PLAYWRIGHT_MODULE_PATH`/`PLAYWRIGHT_CHROMIUM_EXECUTABLE` để chỉ định runtime. Kết quả và ảnh popup nằm trong `test-results/browser/`. Các test trình duyệt chạy ứng dụng và IndexedDB thật, mô phỏng micro/nhận giọng/AI ở ranh giới API. Chúng không chứng minh độ chính xác nhận giọng, tốc độ API thật hay độ ổn định sau 60 phút ghi âm thật. Test 500 snapshot chỉ chứng minh thứ tự và số câu. Xem [báo cáo kiểm tra](NGHIEM-THU.md).
 
 ### Chạy dev server
 ```bash
@@ -67,7 +90,8 @@ AI_SUMMARY_MODEL=google:gemini-3.8-flash
 AI_IMAGE_MODEL=google:gemini-3.1-flash-image
 AI_IMAGE_ENABLED=false
 
-# Đăng nhập và bộ đếm (tùy chọn trong môi trường dev, áp dụng khi deploy production)
+# Đăng nhập: AUTH_SECRET và OWNER_EMAIL bắt buộc khi production;
+# AUTH_GOOGLE_ID/SECRET cần để đăng nhập Google.
 AUTH_SECRET=
 AUTH_GOOGLE_ID=
 AUTH_GOOGLE_SECRET=
@@ -77,6 +101,10 @@ UPSTASH_REDIS_REST_TOKEN=
 ```
 
 *Lưu ý an toàn:* Không commit file `.env.local` hoặc bất kỳ secret key nào lên GitHub repository.
+
+Guard giải mã và kiểm tra hạn token Auth.js cùng email chủ tài khoản; cookie/header tùy ý không cấp quyền. Production thiếu cấu hình xác thực trả lỗi và không gọi AI. Local development chỉ bỏ xác thực khi cả `AUTH_SECRET` và `OWNER_EMAIL` đều chưa cấu hình. Mở `/api/auth/signin` để đăng nhập Google; email đã xác minh phải khớp `OWNER_EMAIL`.
+
+Các adapter không tự tạo kết quả giả khi thiếu API key. Test offline mock SDK rõ ràng. Gemini tạo ảnh native qua `interactions.create`, theo [hướng dẫn Google](https://ai.google.dev/gemini-api/docs/image-generation).
 
 ## 4. Danh mục Model được hỗ trợ
 

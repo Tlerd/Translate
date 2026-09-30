@@ -28,6 +28,8 @@ export interface ControllerState {
   captions: CaptionItem[];
   error: string | null;
   epoch: number;
+  pauseMs: number;
+  readingPauseMs: number;
 }
 
 export interface StartOptions {
@@ -37,6 +39,8 @@ export interface StartOptions {
   translationModelKey?: string;
   context?: string;
   glossary?: string;
+  pauseMs?: number;
+  readingPauseMs?: number;
 }
 
 export class ClassroomController {
@@ -53,6 +57,8 @@ export class ClassroomController {
     captions: [],
     error: null,
     epoch: 0,
+    pauseMs: 900,
+    readingPauseMs: 900,
   };
 
   private listeners: Set<(state: ControllerState) => void> = new Set();
@@ -67,6 +73,14 @@ export class ClassroomController {
   private sessionEpoch = 0;
   private configRevision = 1;
   private activeBlockId = 1;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasPendingTranscript = false;
+  private seenSpeechSnapshots = new Map<string, { text: string; isFinal: boolean; revision: number }>();
+  private speechItemLocations = new Map<string, { captionId: number; blockId: number; startMs: number }>();
+  private pendingCaptionWrites = new Set<Promise<void>>();
+  private captionWriteChain: Promise<void> = Promise.resolve();
+  private starting: Promise<string> | null = null;
+  private stopping: Promise<void> | null = null;
 
   constructor() {
     this.checkStoragePersistence();
@@ -110,6 +124,18 @@ export class ClassroomController {
   }
 
   public async start(options: StartOptions = {}): Promise<string> {
+    if (this.stopping) await this.stopping;
+    if (this.starting) return this.starting;
+    const task = this.startInternal(options);
+    this.starting = task;
+    try {
+      return await task;
+    } finally {
+      if (this.starting === task) this.starting = null;
+    }
+  }
+
+  private async startInternal(options: StartOptions): Promise<string> {
     if (this.state.state === 'recording') {
       return this.state.recordingId!;
     }
@@ -121,6 +147,8 @@ export class ClassroomController {
     const sourceLanguage = options.sourceLanguage || this.state.sourceLanguage;
     const targetLanguage = options.targetLanguage || this.state.targetLanguage;
     const translationModelKey = options.translationModelKey || this.state.translationModelKey;
+    const pauseMs = ClassroomController.clampPause(options.pauseMs ?? this.state.pauseMs);
+    const readingPauseMs = ClassroomController.clampPause(options.readingPauseMs ?? this.state.readingPauseMs);
 
     const recording = await createRecording({
       mode,
@@ -148,7 +176,13 @@ export class ClassroomController {
       captions: [],
       error: null,
       epoch: currentEpoch,
+      pauseMs,
+      readingPauseMs,
     };
+    this.hasPendingTranscript = false;
+    this.captionRevisions.clear();
+    this.seenSpeechSnapshots.clear();
+    this.speechItemLocations.clear();
     this.notify();
 
     // Duration timer
@@ -164,17 +198,18 @@ export class ClassroomController {
 
     // Live Translation Scheduler
     this.scheduler = new LiveTranslationScheduler({
-      runner: async (source, direction, history, signal) => {
-        return new Promise<string>((resolve) => {
+      runner: async (source, direction, history, signal, requestSnapshot, onDelta) => {
+        return new Promise<string>((resolve, reject) => {
           let accumulated = '';
+          let completedText = '';
           const reqId = `tr_${recordingId}_${Date.now()}`;
-          streamTranslate(
+          void streamTranslate(
             {
               requestId: reqId,
               recordingId,
-              captionId: this.assembler?.currentCaptionId || 1,
+              captionId: requestSnapshot?.captionId || 1,
               sessionEpoch: currentEpoch,
-              revision: 1,
+              revision: requestSnapshot?.revision || 1,
               configRevision: this.configRevision,
               modelKey: this.state.translationModelKey,
               sourceLanguage: direction.sourceCode,
@@ -186,16 +221,17 @@ export class ClassroomController {
             },
             (delta) => {
               accumulated += delta;
+              onDelta?.(delta);
             },
             (fullText) => {
-              resolve(fullText);
+              completedText = fullText;
             },
             (err) => {
               console.warn('Live translation error:', err);
-              resolve(accumulated); // return partial on error
+              // Keep deltas already shown in the caption, but let scheduler mark it failed.
             },
             signal
-          );
+          ).then(() => resolve(completedText || accumulated), reject);
         });
       },
       sourceLanguage: sourceLanguage.split('-')[0],
@@ -206,7 +242,14 @@ export class ClassroomController {
     // Assembler -> Scheduler pipeline
     this.assembler.subscribe((snapshot: TranscriptSnapshot) => {
       if (this.sessionEpoch !== currentEpoch) return;
-      this.scheduler?.onSnapshot(snapshot);
+      const previousRevision = this.captionRevisions.get(snapshot.captionId) ?? 0;
+      const revision = snapshot.revision > previousRevision ? snapshot.revision : previousRevision + 1;
+      this.captionRevisions.set(snapshot.captionId, revision);
+      if (this.captionRevisions.size > 128) {
+        const oldestCaptionId = this.captionRevisions.keys().next().value;
+        if (oldestCaptionId !== undefined) this.captionRevisions.delete(oldestCaptionId);
+      }
+      this.scheduler?.onSnapshot({ ...snapshot, revision });
     });
 
     // Scheduler -> UI & DB pipeline
@@ -231,6 +274,11 @@ export class ClassroomController {
         onVolume: (vol) => {
           if (this.sessionEpoch !== currentEpoch) return;
           this.state.audioVolume = vol;
+          if (vol >= 0.035) {
+            this.clearSilenceTimer();
+          } else if (!this.silenceTimer) {
+            this.scheduleSilenceClose(currentEpoch);
+          }
           this.notify();
         },
         onError: (err) => {
@@ -249,18 +297,46 @@ export class ClassroomController {
     // Speech Recognizer
     this.speechRecognizer = new WebSpeechRecognizer(
       {
-        onTranscript: (text, isFinal, epoch) => {
+        onTranscript: (text, isFinal, epoch, providerItemId, providerRevision) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
+          const previousSnapshot = this.seenSpeechSnapshots.get(providerItemId);
+          if (previousSnapshot && providerRevision <= previousSnapshot.revision) return;
+          if (previousSnapshot?.text === text && previousSnapshot.isFinal === isFinal) {
+            this.seenSpeechSnapshots.set(providerItemId, { ...previousSnapshot, revision: providerRevision });
+            return;
+          }
+          this.seenSpeechSnapshots.set(providerItemId, { text, isFinal, revision: providerRevision });
+          if (this.seenSpeechSnapshots.size > 256) {
+            const oldestId = this.seenSpeechSnapshots.keys().next().value;
+            if (oldestId) this.seenSpeechSnapshots.delete(oldestId);
+          }
           const currentMs = Date.now() - this.startTime;
+          const existingLocation = this.speechItemLocations.get(providerItemId);
+          const currentCaptionId = this.assembler!.currentCaptionId;
+          const captionId = existingLocation?.captionId ?? currentCaptionId;
+          const blockId = existingLocation?.blockId ?? this.activeBlockId;
+          const isLateResult = captionId < currentCaptionId;
+          const startMs = existingLocation?.startMs ?? Math.max(0, currentMs - 2000);
+          this.speechItemLocations.delete(providerItemId);
+          this.speechItemLocations.set(providerItemId, { captionId, blockId, startMs });
+          if (this.speechItemLocations.size > 256) {
+            const oldestProviderId = this.speechItemLocations.keys().next().value;
+            if (oldestProviderId) this.speechItemLocations.delete(oldestProviderId);
+          }
+          if (!isLateResult) {
+            this.hasPendingTranscript = !isFinal || this.state.mode === 'readingPractice';
+            this.clearSilenceTimer();
+            if (this.hasPendingTranscript) this.scheduleSilenceClose(currentEpoch);
+          }
           this.assembler?.handleSnapshot({
             connectionEpoch: epoch,
-            providerItemId: `speech-${Date.now()}`,
-            blockId: this.activeBlockId,
-            captionId: this.assembler.currentCaptionId,
-            revision: 1,
+            providerItemId,
+            blockId,
+            captionId,
+            revision: providerRevision,
             text,
             isFinal,
-            startMs: Math.max(0, currentMs - 2000),
+            startMs,
             endMs: currentMs,
           });
         },
@@ -283,6 +359,32 @@ export class ClassroomController {
     return recordingId;
   }
 
+  private captionRevisions = new Map<number, number>();
+
+  private static clampPause(ms: number): number {
+    return Math.max(600, Math.min(10_000, Math.round(ms)));
+  }
+
+  private clearSilenceTimer(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = null;
+  }
+
+  private scheduleSilenceClose(epoch: number): void {
+    if (this.silenceTimer) return;
+    const delay = this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs;
+    this.silenceTimer = setTimeout(() => {
+      this.silenceTimer = null;
+      if (epoch !== this.sessionEpoch || this.state.state !== 'recording') return;
+      if (!this.hasPendingTranscript) return;
+      const closedBlock = this.activeBlockId;
+      this.assembler?.handleBlockClosed(closedBlock);
+      this.scheduler?.onBlockClosed(closedBlock);
+      this.hasPendingTranscript = false;
+      this.activeBlockId = closedBlock + 1;
+    }, delay);
+  }
+
   private async handleTranslationEvent(
     recordingId: string,
     event: ScheduledTranslationEvent
@@ -297,11 +399,21 @@ export class ClassroomController {
       endMs: event.endMs,
       source: event.sourceText,
       revision: event.sourceRevision,
-      isFinal: event.isFinal,
-      translation: event.targetText,
-      targetSourceRevision: event.targetSourceRevision,
+      isFinal: existingIndex >= 0
+        ? this.state.captions[existingIndex].isFinal || event.isFinal
+        : event.isFinal,
+      translation: event.targetText || (existingIndex >= 0 ? this.state.captions[existingIndex].translation : ''),
+      targetSourceRevision: event.targetText
+        ? event.targetSourceRevision
+        : existingIndex >= 0
+          ? this.state.captions[existingIndex].targetSourceRevision
+          : event.targetSourceRevision,
       translationModelKey: this.state.translationModelKey,
-      state: event.error ? 'failed' : event.isFinal ? 'done' : 'streaming',
+      state: event.error
+        ? 'failed'
+        : event.isFinal && !!event.targetText && event.targetSourceRevision >= event.sourceRevision
+          ? 'done'
+          : 'streaming',
       error: event.error,
       skipReason: event.skipReason,
     };
@@ -313,14 +425,35 @@ export class ClassroomController {
     }
 
     this.notify();
-    await saveCaption(captionItem);
+    const write = this.captionWriteChain.then(() => saveCaption(captionItem)).catch((err) => {
+      this.state.error = `Không lưu được phụ đề: ${err instanceof Error ? err.message : String(err)}`;
+      this.notify();
+    });
+    this.captionWriteChain = write;
+    this.pendingCaptionWrites.add(write);
+    void write.finally(() => this.pendingCaptionWrites.delete(write));
   }
 
   public async stop(): Promise<void> {
+    if (this.stopping) return this.stopping;
+    const task = this.stopInternal();
+    this.stopping = task;
+    try {
+      await task;
+    } finally {
+      if (this.stopping === task) this.stopping = null;
+    }
+  }
+
+  private async stopInternal(): Promise<void> {
+    if (this.starting) await this.starting;
     if (this.state.state !== 'recording') return;
 
-    this.sessionEpoch++; // immediately invalidate any subsequent late callbacks!
+    const stopEpoch = this.sessionEpoch;
     const recordingId = this.state.recordingId;
+    const captureEndedAt = Date.now();
+    const durationMs = captureEndedAt - this.startTime;
+    this.clearSilenceTimer();
 
     if (this.durationIntervalId) {
       clearInterval(this.durationIntervalId);
@@ -328,27 +461,31 @@ export class ClassroomController {
     }
 
     if (this.speechRecognizer) {
-      this.speechRecognizer.stop();
+      await this.speechRecognizer.stop();
       this.speechRecognizer = null;
     }
 
     if (this.audioRecorder) {
-      this.audioRecorder.stop();
+      await this.audioRecorder.stop();
       this.audioRecorder = null;
     }
 
     if (this.assembler) {
-      this.assembler.finalizeCurrentUtterance(false);
+      this.assembler.finalizeCurrentUtterance(true);
       this.assembler.close();
       this.assembler = null;
     }
 
     if (this.scheduler) {
+      await this.scheduler.drain();
       this.scheduler.close();
       this.scheduler = null;
     }
 
-    const durationMs = Date.now() - this.startTime;
+    await Promise.all([...this.pendingCaptionWrites]);
+    if (this.sessionEpoch !== stopEpoch) return;
+    this.sessionEpoch++; // Drain final browser events, translation, and storage before invalidating.
+
     this.state = {
       ...this.state,
       state: 'stopped',
@@ -361,7 +498,7 @@ export class ClassroomController {
     if (recordingId) {
       await updateRecording(recordingId, {
         state: 'stopped',
-        endedAt: new Date().toISOString(),
+        endedAt: new Date(captureEndedAt).toISOString(),
         durationMs,
       });
     }
@@ -371,6 +508,28 @@ export class ClassroomController {
     if (this.state.translationModelKey === modelKey) return;
     this.configRevision++;
     this.state.translationModelKey = modelKey;
+    this.notify();
+  }
+
+  public setPauseMs(ms: number): void {
+    const pauseMs = ClassroomController.clampPause(ms);
+    if (this.state.pauseMs === pauseMs) return;
+    this.state.pauseMs = pauseMs;
+    if (this.state.mode === 'lecture' && this.state.state === 'recording' && this.hasPendingTranscript && this.silenceTimer) {
+      this.clearSilenceTimer();
+      this.scheduleSilenceClose(this.sessionEpoch);
+    }
+    this.notify();
+  }
+
+  public setReadingPauseMs(ms: number): void {
+    const readingPauseMs = ClassroomController.clampPause(ms);
+    if (this.state.readingPauseMs === readingPauseMs) return;
+    this.state.readingPauseMs = readingPauseMs;
+    if (this.state.mode === 'readingPractice' && this.state.state === 'recording' && this.hasPendingTranscript && this.silenceTimer) {
+      this.clearSilenceTimer();
+      this.scheduleSilenceClose(this.sessionEpoch);
+    }
     this.notify();
   }
 

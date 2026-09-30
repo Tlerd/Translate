@@ -3,39 +3,24 @@
 import React, { useState } from 'react';
 import { Sparkles, Loader2, BookOpen, AlertCircle } from 'lucide-react';
 import { requestSummary } from '@/lib/api-client';
-import { saveSummary } from '@/storage/recordings';
+import { computeCaptionSourceHash, saveSummary } from '@/storage/recordings';
 import type { SummaryItem, CaptionItem } from '@/shared/recording';
 
 interface SummaryPanelProps {
   recordingId: string;
   captions: CaptionItem[];
   summary?: SummaryItem;
+  summaryIsStale?: boolean;
   targetLanguage?: string;
   onSummaryGenerated: (summary: SummaryItem) => void;
   onSelectCaption?: (captionId: number) => void;
-}
-
-// Simple deterministic hash for sourceHash
-async function computeSha256(text: string): Promise<string> {
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const msgBuffer = new TextEncoder().encode(text);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-  // Fallback simple hash
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16);
 }
 
 export function SummaryPanel({
   recordingId,
   captions,
   summary,
+  summaryIsStale = false,
   targetLanguage = 'vi',
   onSummaryGenerated,
   onSelectCaption,
@@ -53,10 +38,7 @@ export function SummaryPanel({
     setError(null);
 
     try {
-      const sourceString = JSON.stringify(
-        captions.map((c) => ({ id: c.id, text: c.source }))
-      );
-      const sourceHash = await computeSha256(sourceString);
+      const sourceHash = await computeCaptionSourceHash(captions);
       const requestId = `sum_${recordingId}_${Date.now()}`;
 
       const res = await requestSummary({
@@ -156,7 +138,7 @@ export function SummaryPanel({
           ) : (
             <>
               <Sparkles size={16} />
-              <span>{summary ? 'Tóm tắt lại' : 'Tóm tắt'}</span>
+              <span>{summaryIsStale ? 'Tạo lại' : summary ? 'Tóm tắt lại' : 'Tóm tắt'}</span>
             </>
           )}
         </button>
@@ -182,6 +164,11 @@ export function SummaryPanel({
       )}
 
       {/* Summary Content */}
+      {summary && summaryIsStale && (
+        <div role="status" style={{ padding: '12px 14px', color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 'var(--radius-sm)', fontSize: '0.88rem' }}>
+          Kịch bản đã được chỉnh sửa. Bản tóm tắt này chưa cập nhật; chọn <strong>Tạo lại</strong> để tóm tắt theo nội dung mới.
+        </div>
+      )}
       {summary ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div

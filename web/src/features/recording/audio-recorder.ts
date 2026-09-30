@@ -21,6 +21,8 @@ export class WebAudioRecorder {
   private mimeType = 'audio/webm';
   private callbacks: AudioRecorderCallbacks;
   private isRecording = false;
+  private isStopping = false;
+  private pendingChunkWrites = new Set<Promise<void>>();
 
   constructor(callbacks: AudioRecorderCallbacks) {
     this.callbacks = callbacks;
@@ -98,19 +100,24 @@ export class WebAudioRecorder {
       }
 
       this.sequence = 0;
+      this.pendingChunkWrites.clear();
       this.startTime = Date.now();
       this.isRecording = true;
+      this.isStopping = false;
 
       const recorder = new MediaRecorder(stream, { mimeType: this.mimeType });
-      recorder.ondataavailable = async (event: BlobEvent) => {
-        if (!this.isRecording || event.data.size === 0) return;
+      recorder.ondataavailable = (event: BlobEvent) => {
+        // MediaRecorder emits one last dataavailable event as part of stop().
+        if ((!this.isRecording && !this.isStopping) || event.data.size === 0) return;
         const currentSeq = this.sequence++;
         const timestampMs = Date.now() - this.startTime;
-        try {
-          await this.callbacks.onChunk(event.data, currentSeq, timestampMs, this.mimeType);
-        } catch (err) {
-          this.callbacks.onError(`Lỗi ghi chunk âm thanh: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        const write = Promise.resolve()
+          .then(() => this.callbacks.onChunk(event.data, currentSeq, timestampMs, this.mimeType))
+          .catch((err) => {
+            this.callbacks.onError(`Lỗi ghi chunk âm thanh: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        this.pendingChunkWrites.add(write);
+        void write.finally(() => this.pendingChunkWrites.delete(write));
       };
 
       recorder.onerror = (e) => {
@@ -127,8 +134,9 @@ export class WebAudioRecorder {
     }
   }
 
-  public stop(): void {
+  public async stop(): Promise<void> {
     this.isRecording = false;
+    this.isStopping = true;
 
     if (this.volumeIntervalId) {
       clearInterval(this.volumeIntervalId);
@@ -144,20 +152,40 @@ export class WebAudioRecorder {
       this.audioContext = null;
     }
 
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+    const recorder = this.mediaRecorder;
+    const stream = this.mediaStream;
+    this.mediaRecorder = null;
+    this.mediaStream = null;
+    if (recorder && recorder.state !== 'inactive') {
       try {
-        this.mediaRecorder.stop();
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(fallback);
+            resolve();
+          };
+          const fallback = setTimeout(finish, 2000);
+          recorder.addEventListener('stop', finish, { once: true });
+          try {
+            recorder.stop();
+          } catch {
+            finish();
+          }
+        });
       } catch {
         // ignore
       }
-      this.mediaRecorder = null;
     }
 
-    if (this.mediaStream) {
-      for (const track of this.mediaStream.getTracks()) {
+    await Promise.all([...this.pendingChunkWrites]);
+    this.isStopping = false;
+
+    if (stream) {
+      for (const track of stream.getTracks()) {
         track.stop();
       }
-      this.mediaStream = null;
     }
   }
 }

@@ -12,14 +12,6 @@ export interface ProviderCallParams {
 
 export async function* streamGoogleText(params: ProviderCallParams): AsyncIterable<string> {
   if (!params.apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      // Mock stream for testing without external API key
-      const mockWords = ['[Bản dịch mock]: ', params.userPrompt.slice(0, 30)];
-      for (const word of mockWords) {
-        yield word;
-      }
-      return;
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình GOOGLE_API_KEY cho Google model.');
   }
 
@@ -30,33 +22,26 @@ export async function* streamGoogleText(params: ProviderCallParams): AsyncIterab
     contents: params.userPrompt,
     config: {
       systemInstruction: params.systemInstruction,
+      abortSignal: params.signal,
     },
   });
 
+  let receivedText = false;
   for await (const chunk of responseStream) {
     if (params.signal?.aborted) break;
     const text = chunk.text;
     if (text) {
+      receivedText = true;
       yield text;
     }
+  }
+  if (!params.signal?.aborted && !receivedText) {
+    throw new Error('Google AI không trả về nội dung văn bản.');
   }
 }
 
 export async function generateGoogleText(params: ProviderCallParams): Promise<string> {
   if (!params.apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      return JSON.stringify({
-        title: 'Tóm tắt bài học (Mock)',
-        overview: 'Đây là bài tóm tắt tổng quan được tạo ở chế độ kiểm thử tự động.',
-        sections: [
-          {
-            heading: 'Nội dung cốt lõi',
-            bullets: ['Ý chính số 1 của bài học', 'Ý chính số 2 của bài học'],
-            captionIds: [1],
-          },
-        ],
-      });
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình GOOGLE_API_KEY cho Google model.');
   }
 
@@ -67,10 +52,14 @@ export async function generateGoogleText(params: ProviderCallParams): Promise<st
     contents: params.userPrompt,
     config: {
       systemInstruction: params.systemInstruction,
+      abortSignal: params.signal,
     },
   });
 
-  return response.text || '';
+  if (!response.text?.trim()) {
+    throw new Error('Google AI không trả về nội dung văn bản.');
+  }
+  return response.text;
 }
 
 export async function generateGoogleImage(
@@ -79,31 +68,26 @@ export async function generateGoogleImage(
   apiKey?: string
 ): Promise<Buffer> {
   if (!apiKey) {
-    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-      // Return a 1x1 mock png buffer for tests
-      return Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        'base64'
-      );
-    }
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình API key cho Google Image.');
   }
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const response = await ai.models.generateImages({
+  const response = await ai.interactions.create({
     model: modelId,
-    prompt,
-    config: {
-      numberOfImages: 1,
-      outputMimeType: 'image/jpeg',
-    },
+    input: prompt,
   });
 
-  const generated = response.generatedImages?.[0];
-  if (!generated?.image?.imageBytes) {
-    throw new Error('Google Image API không trả về dữ liệu ảnh.');
+  const image = response.output_image;
+  if (!image?.data) {
+    const status = response.status ? ` (trạng thái: ${response.status})` : '';
+    throw new Error(`Google Image API không trả về dữ liệu ảnh${status}.`);
   }
 
-  return Buffer.from(generated.image.imageBytes, 'base64');
+  if (image.mime_type && !image.mime_type.startsWith('image/')) {
+    throw new Error(`Google Image API trả về MIME type không hợp lệ: ${image.mime_type}.`);
+  }
+  const buffer = Buffer.from(image.data, 'base64');
+  if (!buffer.length) throw new Error('Google Image API trả về dữ liệu ảnh rỗng.');
+  return buffer;
 }

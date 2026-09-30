@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Image as ImageIcon, Loader2, Download, AlertCircle } from 'lucide-react';
 import { requestImage, fetchModels } from '@/lib/api-client';
 import { saveImage, getImage } from '@/storage/recordings';
@@ -18,28 +18,35 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [availableImageModels, setAvailableImageModels] = useState<ModelInfo[]>([]);
   const [selectedModelKey, setSelectedModelKey] = useState('google:gemini-3.1-flash-image');
+  const currentSummaryHashRef = useRef(summary?.sourceHash);
+  currentSummaryHashRef.current = summary?.sourceHash;
 
-  // Load existing image if any
+  // Only show an image generated from the summary currently on screen.
   useEffect(() => {
     let activeUrl: string | null = null;
+    let active = true;
+    setImageUrl(null);
     getImage(recordingId).then((img) => {
-      if (img) {
+      if (active && img && img.summaryHash === summary?.sourceHash) {
         const url = URL.createObjectURL(img.blob);
         activeUrl = url;
         setImageUrl(url);
       }
     });
 
+    return () => {
+      active = false;
+      if (activeUrl) URL.revokeObjectURL(activeUrl);
+    };
+  }, [recordingId, summary?.sourceHash]);
+
+  useEffect(() => {
     fetchModels()
       .then((res) => {
         const imageModels = res.models.filter((m) => m.allowedTasks.includes('image'));
         setAvailableImageModels(imageModels);
       })
       .catch((err) => console.warn('Lỗi lấy model ảnh:', err));
-
-    return () => {
-      if (activeUrl) URL.revokeObjectURL(activeUrl);
-    };
   }, [recordingId]);
 
   const handleGenerateImage = async () => {
@@ -53,6 +60,7 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
 
     try {
       const requestId = `img_${recordingId}_${Date.now()}`;
+      const requestedSourceHash = summary.sourceHash;
       const { blob, modelKey } = await requestImage({
         requestId,
         recordingId,
@@ -69,6 +77,8 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
           })),
         },
       });
+
+      if (currentSummaryHashRef.current !== requestedSourceHash) return;
 
       const newImageItem: ImageItem = {
         id: `img_${recordingId}`,

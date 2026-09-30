@@ -130,6 +130,11 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
               }}
             >
               {cap.translation || (isStreaming ? '...' : '')}
+              {!isStreaming && cap.translation && cap.targetSourceRevision !== cap.revision && (
+                <span style={{ display: 'block', marginTop: 5, color: 'var(--warning)', fontSize: '0.78rem' }}>
+                  Bản dịch cũ — lời gốc đã được chỉnh sửa
+                </span>
+              )}
             </div>
 
             {cap.error && (

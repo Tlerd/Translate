@@ -14,12 +14,28 @@ export interface TranscriptSnapshot {
 
 export type SnapshotListener = (snapshot: TranscriptSnapshot) => void;
 
+interface ReadingPart {
+  providerItemId: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
+interface FinalizedReadingCaption {
+  captionId: number;
+  blockId: number;
+  parts: ReadingPart[];
+  revision: number;
+  startMs: number;
+  endMs: number;
+}
+
 /**
  * Assembles speech tokens and technical spans into coherent sentence units.
  * Ports the logic from app/lib/live_utterance_assembler.dart:
  * - In lecture mode, pass-through with sentence boundary tracking.
- * - In readingPractice mode, prevents 1-3 second pauses from fragmenting
- *   sentences into multiple separate rows.
+ * - In readingPractice mode, merges recognition spans until the configured
+ *   silence boundary and applies delayed ASR corrections to their original row.
  */
 export class LiveUtteranceAssembler {
   public mode: ClassroomMode;
@@ -27,13 +43,14 @@ export class LiveUtteranceAssembler {
   private listeners: Set<SnapshotListener> = new Set();
   private captionCounter = 1;
   private currentRevision = 0;
-  private assembledConfirmedText = '';
-  private activeInterimText = '';
+  private readingParts: ReadingPart[] = [];
+  private finalizedReadingCaptions = new Map<number, FinalizedReadingCaption>();
   private activeBlockId = 1;
   private activeStartMs = 0;
   private activeEndMs = 0;
   private connectionEpoch = 1;
   private providerItemId = 'assembled-1';
+  private latestLectureSnapshot: TranscriptSnapshot | null = null;
   private closed = false;
 
   constructor(mode: ClassroomMode = 'lecture') {
@@ -61,7 +78,40 @@ export class LiveUtteranceAssembler {
   }
 
   public get currentText(): string {
-    return LiveUtteranceAssembler.combine(this.assembledConfirmedText, this.activeInterimText);
+    return this.combineReadingParts(this.readingParts);
+  }
+
+  private combineReadingParts(parts: ReadingPart[]): string {
+    return parts.reduce(
+      (text, part) => LiveUtteranceAssembler.combine(text, part.text),
+      ''
+    );
+  }
+
+  private upsertReadingPart(parts: ReadingPart[], snapshot: TranscriptSnapshot): ReadingPart[] {
+    const nextPart: ReadingPart = {
+      providerItemId: snapshot.providerItemId,
+      text: snapshot.text,
+      startMs: snapshot.startMs,
+      endMs: snapshot.endMs,
+    };
+    const index = parts.findIndex((part) => part.providerItemId === snapshot.providerItemId);
+    if (index >= 0) {
+      const next = [...parts];
+      next[index] = nextPart;
+      return next;
+    }
+    return [...parts, nextPart].sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+  }
+
+  private rememberFinalizedReadingCaption(caption: FinalizedReadingCaption): void {
+    this.finalizedReadingCaptions.delete(caption.captionId);
+    this.finalizedReadingCaptions.set(caption.captionId, caption);
+    while (this.finalizedReadingCaptions.size > 128) {
+      const oldestCaptionId = this.finalizedReadingCaptions.keys().next().value;
+      if (oldestCaptionId === undefined) break;
+      this.finalizedReadingCaptions.delete(oldestCaptionId);
+    }
   }
 
   public static isCjk(text: string): boolean {
@@ -85,30 +135,60 @@ export class LiveUtteranceAssembler {
     this.providerItemId = snapshot.providerItemId;
 
     if (this.mode === 'lecture') {
-      // In lecture mode, pass-through with sentence boundary tracking
+      if (snapshot.captionId < this.captionCounter) {
+        // A final recognition result can arrive after silence already closed
+        // this caption. Publish the correction without changing the new caption.
+        this.emit(snapshot);
+        return;
+      }
       this.activeBlockId = snapshot.blockId;
+      this.currentRevision = Math.max(this.currentRevision, snapshot.revision);
+      this.latestLectureSnapshot = snapshot;
       this.emit(snapshot);
       if (snapshot.isFinal) {
-        this.captionCounter = snapshot.captionId + 1;
+        this.captionCounter = Math.max(this.captionCounter, snapshot.captionId + 1);
+        this.currentRevision = 0;
+        this.latestLectureSnapshot = null;
       }
       return;
     }
 
     // --- Reading Practice Mode ---
-    if (this.activeStartMs === 0 && snapshot.startMs > 0) {
-      this.activeStartMs = snapshot.startMs;
+    if (snapshot.captionId < this.captionCounter) {
+      const finalized = this.finalizedReadingCaptions.get(snapshot.captionId);
+      const parts = this.upsertReadingPart(finalized?.parts ?? [], snapshot);
+      const corrected: FinalizedReadingCaption = {
+        captionId: snapshot.captionId,
+        blockId: finalized?.blockId ?? snapshot.blockId,
+        parts,
+        revision: Math.max(finalized?.revision ?? 0, snapshot.revision) + 1,
+        startMs: Math.min(finalized?.startMs ?? snapshot.startMs, snapshot.startMs),
+        endMs: Math.max(finalized?.endMs ?? snapshot.endMs, snapshot.endMs),
+      };
+      this.rememberFinalizedReadingCaption(corrected);
+      this.emit({
+        connectionEpoch: snapshot.connectionEpoch,
+        providerItemId: snapshot.providerItemId,
+        blockId: corrected.blockId,
+        captionId: corrected.captionId,
+        revision: corrected.revision,
+        text: this.combineReadingParts(corrected.parts),
+        isFinal: true,
+        startMs: corrected.startMs,
+        endMs: corrected.endMs,
+      });
+      return;
     }
-    this.activeEndMs = snapshot.endMs;
+    if (this.readingParts.length === 0) this.activeStartMs = snapshot.startMs;
+    else this.activeStartMs = Math.min(this.activeStartMs, snapshot.startMs);
+    this.activeEndMs = Math.max(this.activeEndMs, snapshot.endMs);
     this.activeBlockId = snapshot.blockId;
+    this.providerItemId = snapshot.providerItemId;
+    this.readingParts = this.upsertReadingPart(this.readingParts, snapshot);
+    this.currentRevision++;
+    const fullText = this.combineReadingParts(this.readingParts);
 
     if (!snapshot.isFinal) {
-      // Interim hypothesis
-      this.activeInterimText = snapshot.text;
-      this.currentRevision++;
-      const fullText = LiveUtteranceAssembler.combine(
-        this.assembledConfirmedText,
-        this.activeInterimText
-      );
       this.emit({
         connectionEpoch: this.connectionEpoch,
         providerItemId: `reading-${this.captionCounter}`,
@@ -121,23 +201,13 @@ export class LiveUtteranceAssembler {
         endMs: this.activeEndMs,
       });
     } else {
-      // ASR final for a chunk/span (e.g. user paused for 1-2 seconds)
-      // In Reading Practice mode, we append this chunk to current sentence
-      // rather than ending the caption row.
-      this.assembledConfirmedText = LiveUtteranceAssembler.combine(
-        this.assembledConfirmedText,
-        snapshot.text
-      );
-      this.activeInterimText = '';
-      this.currentRevision++;
-
       this.emit({
         connectionEpoch: this.connectionEpoch,
         providerItemId: this.providerItemId,
         blockId: this.activeBlockId,
         captionId: this.captionCounter,
         revision: this.currentRevision,
-        text: this.assembledConfirmedText,
+        text: fullText,
         // Mark as non-final in UI/scheduler so user can continue reading the sentence!
         isFinal: false,
         startMs: this.activeStartMs,
@@ -147,16 +217,37 @@ export class LiveUtteranceAssembler {
   }
 
   /**
-   * Called when 10s silence closes block or session finishes.
+   * Called when the configured silence interval closes a block or the session finishes.
    */
   public finalizeCurrentUtterance(advanceCaption = true): void {
-    if (this.closed || !this.assembledConfirmedText.trim()) return;
+    if (this.closed) return;
 
-    const fullText = LiveUtteranceAssembler.combine(
-      this.assembledConfirmedText,
-      this.activeInterimText
-    );
+    if (this.mode === 'lecture') {
+      const pending = this.latestLectureSnapshot;
+      if (!pending || pending.isFinal || !pending.text.trim()) return;
+      this.emit({
+        ...pending,
+        revision: Math.max(this.currentRevision, pending.revision) + 1,
+        isFinal: true,
+      });
+      if (advanceCaption) this.captionCounter = pending.captionId + 1;
+      this.currentRevision = 0;
+      this.latestLectureSnapshot = null;
+      return;
+    }
+
+    const fullText = this.combineReadingParts(this.readingParts);
+    if (!fullText.trim()) return;
     this.currentRevision++;
+    const finalized: FinalizedReadingCaption = {
+      captionId: this.captionCounter,
+      blockId: this.activeBlockId,
+      parts: [...this.readingParts],
+      revision: this.currentRevision,
+      startMs: this.activeStartMs,
+      endMs: this.activeEndMs,
+    };
+    this.rememberFinalizedReadingCaption(finalized);
     this.emit({
       connectionEpoch: this.connectionEpoch,
       providerItemId: this.providerItemId,
@@ -171,25 +262,20 @@ export class LiveUtteranceAssembler {
 
     if (advanceCaption) {
       this.captionCounter++;
-      this.assembledConfirmedText = '';
-      this.activeInterimText = '';
+      this.readingParts = [];
       this.activeStartMs = 0;
       this.activeEndMs = 0;
     }
   }
 
   public handleBlockClosed(blockId: number): void {
-    if (this.mode === 'readingPractice') {
-      this.finalizeCurrentUtterance(true);
-    }
+    this.finalizeCurrentUtterance(true);
     this.activeBlockId = blockId + 1;
   }
 
   public switchMode(newMode: ClassroomMode): void {
     if (this.mode === newMode) return;
-    if (this.mode === 'readingPractice') {
-      this.finalizeCurrentUtterance(true);
-    }
+    this.finalizeCurrentUtterance(true);
     this.mode = newMode;
   }
 

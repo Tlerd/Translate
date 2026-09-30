@@ -6,9 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run",
+    "test:browser": "node scripts/browser-smoke.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

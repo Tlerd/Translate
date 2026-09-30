@@ -158,6 +158,58 @@ export async function getCaptions(recordingId: string): Promise<CaptionItem[]> {
   return list.sort((a, b) => a.startMs - b.startMs || a.id - b.id);
 }
 
+/** Hashes the original-language lines in the same stable shape used by summaries. */
+export async function computeCaptionSourceHash(captions: CaptionItem[]): Promise<string> {
+  const sourceString = JSON.stringify(captions.map((caption) => ({ id: caption.id, text: caption.source })));
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sourceString));
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  let hash = 0;
+  for (let index = 0; index < sourceString.length; index++) {
+    hash = (hash << 5) - hash + sourceString.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(16);
+}
+
+/** Saves edited source lines atomically while retaining their translations and metadata. */
+export async function updateCaptionSources(
+  recordingId: string,
+  sources: Array<{ id: number; source: string }>
+): Promise<CaptionItem[]> {
+  const db = getDb();
+  return db.transaction('rw', [db.recordings, db.captions], async () => {
+    const recording = await db.recordings.get(recordingId);
+    if (!recording) throw new Error('Không tìm thấy buổi ghi âm này.');
+    if (recording.state === 'recording') {
+      throw new Error('Hãy kết thúc buổi thu trước khi chỉnh sửa kịch bản.');
+    }
+
+    const captions = await db.captions.where('recordingId').equals(recordingId).toArray();
+    const current = captions.sort((a, b) => a.startMs - b.startMs || a.id - b.id);
+    if (sources.length !== current.length || new Set(sources.map((line) => line.id)).size !== current.length) {
+      throw new Error('Danh sách câu đã thay đổi. Hãy đóng cửa sổ và mở lại để cập nhật.');
+    }
+
+    const sourceById = new Map(sources.map((line) => [line.id, line.source]));
+    if (current.some((caption) => !sourceById.has(caption.id))) {
+      throw new Error('Không thể xác định đầy đủ các câu cần lưu. Hãy mở lại cửa sổ chỉnh sửa.');
+    }
+    if (sources.some((line) => !line.source.trim())) {
+      throw new Error('Mỗi câu cần có nội dung. Hãy nhập lại câu đang để trống hoặc hủy thay đổi.');
+    }
+
+    const updated = current.map((caption) => {
+      const source = sourceById.get(caption.id)!;
+      return source === caption.source ? caption : { ...caption, source, revision: caption.revision + 1 };
+    });
+    await db.captions.bulkPut(updated);
+    return updated;
+  });
+}
+
 // Summaries
 export async function saveSummary(summary: SummaryItem): Promise<void> {
   const db = getDb();
@@ -181,6 +233,12 @@ export async function getImage(recordingId: string): Promise<ImageItem | undefin
 }
 
 // Settings
+function normalizePauseMs(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(600, Math.min(10_000, Math.round(parsed)));
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   const db = getDb();
   try {
@@ -196,6 +254,8 @@ export async function loadSettings(): Promise<AppSettings> {
       mode: (map.get('mode') as ClassroomMode) || DEFAULT_SETTINGS.mode,
       context: map.get('context') || DEFAULT_SETTINGS.context,
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
+      pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
+      readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -207,7 +267,12 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
   await db.transaction('rw', db.settings, async () => {
     for (const [key, value] of Object.entries(settings)) {
       if (value !== undefined) {
-        await db.settings.put({ key, value: String(value) });
+        const persistedValue = key === 'pauseMs'
+          ? normalizePauseMs(value, DEFAULT_SETTINGS.pauseMs)
+          : key === 'readingPauseMs'
+          ? normalizePauseMs(value, DEFAULT_SETTINGS.readingPauseMs)
+          : value;
+        await db.settings.put({ key, value: String(persistedValue) });
       }
     }
   });

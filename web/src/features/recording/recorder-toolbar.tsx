@@ -12,9 +12,11 @@ interface RecorderToolbarProps {
 }
 
 export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
-  const { state, startRecording, stopRecording, switchMode, setTranslationModel } = useRecording();
+  const { state, startRecording, stopRecording, switchMode, setTranslationModel, setPauseMs, setReadingPauseMs } = useRecording();
 
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchModels()
@@ -28,17 +30,28 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
   const isRecording = state.state === 'recording';
 
   const handleToggle = async () => {
-    if (isRecording) {
-      await stopRecording();
-      if (onStop) onStop();
-    } else {
-      await startRecording({
-        mode: state.mode,
-        sourceLanguage: state.sourceLanguage,
-        targetLanguage: state.targetLanguage,
-        translationModelKey: state.translationModelKey,
-      });
-      if (onStart) onStart();
+    if (pendingAction) return;
+    setPendingAction(isRecording ? 'stopping' : 'starting');
+    setActionError(null);
+    try {
+      if (isRecording) {
+        await stopRecording();
+        onStop?.();
+      } else {
+        await startRecording({
+          mode: state.mode,
+          sourceLanguage: state.sourceLanguage,
+          targetLanguage: state.targetLanguage,
+          translationModelKey: state.translationModelKey,
+          pauseMs: state.pauseMs,
+          readingPauseMs: state.readingPauseMs,
+        });
+        onStart?.();
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -59,6 +72,8 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         {/* Main Action Button */}
         <button
           onClick={handleToggle}
+          disabled={pendingAction !== null}
+          aria-busy={pendingAction !== null}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -78,15 +93,17 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           {isRecording ? (
             <>
               <Square size={18} fill="#fff" />
-              <span>Kết thúc buổi</span>
+              <span>{pendingAction === 'stopping' ? 'Đang kết thúc…' : 'Kết thúc buổi'}</span>
             </>
           ) : (
             <>
               <Mic size={18} />
-              <span>Bắt đầu thu</span>
+              <span>{pendingAction === 'starting' ? 'Đang bắt đầu…' : 'Bắt đầu thu'}</span>
             </>
           )}
         </button>
+
+        {actionError && <span role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{actionError}</span>}
 
         {/* Mode switcher */}
         <div
@@ -163,6 +180,27 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
             )}
           </select>
         </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+          <span>Khoảng nghỉ để chốt câu</span>
+          <input
+            type="range"
+            min={600}
+            max={state.mode === 'lecture' ? 2000 : 10000}
+            step={100}
+            value={state.mode === 'lecture' ? state.pauseMs : state.readingPauseMs}
+            onChange={(event) => {
+              const milliseconds = Number(event.target.value);
+              if (state.mode === 'lecture') setPauseMs(milliseconds);
+              else setReadingPauseMs(milliseconds);
+            }}
+            aria-label="Khoảng nghỉ để chốt câu, giây"
+            style={{ width: 120, accentColor: 'var(--accent)' }}
+          />
+          <output style={{ minWidth: 32, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+            {((state.mode === 'lecture' ? state.pauseMs : state.readingPauseMs) / 1000).toFixed(1)}s
+          </output>
+        </label>
       </div>
 
       {/* Status & volume meter */}

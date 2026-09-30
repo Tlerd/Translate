@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { ClassroomController, type ControllerState, type StartOptions } from './controller';
 import type { ClassroomMode } from '@/shared/recording';
+import { loadSettings, saveSettings } from '@/storage/recordings';
 
 interface RecordingContextValue {
   controller: ClassroomController;
@@ -11,6 +12,8 @@ interface RecordingContextValue {
   stopRecording: () => Promise<void>;
   switchMode: (mode: ClassroomMode) => void;
   setTranslationModel: (modelKey: string) => void;
+  setPauseMs: (milliseconds: number) => void;
+  setReadingPauseMs: (milliseconds: number) => void;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -22,6 +25,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }
 
   const [state, setState] = useState<ControllerState>(() => controllerRef.current!.snapshot());
+  const pauseChangedByUserRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = controllerRef.current!.subscribe((nextState) => {
@@ -32,6 +36,29 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    loadSettings().then((settings) => {
+      const controller = controllerRef.current!;
+      if (!active || controller.snapshot().state !== 'stopped' || pauseChangedByUserRef.current) return;
+      controller.setPauseMs(settings.pauseMs);
+      controller.setReadingPauseMs(settings.readingPauseMs);
+    }).catch((error) => console.warn('Không thể tải thời gian chốt câu:', error));
+    return () => { active = false; };
+  }, []);
+
+  const updatePauseMs = (milliseconds: number) => {
+    pauseChangedByUserRef.current = true;
+    controllerRef.current!.setPauseMs(milliseconds);
+    void saveSettings({ pauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
+  };
+
+  const updateReadingPauseMs = (milliseconds: number) => {
+    pauseChangedByUserRef.current = true;
+    controllerRef.current!.setReadingPauseMs(milliseconds);
+    void saveSettings({ readingPauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
+  };
+
   const value: RecordingContextValue = {
     controller: controllerRef.current,
     state,
@@ -39,6 +66,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     stopRecording: () => controllerRef.current!.stop(),
     switchMode: (mode) => controllerRef.current!.switchMode(mode),
     setTranslationModel: (modelKey) => controllerRef.current!.setTranslationModel(modelKey),
+    setPauseMs: updatePauseMs,
+    setReadingPauseMs: updateReadingPauseMs,
   };
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;
