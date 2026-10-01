@@ -6,6 +6,7 @@
 - Các result index nhận giọng đồng thời bị gom dưới một ID, có thể khiến câu cuối đến muộn sửa nhầm dòng. Đã tách ID theo kết nối và result index, kiểm tra revision và giữ lịch sử của câu đã chốt.
 - Chữ, bản dịch và tóm tắt trước đây chỉ nằm trong IndexedDB của từng trình duyệt. Chúng không thể tự xuất hiện trên thiết bị khác nếu chưa có cloud.
 - Bố cục flex/chiều cao màn hình làm vùng phụ đề quá nhỏ trên điện thoại. Đã sửa vùng cuộn, min-height, chiều cao viewport và các điều khiển khi đang thu.
+- Kiểm tra production phát hiện Google gửi JSON trong frame WebSocket nhị phân; bộ nhận chỉ đọc chuỗi nên bỏ qua phản hồi. Đã dùng ArrayBuffer và giải mã UTF-8 theo đúng thứ tự, kiểm thử lại mở phiên và chữ tạm/cuối bằng frame nhị phân.
 
 ## Luồng nhận giọng mới
 
@@ -27,7 +28,7 @@ Danh sách cloud phân trang chỉ tải ID/version; chỉ bản mới hoặc đ
 
 ## Kiểm tra đã chạy
 
-- 103 kiểm thử Vitest: nhận giọng theo ID/revision; kết quả cuối đến muộn; reconnect; PCM bị tạm dừng; lỗi khi Dừng; sourceHistory; token và diarization; xác thực; race/xung đột cloud; phân trang hơn 1.000 bản ghi.
+- 104 kiểm thử Vitest: nhận giọng theo ID/revision; frame WebSocket nhị phân; kết quả cuối đến muộn; reconnect; PCM bị tạm dừng; lỗi khi Dừng; sourceHistory; token và diarization; xác thực; race/xung đột cloud; phân trang hơn 1.000 bản ghi.
 - TypeScript, ESLint và Next.js production build đạt.
 - Playwright: popup sửa chữ/lưu/tóm tắt lại; chữ và SSE trước khi hoàn tất; khoảng nghỉ 0,9 giây; audio cuối; bảo toàn dữ liệu; ô gốc/dịch ở 320×568 và 360×800; trang công khai, đăng nhập, cookie giả/sai chủ/hết hạn và đăng xuất.
 - Các kiểm tra trình duyệt dùng microphone/AI fixtures. Thời gian từ fixtures không đại diện cho độ trễ Google hoặc lớp học thật. Chưa kiểm tra trực tiếp phần cứng iPhone/Realme C3 hay ghi âm 60 phút; không khẳng định đã đo bộ nhớ 60 phút.

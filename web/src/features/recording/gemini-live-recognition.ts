@@ -93,6 +93,9 @@ export class GeminiLiveRecognizer {
     const url = new URL(tokenData.websocketUrl);
     url.searchParams.set('access_token', tokenData.token);
     const socket = new WebSocket(url);
+    // Google sends JSON in binary WebSocket frames. Decode synchronously in
+    // arrival order instead of leaving the browser's default Blob payloads.
+    socket.binaryType = 'arraybuffer';
     this.socket = socket;
 
     await new Promise<void>((resolve, reject) => {
@@ -196,9 +199,16 @@ export class GeminiLiveRecognizer {
   }
 
   private handleMessage(raw: unknown, setupDone: (error?: Error) => void, generation: number): void {
-    if (typeof raw !== 'string') return;
+    const json = typeof raw === 'string'
+      ? raw
+      : raw instanceof ArrayBuffer
+        ? new TextDecoder().decode(raw)
+        : ArrayBuffer.isView(raw)
+          ? new TextDecoder().decode(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength))
+          : null;
+    if (json === null) return;
     let message: Record<string, unknown>;
-    try { message = JSON.parse(raw) as Record<string, unknown>; } catch { return; }
+    try { message = JSON.parse(json) as Record<string, unknown>; } catch { return; }
     if ('setupComplete' in message && message.setupComplete) {
       setupDone();
       return;

@@ -6,9 +6,10 @@ class FakeWebSocket {
   static last: FakeWebSocket | undefined;
   readyState = 0;
   bufferedAmount = 0;
+  binaryType = 'blob';
   sent: string[] = [];
   onopen: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
+  onmessage: ((event: { data: unknown }) => void) | null = null;
   onerror: (() => void) | null = null;
   onclose: ((event: { code: number; reason: string }) => void) | null = null;
   url: string;
@@ -20,10 +21,39 @@ class FakeWebSocket {
   }
   open() { this.readyState = 1; this.onopen?.(); }
   message(value: unknown) { this.onmessage?.({ data: JSON.stringify(value) }); }
+  binaryMessage(value: unknown) { this.onmessage?.({ data: new TextEncoder().encode(JSON.stringify(value)).buffer }); }
 }
 
 describe('Gemini live recognizer', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it('decodes Google binary setup and UTF-8 transcripts instead of timing out or losing text', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      token: 'single-use-token', websocketUrl: 'wss://example.test/live', sessionLimitMs: 600_000,
+    }), { status: 200 })));
+    const onTranscript = vi.fn();
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() });
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(19);
+    void starting.catch(() => undefined);
+    try {
+      await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+      const socket = FakeWebSocket.last!;
+      socket.open();
+      socket.binaryMessage({ setupComplete: {} });
+      await vi.waitFor(() => expect(recognizer.diagnostics.status).toBe('listening'), { timeout: 350 });
+      await starting;
+      expect(socket.binaryType).toBe('arraybuffer');
+      socket.binaryMessage({ serverContent: { interimInputTranscription: { text: 'えっと、日本文化' } } });
+      socket.binaryMessage({ serverContent: { inputTranscription: { text: 'えっと、日本文化を勉強する。' } } });
+      expect(onTranscript.mock.calls.map((call) => call[0])).toEqual(['えっと、日本文化', 'えっと、日本文化を勉強する。']);
+      expect(onTranscript.mock.calls.map((call) => call[1])).toEqual([false, true]);
+      expect(onTranscript.mock.calls[0][3]).toBe(onTranscript.mock.calls[1][3]);
+    } finally {
+      await recognizer.stop(0);
+    }
+  });
 
   it('connects with ephemeral auth, sends PCM at 16 kHz, and preserves interim-to-final item identity', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
