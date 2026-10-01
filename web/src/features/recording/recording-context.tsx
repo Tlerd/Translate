@@ -27,7 +27,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }
 
   const [state, setState] = useState<ControllerState>(() => controllerRef.current!.snapshot());
-  const pauseChangedByUserRef = useRef(false);
+  const settingsChangedByUserRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = controllerRef.current!.subscribe((nextState) => {
@@ -42,7 +42,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     loadSettings().then((settings) => {
       const controller = controllerRef.current!;
-      if (!active || controller.snapshot().state !== 'stopped' || pauseChangedByUserRef.current) return;
+      if (!active || controller.snapshot().state !== 'stopped' || settingsChangedByUserRef.current) return;
       controller.setPauseMs(settings.pauseMs);
       controller.setReadingPauseMs(settings.readingPauseMs);
       controller.setTranslationModel(settings.translationModel);
@@ -53,28 +53,31 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updatePauseMs = (milliseconds: number) => {
-    pauseChangedByUserRef.current = true;
+    settingsChangedByUserRef.current = true;
     controllerRef.current!.setPauseMs(milliseconds);
     void saveSettings({ pauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
   };
 
   const updateTranslationModel = (modelKey: string) => {
+    settingsChangedByUserRef.current = true;
     controllerRef.current!.setTranslationModel(modelKey);
     void saveSettings({ translationModel: modelKey }).catch((error) => console.warn('Không thể lưu model dịch:', error));
   };
 
   const updateTranslationThinkingLevel = (level: string) => {
+    settingsChangedByUserRef.current = true;
     controllerRef.current!.setTranslationThinkingLevel(level);
     void saveSettings({ translationThinkingLevel: level }).catch((error) => console.warn('Không thể lưu mức suy luận:', error));
   };
 
   const updateReadingPauseMs = (milliseconds: number) => {
-    pauseChangedByUserRef.current = true;
+    settingsChangedByUserRef.current = true;
     controllerRef.current!.setReadingPauseMs(milliseconds);
     void saveSettings({ readingPauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
   };
 
   const updateSpeechProvider = (provider: 'google' | 'google-transcribe' | 'browser') => {
+    settingsChangedByUserRef.current = true;
     controllerRef.current!.setSpeechProvider(provider);
     void saveSettings({ speechProvider: provider }).catch((error) => console.warn('Không thể lưu cách nhận giọng:', error));
   };
