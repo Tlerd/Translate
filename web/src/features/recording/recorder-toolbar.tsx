@@ -124,11 +124,17 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           </select>
         </div>
 
-        {state.speechProvider !== 'browser' && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-          {state.speechProvider === 'google' ? 'Chữ trực tiếp · 5 giờ nhận giọng ≈ 2,70 USD.' : 'Chữ sau mỗi đoạn nghỉ, tối đa 15 giây + thời gian API · 5 giờ nhận giọng ≈ 1,50 USD.'}
-          {' '}Ví dụ dịch bằng Gemini 3.1 Flash-Lite với tổng 100.000 token vào + 100.000 token ra: thêm ≈ 0,175 USD (5 giờ nhận giọng + dịch ≈ 2,88 USD Live / 1,68 USD theo đoạn). Chưa gồm tóm tắt, ảnh, phân người nói và các lượt dịch lại.
-          {' '}<a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe" target="_blank" rel="noreferrer">Bảng giá Google</a>
-        </p>}
+        {state.speechProvider !== 'browser' && <details style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flexBasis: '100%', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
+          <summary style={{ cursor: 'pointer' }}>
+            {state.speechProvider === 'google' ? 'Trực tiếp · 5 giờ nhận giọng ≈ 2,70 USD' : 'Theo đoạn · 5 giờ nhận giọng ≈ 1,50 USD'} — xem phí dịch
+          </summary>
+          <p style={{ margin: '6px 0', whiteSpace: 'normal' }}>
+            {state.speechProvider === 'google' ? 'Chữ trực tiếp.' : 'Chữ sau mỗi đoạn nghỉ, tối đa 15 giây + thời gian API.'}
+            {' '}Ví dụ dịch bằng Gemini 3.1 Flash-Lite với tổng 100.000 token vào + 100.000 token ra: thêm ≈ 0,175 USD (5 giờ nhận giọng + dịch ≈ 2,88 USD Live / 1,68 USD theo đoạn). Chưa gồm tóm tắt, ảnh, phân người nói và các lượt dịch lại.
+            {' '}<a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe" target="_blank" rel="noreferrer">Bảng giá Google</a>
+          </p>
+        </details>}
+
 
         <div className={styles.modelSettings} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <label htmlFor="translation-model" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Model dịch:</label>
