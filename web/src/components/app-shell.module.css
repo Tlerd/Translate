@@ -2,7 +2,6 @@
   display: flex;
   height: 100vh;
   height: 100dvh;
-  width: 100vw;
   width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -19,7 +18,7 @@
   background-color: var(--bg-secondary);
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s ease, width 0.25s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
   z-index: 50;
 }
 
@@ -34,67 +33,124 @@
 }
 
 .topBar {
-  flex: 0 0 56px;
-  height: 56px;
+  flex: 0 0 54px;
+  height: 54px;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  gap: 12px;
+  gap: 10px;
+  z-index: 30;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 .topBarLeft {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 12px;
+  gap: 10px;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .toggleButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   background-color: var(--bg-card);
-  transition: background 0.15s;
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .toggleButton:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.toggleButton:active {
+  transform: scale(0.95);
 }
 
 .appTitle {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.appLogo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.appTitleTextShort {
+  display: none;
+}
+
+.accountWrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
 }
 
 .activeSessionBanner {
-  background-color: rgba(37, 99, 235, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  border-radius: var(--radius-sm);
-  padding: 4px 12px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .recordingDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
   animation: pulse 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.stopButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background-color: var(--danger);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.stopButton:hover {
+  background-color: var(--danger-hover);
 }
 
 @keyframes pulse {
@@ -124,13 +180,19 @@
 }
 
 @media (max-width: 768px) {
+  .topBar {
+    padding: 0 10px;
+    height: 50px;
+    flex: 0 0 50px;
+  }
+
   .sidebarWrapper {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
     transform: translateX(-100%);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.4);
   }
 
   .sidebarOpen {
@@ -140,39 +202,46 @@
   .backdrop {
     display: block;
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
     z-index: 40;
   }
 }
 
-@media (max-width: 420px) {
-  .topBar {
-    height: auto;
-    flex: 0 0 auto;
-    flex-wrap: wrap;
-    padding: 8px 10px;
-    gap: 6px;
+@media (max-width: 520px) {
+  .appTitleText {
+    display: none;
   }
 
-  .topBarLeft {
-    flex: 1 1 100%;
-    justify-content: space-between;
+  .appTitleTextShort {
+    display: inline;
   }
 
-  .topBar > div:last-child {
-    flex: 1 1 100%;
-    min-width: 0;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 6px;
+  .accountWrapper button {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .activeSessionBanner {
-    min-width: 0;
-    flex-wrap: wrap;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .topBar {
+    gap: 4px;
+    padding: 0 6px;
+  }
+
+  .topBarRight {
+    gap: 4px;
+  }
+
+  .recordingText {
+    display: none;
   }
 }

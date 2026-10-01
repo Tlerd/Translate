@@ -94,54 +94,23 @@ export function RecordingWorkspace({
   return (
     <div className={styles.workspace}>
       {/* Tab bar */}
-      <div
-        className={styles.workspaceTabs}
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 16px',
-          borderBottom: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-secondary)',
-          minHeight: 48,
-          gap: 8,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 4 }}>
+      <div className={styles.workspaceTabs}>
+        <div className={styles.tabPillContainer}>
           <button
+            type="button"
             onClick={() => setActiveTab('transcript')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 16px',
-              fontSize: '0.88rem',
-              fontWeight: activeTab === 'transcript' ? 600 : 400,
-              color: activeTab === 'transcript' ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'transcript' ? '2px solid var(--accent)' : '2px solid transparent',
-              transition: 'all 0.15s',
-            }}
+            className={`${styles.tabPill} ${activeTab === 'transcript' ? styles.tabPillActive : ''}`}
           >
-            <FileText size={16} />
+            <FileText size={15} />
             <span>Bản dịch ({workspaceCaptions.length})</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('summary')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 16px',
-              fontSize: '0.88rem',
-              fontWeight: activeTab === 'summary' ? 600 : 400,
-              color: activeTab === 'summary' ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'summary' ? '2px solid var(--accent)' : '2px solid transparent',
-              transition: 'all 0.15s',
-            }}
+            className={`${styles.tabPill} ${activeTab === 'summary' ? styles.tabPillActive : ''}`}
           >
-            <Sparkles size={16} />
+            <Sparkles size={15} />
             <span>Tóm tắt {summary ? '✓' : ''}</span>
           </button>
         </div>

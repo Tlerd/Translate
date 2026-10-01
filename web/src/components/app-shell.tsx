@@ -7,6 +7,7 @@ import { Menu, X, Square, Settings, Radio } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
+import { ThemeToggle } from './theme-toggle';
 
 export function AppShell({ children, accountControls }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,41 +56,41 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
               title="Mở/Đóng danh sách bản ghi"
               aria-label="Toggle menu"
             >
-              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+              {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
             </button>
             <Link href="/app" className={styles.appTitle}>
-              <Radio size={20} color="#38bdf8" />
-              <span>Máy Dịch Lớp Học</span>
+              <span className={styles.appLogo}>
+                <Radio size={18} color="var(--accent)" />
+              </span>
+              <span className={styles.appTitleText}>Máy Dịch Lớp Học</span>
+              <span className={styles.appTitleTextShort}>Máy Dịch</span>
             </Link>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {accountControls}
+          <div className={styles.topBarRight}>
             {/* Active recording persistent status banner */}
             {isRecording && (
               <div className={styles.activeSessionBanner}>
                 <div className={styles.recordingDot} />
-                <span>Đang thu ({formatDuration(recordingState.durationMs)})</span>
+                <span className={styles.recordingText}>Đang thu ({formatDuration(recordingState.durationMs)})</span>
                 <button
                   onClick={() => stopRecording()}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '4px 8px',
-                    backgroundColor: 'var(--danger)',
-                    color: '#fff',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                  }}
+                  className={styles.stopButton}
                   title="Kết thúc buổi học"
                 >
-                  <Square size={12} fill="#fff" />
+                  <Square size={10} fill="#fff" />
                   <span>Dừng</span>
                 </button>
               </div>
             )}
+
+            {accountControls && (
+              <div className={styles.accountWrapper}>
+                {accountControls}
+              </div>
+            )}
+
+            <ThemeToggle />
 
             <Link
               href="/settings"

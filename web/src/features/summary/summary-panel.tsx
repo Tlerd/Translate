@@ -6,6 +6,7 @@ import { fetchModels, requestSummary } from '@/lib/api-client';
 import { computeCaptionSourceHash, saveSummary } from '@/storage/recordings';
 import type { SummaryItem, CaptionItem } from '@/shared/recording';
 import type { ModelInfo, ModelsResponse } from '@/shared/ai-contracts';
+import styles from './summary-panel.module.css';
 
 interface SummaryPanelProps {
   recordingId: string;
@@ -35,10 +36,12 @@ export function SummaryPanel({
   const [selectedSummaryModelKey, setSelectedSummaryModelKey] = useState('');
 
   useEffect(() => {
-    fetchModels().then((data) => {
-      setModelData(data);
-      setSelectedSummaryModelKey(data.defaults.summarize);
-    }).catch((err) => console.warn('Lỗi lấy danh sách model:', err));
+    fetchModels()
+      .then((data) => {
+        setModelData(data);
+        setSelectedSummaryModelKey(data.defaults.summarize);
+      })
+      .catch((err) => console.warn('Lỗi lấy danh sách model:', err));
   }, []);
 
   const summaryModels = (modelData?.models ?? [])
@@ -68,7 +71,7 @@ export function SummaryPanel({
         recordingId,
         sourceHash,
         targetLanguage,
-        thinkingLevel: thinkingLevel === 'auto' ? undefined : thinkingLevel as 'minimal' | 'low' | 'medium' | 'high',
+        thinkingLevel: thinkingLevel === 'auto' ? undefined : (thinkingLevel as 'minimal' | 'low' | 'medium' | 'high'),
         modelKey: selectedSummaryModelKey || modelData?.defaults.summarize,
         translationModelKey,
         captions: captions.map((c) => ({
@@ -103,87 +106,81 @@ export function SummaryPanel({
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        padding: '20px',
-        overflowY: 'auto',
-        gap: 16,
-      }}
-    >
+    <div className={styles.panel}>
       {/* Top action header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingBottom: 12,
-          borderBottom: '1px solid var(--border-color)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BookOpen size={20} color="var(--accent)" />
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Tóm Tắt Buổi Học</h3>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              backgroundColor: 'var(--bg-hover)',
-              padding: '2px 8px',
-              borderRadius: 12,
-              color: 'var(--text-secondary)',
-            }}
-          >
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div className={styles.headerTitle}>
+            <BookOpen size={20} color="var(--accent)" />
+            <h3>Tóm Tắt Buổi Học</h3>
+          </div>
+          <span className={styles.presetBadge}>
             Kiểu: Mặc định
           </span>
         </div>
 
-        {summaryModels.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            <span>Model tóm tắt</span>
-            <select aria-label="Model tóm tắt" value={selectedSummaryModelKey} onChange={(event) => { setSelectedSummaryModelKey(event.target.value); setThinkingLevel('auto'); }} disabled={loading} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
-              {summaryModels.map((model) => <option key={model.key} value={model.key} disabled={model.key === translationModelKey}>{model.name}{model.key === translationModelKey ? ' (đang dùng để dịch)' : ''}</option>)}
-            </select>
-          </label>
-        )}
-        {summaryThinkingLevels.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            <span>Mức suy luận</span>
-            <select aria-label="Mức suy luận tóm tắt" value={thinkingLevel} onChange={(event) => setThinkingLevel(event.target.value)} disabled={loading} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
-              <option value="auto">Tự động</option>
-              {summaryThinkingLevels.map((level) => <option key={level} value={level}>{({ minimal: 'Tối thiểu', low: 'Thấp', medium: 'Vừa', high: 'Cao' } as const)[level]}</option>)}
-            </select>
-          </label>
-        )}
-        <button
-          onClick={handleGenerateSummary}
-          disabled={loading || captions.length === 0}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            backgroundColor: loading ? 'var(--bg-hover)' : 'var(--bg-active)',
-            color: '#fff',
-            borderRadius: 'var(--radius-sm)',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            opacity: captions.length === 0 ? 0.5 : 1,
-          }}
-        >
-          {loading ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              <span>Đang tóm tắt...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} />
-              <span>{summaryIsStale ? 'Tạo lại' : summary ? 'Tóm tắt lại' : 'Tóm tắt'}</span>
-            </>
+        <div className={styles.headerControls}>
+          {summaryModels.length > 0 && (
+            <label className={styles.controlField}>
+              <span>Model tóm tắt</span>
+              <select
+                aria-label="Model tóm tắt"
+                value={selectedSummaryModelKey}
+                onChange={(event) => {
+                  setSelectedSummaryModelKey(event.target.value);
+                  setThinkingLevel('auto');
+                }}
+                disabled={loading}
+                className={styles.controlSelect}
+              >
+                {summaryModels.map((model) => (
+                  <option key={model.key} value={model.key} disabled={model.key === translationModelKey}>
+                    {model.name}
+                    {model.key === translationModelKey ? ' (đang dùng để dịch)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
-        </button>
+
+          {summaryThinkingLevels.length > 0 && (
+            <label className={styles.controlField}>
+              <span>Mức suy luận</span>
+              <select
+                aria-label="Mức suy luận tóm tắt"
+                value={thinkingLevel}
+                onChange={(event) => setThinkingLevel(event.target.value)}
+                disabled={loading}
+                className={styles.controlSelect}
+              >
+                <option value="auto">Tự động</option>
+                {summaryThinkingLevels.map((level) => (
+                  <option key={level} value={level}>
+                    {({ minimal: 'Tối thiểu', low: 'Thấp', medium: 'Vừa', high: 'Cao' } as const)[level]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <button
+            onClick={handleGenerateSummary}
+            disabled={loading || captions.length === 0}
+            className={styles.summaryActionBtn}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Đang tóm tắt...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                <span>{summaryIsStale ? 'Tạo lại' : summary ? 'Tóm tắt lại' : 'Tóm tắt'}</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -207,62 +204,39 @@ export function SummaryPanel({
 
       {/* Summary Content */}
       {summary && summaryIsStale && (
-        <div role="status" style={{ padding: '12px 14px', color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 'var(--radius-sm)', fontSize: '0.88rem' }}>
+        <div
+          role="status"
+          style={{
+            padding: '12px 14px',
+            color: '#92400e',
+            background: '#fffbeb',
+            border: '1px solid #fcd34d',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.88rem',
+          }}
+        >
           Kịch bản đã được chỉnh sửa. Bản tóm tắt này chưa cập nhật; chọn <strong>Tạo lại</strong> để tóm tắt theo nội dung mới.
         </div>
       )}
+
       {summary ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div
-            style={{
-              padding: '16px',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {summary.title}
-              </h2>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--accent)',
-                  backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                }}
-              >
-                {summary.modelKey}
-              </span>
+          <div className={styles.overviewCard}>
+            <div className={styles.overviewHeader}>
+              <h2 className={styles.overviewTitle}>{summary.title}</h2>
+              <span className={styles.modelBadge}>{summary.modelKey}</span>
             </div>
 
-            <p style={{ marginTop: 10, fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {summary.overview}
-            </p>
+            <p className={styles.overviewText}>{summary.overview}</p>
           </div>
 
           {/* Sections */}
           {summary.sections.map((sec, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '14px 16px',
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
-              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--accent)' }}>
-                {sec.heading}
-              </h4>
-              <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div key={idx} className={styles.sectionCard}>
+              <h4 className={styles.sectionHeading}>{sec.heading}</h4>
+              <ul className={styles.bulletList}>
                 {sec.bullets.map((b, bIdx) => (
-                  <li key={bIdx} style={{ fontSize: '0.92rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  <li key={bIdx} className={styles.bulletItem}>
                     {b}
                   </li>
                 ))}
@@ -270,29 +244,13 @@ export function SummaryPanel({
 
               {/* Citations references */}
               {sec.captionIds && sec.captionIds.length > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 6,
-                    fontSize: '0.78rem',
-                    color: 'var(--text-muted)',
-                  }}
-                >
+                <div className={styles.citationRow}>
                   <span>Dẫn nguồn câu:</span>
                   {sec.captionIds.map((cid) => (
                     <button
                       key={cid}
                       onClick={() => onSelectCaption && onSelectCaption(cid)}
-                      style={{
-                        padding: '1px 6px',
-                        backgroundColor: 'var(--bg-hover)',
-                        borderRadius: 4,
-                        color: 'var(--accent)',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                      }}
+                      className={styles.citationPill}
                       title={`Xem lại câu #${cid} trong bản gốc`}
                     >
                       #{cid}

@@ -52,54 +52,24 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
             key={cap.id}
             id={`caption-${cap.id}`}
             data-testid="caption-card"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: isHighlighted ? 'rgba(56, 189, 248, 0.15)' : 'var(--bg-secondary)',
-              border: isHighlighted
-                ? '1px solid var(--accent)'
-                : '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              padding: '12px 16px',
-              gap: 8,
-              transition: 'background-color 0.3s, border-color 0.3s',
-            }}
-            className={styles.captionCard}
+            className={`${styles.captionCard} ${isHighlighted ? styles.captionCardHighlighted : ''}`}
           >
             {/* Header: Timestamp and ID */}
-            <div
-              style={{
-                fontSize: '0.75rem',
-                color: 'var(--text-muted)',
-              }}
-              className={styles.captionHeader}
-            >
-              <span style={{ fontWeight: 600 }}>#{cap.id} • {formatTimestamp(cap.startMs)}</span>
-              {cap.speakerLabel && <span className={styles.speakerLabel}>{cap.speakerLabel}</span>}
+            <div className={styles.captionHeader}>
+              <div className={styles.captionMeta}>
+                <span style={{ fontWeight: 600 }}>#{cap.id} • {formatTimestamp(cap.startMs)}</span>
+                {cap.speakerLabel && <span className={styles.speakerLabel}>{cap.speakerLabel}</span>}
+              </div>
               {isStreaming && (
-                <span
-                  style={{
-                    color: 'var(--accent)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--accent)',
-                    }}
-                  />
+                <span className={styles.streamingBadge}>
+                  <span className={styles.streamingDot} />
                   Đang dịch...
                 </span>
               )}
             </div>
 
             {/* Original source */}
-            <div data-testid="caption-source" className={styles.captionText} style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>
+            <div data-testid="caption-source" className={styles.captionText}>
               {cap.source}
             </div>
 
@@ -119,13 +89,7 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
 
             {/* Translation */}
             <div
-              style={{
-                fontSize: '0.95rem',
-                color: isStreaming ? 'var(--accent)' : 'var(--text-secondary)',
-                borderTop: '1px dashed var(--border-color)',
-                paddingTop: 8,
-              }}
-              className={styles.captionText}
+              className={styles.captionTranslation}
               data-testid="caption-translation"
             >
               {cap.translation || (isStreaming ? '...' : '')}

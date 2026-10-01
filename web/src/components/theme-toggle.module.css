@@ -1,0 +1,70 @@
+/* Uiverse Galaxy inspired theme switch (satyamchaudharydev / 3bdel3ziz-T) */
+.toggleWrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  user-select: none;
+}
+
+.switch {
+  display: inline-block;
+  --width-of-switch: 44px;
+  --height-of-switch: 24px;
+  --size-of-icon: 16px;
+  --slider-offset: 4px;
+  position: relative;
+  width: var(--width-of-switch);
+  height: var(--height-of-switch);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  border: 1px solid var(--border-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 30px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.slider::before {
+  position: absolute;
+  content: "";
+  height: var(--size-of-icon);
+  width: var(--size-of-icon);
+  border-radius: 50%;
+  left: var(--slider-offset);
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(40deg, #ff0080, #ff8c00 70%);
+  box-shadow: 0 0 8px rgba(255, 140, 0, 0.6);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark mode state (checked = dark) */
+.checkbox:checked + .slider {
+  background-color: #1e293b;
+  border-color: #334155;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.checkbox:checked + .slider::before {
+  left: calc(100% - (var(--size-of-icon) + var(--slider-offset)));
+  background: #1e293b;
+  box-shadow: inset -3px -2px 5px -1px #8983f7, inset -7px -3px 0 0 #38bdf8, 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.checkbox:focus-visible + .slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
