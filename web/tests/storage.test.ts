@@ -298,7 +298,7 @@ describe('Storage Layer', () => {
 
   it('loads and saves settings', async () => {
     const initial = await loadSettings();
-    expect(initial.translationModel).toBe('google:gemini-3.5-flash-lite');
+    expect(initial.translationModel).toBe('google:gemini-3.1-flash-lite');
     expect(initial.pauseMs).toBe(900);
     expect(initial.readingPauseMs).toBe(900);
 

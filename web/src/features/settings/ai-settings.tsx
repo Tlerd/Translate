@@ -29,7 +29,9 @@ export function AiSettings() {
     return <div style={{ padding: 32 }}>Đang tải cài đặt...</div>;
   }
 
-  const translationModels = modelData?.models.filter((m) => m.allowedTasks.includes('translate')) || [];
+  const translationOrder = ['google:gemini-3.1-flash-lite', 'google:gemini-2.5-flash-lite', 'google:gemini-3.5-flash-lite', 'openai:gpt-4o-mini'];
+  const translationModels = modelData?.models.filter((m) => m.allowedTasks.includes('translate') && m.enabled)
+    .sort((a, b) => translationOrder.indexOf(a.key) - translationOrder.indexOf(b.key)) || [];
   const summaryModels = modelData?.models.filter((m) => m.allowedTasks.includes('summarize')) || [];
   const imageModels = modelData?.models.filter((m) => m.allowedTasks.includes('image')) || [];
 

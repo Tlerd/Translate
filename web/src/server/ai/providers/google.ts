@@ -1,5 +1,6 @@
 import 'server-only';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import type { ThinkingConfig } from '@google/genai';
 import { AiConfigError } from '@/config/ai.server';
 
 export interface ProviderCallParams {
@@ -8,6 +9,7 @@ export interface ProviderCallParams {
   systemInstruction?: string;
   userPrompt: string;
   signal?: AbortSignal;
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
 export async function* streamGoogleText(params: ProviderCallParams): AsyncIterable<string> {
@@ -23,6 +25,7 @@ export async function* streamGoogleText(params: ProviderCallParams): AsyncIterab
     config: {
       systemInstruction: params.systemInstruction,
       abortSignal: params.signal,
+      thinkingConfig: params.thinkingLevel ? thinkingConfigForModel(params.modelId, params.thinkingLevel) : undefined,
     },
   });
 
@@ -53,6 +56,7 @@ export async function generateGoogleText(params: ProviderCallParams): Promise<st
     config: {
       systemInstruction: params.systemInstruction,
       abortSignal: params.signal,
+      thinkingConfig: params.thinkingLevel ? thinkingConfigForModel(params.modelId, params.thinkingLevel) : undefined,
     },
   });
 
@@ -65,7 +69,8 @@ export async function generateGoogleText(params: ProviderCallParams): Promise<st
 export async function generateGoogleImage(
   prompt: string,
   modelId: string,
-  apiKey?: string
+  apiKey?: string,
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
 ): Promise<Buffer> {
   if (!apiKey) {
     throw new AiConfigError('MISSING_CONFIG', 'Chưa cấu hình API key cho Google Image.');
@@ -76,6 +81,8 @@ export async function generateGoogleImage(
   const response = await ai.interactions.create({
     model: modelId,
     input: prompt,
+    response_format: { type: 'image', image_size: '1K' },
+    generation_config: thinkingLevel ? { thinking_level: thinkingLevel } : undefined,
   });
 
   const image = response.output_image;
@@ -90,4 +97,20 @@ export async function generateGoogleImage(
   const buffer = Buffer.from(image.data, 'base64');
   if (!buffer.length) throw new Error('Google Image API trả về dữ liệu ảnh rỗng.');
   return buffer;
+}
+
+function thinkingConfigForModel(
+  modelId: string,
+  level: 'minimal' | 'low' | 'medium' | 'high'
+): ThinkingConfig {
+  if (modelId.startsWith('gemini-2.5-')) {
+    const thinkingBudget = level === 'minimal' ? 0 : { low: 512, medium: 8192, high: 24576 }[level];
+    return { thinkingBudget };
+  }
+  return { thinkingLevel: {
+    minimal: ThinkingLevel.MINIMAL,
+    low: ThinkingLevel.LOW,
+    medium: ThinkingLevel.MEDIUM,
+    high: ThinkingLevel.HIGH,
+  }[level] };
 }

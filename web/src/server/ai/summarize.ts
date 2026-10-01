@@ -12,7 +12,7 @@ export async function executeSummarize(
   req: SummarizeRequest,
   signal?: AbortSignal
 ): Promise<SummarizeResponse> {
-  const resolved = resolveTaskConfig('summarize');
+  const resolved = resolveTaskConfig('summarize', req.modelKey, req.translationModelKey);
 
   // Check input length
   let totalChars = 0;
@@ -36,10 +36,14 @@ export async function executeSummarize(
     systemInstruction,
     userPrompt: userPayload,
     signal,
+    thinkingLevel: req.thinkingLevel,
   };
 
   let rawOutput = '';
   if (resolved.model.provider === 'google') {
+    if (req.thinkingLevel && !resolved.model.thinkingLevels?.includes(req.thinkingLevel)) {
+      throw new AiConfigError('UNSUPPORTED_MODEL', `Mức suy luận ${req.thinkingLevel} không được model ${resolved.model.modelId} hỗ trợ.`);
+    }
     rawOutput = await generateGoogleText(params);
   } else {
     rawOutput = await generateOpenAiText(params);

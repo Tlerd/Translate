@@ -12,7 +12,7 @@ interface RecorderToolbarProps {
 }
 
 export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
-  const { state, startRecording, stopRecording, switchMode, setTranslationModel, setPauseMs, setReadingPauseMs } = useRecording();
+  const { state, startRecording, stopRecording, switchMode, setTranslationModel, setTranslationThinkingLevel, setPauseMs, setReadingPauseMs } = useRecording();
 
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | null>(null);
@@ -21,7 +21,9 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
   useEffect(() => {
     fetchModels()
       .then((data) => {
-        const transModels = data.models.filter((m) => m.allowedTasks.includes('translate'));
+        const order = ['google:gemini-3.1-flash-lite', 'google:gemini-2.5-flash-lite', 'google:gemini-3.5-flash-lite', 'openai:gpt-4o-mini'];
+        const transModels = data.models.filter((m) => m.allowedTasks.includes('translate') && m.enabled)
+          .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
         setAvailableModels(transModels);
       })
       .catch((err) => console.warn('Lỗi lấy danh mục model:', err));
@@ -103,6 +105,40 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           )}
         </button>
 
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+          <label htmlFor="translation-model" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Model dịch:</label>
+          <select
+            id="translation-model"
+            value={state.translationModelKey}
+            onChange={(e) => {
+              const nextKey = e.target.value;
+              setTranslationModel(nextKey);
+              const nextModel = availableModels.find((model) => model.key === nextKey);
+              if (state.translationThinkingLevel !== 'auto' && !nextModel?.thinkingLevels?.includes(state.translationThinkingLevel as 'minimal' | 'low' | 'medium' | 'high')) {
+                setTranslationThinkingLevel('auto');
+              }
+            }}
+            disabled={isRecording}
+            style={{ padding: '6px 10px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-primary)' }}
+          >
+            {availableModels.map((m) => <option key={m.key} value={m.key}>{m.name}{!m.configured ? ' (Chưa có key)' : ''}</option>)}
+            {availableModels.length === 0 && <option value="google:gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite · $0.25/$1.50 / 1M token</option>}
+          </select>
+          {(() => {
+            const selected = availableModels.find((model) => model.key === state.translationModelKey);
+            const levels = selected?.thinkingLevels ?? [];
+            return levels.length > 0 ? (
+              <>
+                <label htmlFor="translation-thinking" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Suy luận:</label>
+                <select id="translation-thinking" value={state.translationThinkingLevel} onChange={(e) => setTranslationThinkingLevel(e.target.value)} disabled={isRecording} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                  <option value="auto">Tự động</option>
+                  {levels.map((level) => <option key={level} value={level}>{({ minimal: 'Tối thiểu', low: 'Thấp', medium: 'Vừa', high: 'Cao' } as const)[level]}</option>)}
+                </select>
+              </>
+            ) : null;
+          })()}
+        </div>
+
         {actionError && <span role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{actionError}</span>}
 
         {/* Mode switcher */}
@@ -148,37 +184,6 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
             <Layers size={14} />
             <span>Luyện đọc</span>
           </button>
-        </div>
-
-        {/* Translation Model selection */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Model dịch:</span>
-          <select
-            value={state.translationModelKey}
-            onChange={(e) => setTranslationModel(e.target.value)}
-            disabled={isRecording}
-            style={{
-              padding: '6px 10px',
-              backgroundColor: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            {availableModels.length > 0 ? (
-              availableModels.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.name} {!m.configured ? '(Chưa có key)' : ''}
-                </option>
-              ))
-            ) : (
-              <>
-                <option value="google:gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Google)</option>
-                <option value="openai:gpt-4o-mini">GPT-4o mini (OpenAI)</option>
-              </>
-            )}
-          </select>
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>

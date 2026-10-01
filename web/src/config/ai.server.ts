@@ -24,10 +24,10 @@ export interface ResolvedTaskConfig {
   timeoutMs: number;
 }
 
-export function validateTwoModelsSeparation(): void {
+export function validateTwoModelsSeparation(translationOverride?: string, summaryOverride?: string): void {
   const env = getServerEnv();
-  const transKey = env.AI_TRANSLATION_MODEL;
-  const summKey = env.AI_SUMMARY_MODEL;
+  const transKey = translationOverride || env.AI_TRANSLATION_MODEL;
+  const summKey = summaryOverride || env.AI_SUMMARY_MODEL;
 
   const transModel = getModelConfig(transKey);
   const summModel = getModelConfig(summKey);
@@ -46,10 +46,15 @@ export function validateTwoModelsSeparation(): void {
 
 export function resolveTaskConfig(
   task: AiTask,
-  requestedModelKey?: string
+  requestedModelKey?: string,
+  pairedTranslationModelKey?: string
 ): ResolvedTaskConfig {
   // Validate separation
-  validateTwoModelsSeparation();
+  if (task === 'summarize' && (requestedModelKey || pairedTranslationModelKey)) {
+    validateTwoModelsSeparation(pairedTranslationModelKey, requestedModelKey);
+  } else {
+    validateTwoModelsSeparation();
+  }
 
   const env = getServerEnv();
   let modelKey = requestedModelKey;
@@ -77,6 +82,9 @@ export function resolveTaskConfig(
       'AI_MODEL_ROLE_CONFLICT',
       `Model ${model.key} không được phép dùng cho tác vụ ${task}. Danh sách cho phép: ${model.allowedTasks.join(', ')}`
     );
+  }
+  if (!model.enabled) {
+    throw new AiConfigError('UNSUPPORTED_MODEL', model.disabledReason || `Model ${model.key} đã bị tắt.`);
   }
 
   // Resolve API Key according to priority
@@ -130,6 +138,12 @@ export function getPublicModelList(): ModelInfo[] {
       capabilities: m.capabilities,
       allowedTasks: m.allowedTasks,
       configured: hasKey,
+      enabled: m.enabled,
+      disabledReason: m.disabledReason,
+      inputPrice: m.inputPrice,
+      outputPrice: m.outputPrice,
+      imagePrice: m.imagePrice,
+      thinkingLevels: m.thinkingLevels,
     };
   });
 }

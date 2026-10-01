@@ -246,6 +246,7 @@ export async function loadSettings(): Promise<AppSettings> {
     const map = new Map(records.map((r) => [r.key, r.value]));
     return {
       translationModel: map.get('translationModel') || DEFAULT_SETTINGS.translationModel,
+      translationThinkingLevel: map.get('translationThinkingLevel') || DEFAULT_SETTINGS.translationThinkingLevel,
       summaryModel: map.get('summaryModel') || DEFAULT_SETTINGS.summaryModel,
       imageModel: map.get('imageModel') || DEFAULT_SETTINGS.imageModel,
       imageEnabled: map.get('imageEnabled') === 'true',

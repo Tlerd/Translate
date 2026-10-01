@@ -11,6 +11,7 @@ const sdk = vi.hoisted(() => ({
 }));
 
 vi.mock('@google/genai', () => ({
+  ThinkingLevel: { MINIMAL: 'MINIMAL', LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' },
   GoogleGenAI: class {
     models = {
       generateContent: sdk.googleContent,
@@ -61,8 +62,21 @@ describe('provider SDK boundaries', () => {
     expect(sdk.googleImage).toHaveBeenCalledWith({
       model: 'gemini-3.1-flash-image',
       input: 'A blue landscape',
+      response_format: { type: 'image', image_size: '1K' },
+      generation_config: undefined,
     });
     expect(sdk.googleGenerateImages).not.toHaveBeenCalled();
+  });
+
+  it('uses model-specific text thinking controls and native image effort fields', async () => {
+    sdk.googleContent.mockResolvedValue({ text: 'translated' });
+    await generateGoogleText({ apiKey: 'key', modelId: 'gemini-2.5-flash-lite', userPrompt: 'p', thinkingLevel: 'low' });
+    expect(sdk.googleContent.mock.calls.at(-1)?.[0].config.thinkingConfig).toEqual({ thinkingBudget: 512 });
+    await generateGoogleText({ apiKey: 'key', modelId: 'gemini-3.1-flash-lite', userPrompt: 'p', thinkingLevel: 'minimal' });
+    expect(sdk.googleContent.mock.calls.at(-1)?.[0].config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
+    sdk.googleImage.mockResolvedValue({ output_image: { data: Buffer.from('image').toString('base64') } });
+    await generateGoogleImage('p', 'gemini-3.1-flash-lite-image', 'key', 'high');
+    expect(sdk.googleImage).toHaveBeenLastCalledWith({ model: 'gemini-3.1-flash-lite-image', input: 'p', response_format: { type: 'image', image_size: '1K' }, generation_config: { thinking_level: 'high' } });
   });
 
   it('reports Gemini safety or empty image output rather than fabricating an image', async () => {

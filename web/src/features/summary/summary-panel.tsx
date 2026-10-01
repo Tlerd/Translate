@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sparkles, Loader2, BookOpen, AlertCircle } from 'lucide-react';
-import { requestSummary } from '@/lib/api-client';
+import { fetchModels, requestSummary } from '@/lib/api-client';
 import { computeCaptionSourceHash, saveSummary } from '@/storage/recordings';
 import type { SummaryItem, CaptionItem } from '@/shared/recording';
+import type { ModelInfo, ModelsResponse } from '@/shared/ai-contracts';
 
 interface SummaryPanelProps {
   recordingId: string;
@@ -12,6 +13,7 @@ interface SummaryPanelProps {
   summary?: SummaryItem;
   summaryIsStale?: boolean;
   targetLanguage?: string;
+  translationModelKey?: string;
   onSummaryGenerated: (summary: SummaryItem) => void;
   onSelectCaption?: (captionId: number) => void;
 }
@@ -22,11 +24,31 @@ export function SummaryPanel({
   summary,
   summaryIsStale = false,
   targetLanguage = 'vi',
+  translationModelKey = 'google:gemini-3.1-flash-lite',
   onSummaryGenerated,
   onSelectCaption,
 }: SummaryPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelData, setModelData] = useState<ModelsResponse | null>(null);
+  const [thinkingLevel, setThinkingLevel] = useState('auto');
+  const [selectedSummaryModelKey, setSelectedSummaryModelKey] = useState('');
+
+  useEffect(() => {
+    fetchModels().then((data) => {
+      setModelData(data);
+      setSelectedSummaryModelKey(data.defaults.summarize);
+    }).catch((err) => console.warn('Lỗi lấy danh sách model:', err));
+  }, []);
+
+  const summaryModels = (modelData?.models ?? [])
+    .filter((model) => model.allowedTasks.includes('summarize') && model.enabled)
+    .sort((a, b) => {
+      const order = ['google:gemini-3.1-flash-lite', 'google:gemini-2.5-flash-lite', 'google:gemini-3.8-flash'];
+      return (order.indexOf(a.key) < 0 ? 99 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 99 : order.indexOf(b.key));
+    });
+  const selectedSummaryModel: ModelInfo | undefined = summaryModels.find((model) => model.key === selectedSummaryModelKey);
+  const summaryThinkingLevels = selectedSummaryModel?.thinkingLevels ?? [];
 
   const handleGenerateSummary = async () => {
     if (captions.length === 0) {
@@ -46,6 +68,9 @@ export function SummaryPanel({
         recordingId,
         sourceHash,
         targetLanguage,
+        thinkingLevel: thinkingLevel === 'auto' ? undefined : thinkingLevel as 'minimal' | 'low' | 'medium' | 'high',
+        modelKey: selectedSummaryModelKey || modelData?.defaults.summarize,
+        translationModelKey,
         captions: captions.map((c) => ({
           id: c.id,
           startMs: c.startMs,
@@ -114,6 +139,23 @@ export function SummaryPanel({
           </span>
         </div>
 
+        {summaryModels.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            <span>Model tóm tắt</span>
+            <select aria-label="Model tóm tắt" value={selectedSummaryModelKey} onChange={(event) => { setSelectedSummaryModelKey(event.target.value); setThinkingLevel('auto'); }} disabled={loading} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
+              {summaryModels.map((model) => <option key={model.key} value={model.key} disabled={model.key === translationModelKey}>{model.name}{model.key === translationModelKey ? ' (đang dùng để dịch)' : ''}</option>)}
+            </select>
+          </label>
+        )}
+        {summaryThinkingLevels.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            <span>Mức suy luận</span>
+            <select aria-label="Mức suy luận tóm tắt" value={thinkingLevel} onChange={(event) => setThinkingLevel(event.target.value)} disabled={loading} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
+              <option value="auto">Tự động</option>
+              {summaryThinkingLevels.map((level) => <option key={level} value={level}>{({ minimal: 'Tối thiểu', low: 'Thấp', medium: 'Vừa', high: 'Cao' } as const)[level]}</option>)}
+            </select>
+          </label>
+        )}
         <button
           onClick={handleGenerateSummary}
           disabled={loading || captions.length === 0}

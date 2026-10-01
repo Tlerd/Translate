@@ -17,7 +17,8 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableImageModels, setAvailableImageModels] = useState<ModelInfo[]>([]);
-  const [selectedModelKey, setSelectedModelKey] = useState('google:gemini-3.1-flash-image');
+  const [selectedModelKey, setSelectedModelKey] = useState('google:gemini-3.1-flash-lite-image');
+  const [thinkingLevel, setThinkingLevel] = useState('minimal');
   const currentSummaryHashRef = useRef(summary?.sourceHash);
   currentSummaryHashRef.current = summary?.sourceHash;
 
@@ -43,7 +44,9 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
   useEffect(() => {
     fetchModels()
       .then((res) => {
-        const imageModels = res.models.filter((m) => m.allowedTasks.includes('image'));
+        const order = ['google:gemini-3.1-flash-lite-image', 'google:gemini-3.1-flash-image', 'google:gemini-2.5-flash-image'];
+        const imageModels = res.models.filter((m) => m.allowedTasks.includes('image'))
+          .sort((a, b) => (order.indexOf(a.key) < 0 ? 99 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 99 : order.indexOf(b.key)));
         setAvailableImageModels(imageModels);
       })
       .catch((err) => console.warn('Lỗi lấy model ảnh:', err));
@@ -61,6 +64,7 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
     try {
       const requestId = `img_${recordingId}_${Date.now()}`;
       const requestedSourceHash = summary.sourceHash;
+      const selectedModel = availableImageModels.find((model) => model.key === selectedModelKey);
       const { blob, modelKey } = await requestImage({
         requestId,
         recordingId,
@@ -68,6 +72,9 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
         sourceHash: summary.sourceHash,
         summaryHash: `hash_${Date.now()}`,
         modelKey: selectedModelKey,
+        thinkingLevel: selectedModel?.thinkingLevels?.includes(thinkingLevel as 'minimal' | 'low' | 'medium' | 'high')
+          ? thinkingLevel as 'minimal' | 'low' | 'medium' | 'high'
+          : undefined,
         summary: {
           title: summary.title,
           overview: summary.overview,
@@ -152,6 +159,12 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
           <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Ảnh Minh Họa Bài Học</h4>
         </div>
 
+        {availableImageModels.some((model) => model.key === 'google:gemini-2.5-flash-image') && (
+          <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.78rem' }}>
+            Nano Banana (Gemini 2.5 Flash Image) đã bị tắt; Google sẽ ngừng model này ngày 02/10/2026.
+          </p>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select
             value={selectedModelKey}
@@ -168,17 +181,25 @@ export function ImagePanel({ recordingId, summary }: ImagePanelProps) {
           >
             {availableImageModels.length > 0 ? (
               availableImageModels.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.name} {!m.configured ? '(Chưa có key)' : ''}
+                <option key={m.key} value={m.key} disabled={!m.enabled}>
+                  {m.name} {!m.enabled ? '(Đã ngừng)' : !m.configured ? '(Chưa có key)' : ''}
                 </option>
               ))
             ) : (
               <>
-                <option value="google:gemini-3.1-flash-image">Gemini 3.1 Flash Image (Google)</option>
+                <option value="google:gemini-3.1-flash-lite-image">Nano Banana 2 Lite · ~$0.034/ảnh 1K</option>
+                <option value="google:gemini-3.1-flash-image">Nano Banana 2 · ~$0.067/ảnh 1K</option>
+                <option value="google:gemini-2.5-flash-image" disabled>Nano Banana · $0.039/ảnh (ngừng 02/10/2026)</option>
                 <option value="openai:gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst (OpenAI)</option>
               </>
             )}
           </select>
+
+          {availableImageModels.some((m) => m.key === selectedModelKey && (m.thinkingLevels?.length ?? 0) > 0) && (
+            <select aria-label="Mức suy luận tạo ảnh" value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} disabled={loading} style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+              {availableImageModels.find((m) => m.key === selectedModelKey)?.thinkingLevels?.map((level) => <option key={level} value={level}>{level === 'minimal' ? 'Suy luận tối thiểu' : 'Suy luận cao'}</option>)}
+            </select>
+          )}
 
           <button
             onClick={handleGenerateImage}

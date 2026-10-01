@@ -28,11 +28,11 @@ export function getServerEnv(): ServerEnv {
     IMAGE_GOOGLE_API_KEY: process.env.IMAGE_GOOGLE_API_KEY?.trim() || undefined,
     IMAGE_OPENAI_API_KEY: process.env.IMAGE_OPENAI_API_KEY?.trim() || undefined,
     AI_TRANSLATION_MODEL:
-      process.env.AI_TRANSLATION_MODEL?.trim() || 'google:gemini-3.5-flash-lite',
+      process.env.AI_TRANSLATION_MODEL?.trim() || 'google:gemini-3.1-flash-lite',
     AI_SUMMARY_MODEL:
       process.env.AI_SUMMARY_MODEL?.trim() || 'google:gemini-3.8-flash',
     AI_IMAGE_MODEL:
-      process.env.AI_IMAGE_MODEL?.trim() || 'google:gemini-3.1-flash-image',
+      process.env.AI_IMAGE_MODEL?.trim() || 'google:gemini-3.1-flash-lite-image',
     AI_IMAGE_ENABLED: process.env.AI_IMAGE_ENABLED === 'true',
     AUTH_SECRET: process.env.AUTH_SECRET?.trim() || undefined,
     AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID?.trim() || undefined,

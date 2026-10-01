@@ -22,6 +22,7 @@ export interface ControllerState {
   sourceLanguage: string;
   targetLanguage: string;
   translationModelKey: string;
+  translationThinkingLevel: string;
   durationMs: number;
   audioVolume: number;
   speechState: 'idle' | 'listening' | 'reconnecting' | 'stopped';
@@ -50,7 +51,8 @@ export class ClassroomController {
     mode: 'lecture',
     sourceLanguage: 'ja-JP',
     targetLanguage: 'vi',
-    translationModelKey: 'google:gemini-3.5-flash-lite',
+    translationModelKey: 'google:gemini-3.1-flash-lite',
+    translationThinkingLevel: 'auto',
     durationMs: 0,
     audioVolume: 0,
     speechState: 'idle',
@@ -170,6 +172,7 @@ export class ClassroomController {
       sourceLanguage,
       targetLanguage,
       translationModelKey,
+      translationThinkingLevel: this.state.translationThinkingLevel,
       durationMs: 0,
       audioVolume: 0,
       speechState: 'listening',
@@ -212,6 +215,7 @@ export class ClassroomController {
               revision: requestSnapshot?.revision || 1,
               configRevision: this.configRevision,
               modelKey: this.state.translationModelKey,
+              thinkingLevel: this.state.translationThinkingLevel === 'auto' ? undefined : this.state.translationThinkingLevel as 'minimal' | 'low' | 'medium' | 'high',
               sourceLanguage: direction.sourceCode,
               targetLanguage: direction.targetCode,
               text: source,
@@ -508,6 +512,13 @@ export class ClassroomController {
     if (this.state.translationModelKey === modelKey) return;
     this.configRevision++;
     this.state.translationModelKey = modelKey;
+    this.notify();
+  }
+
+  public setTranslationThinkingLevel(level: string): void {
+    if (this.state.translationThinkingLevel === level) return;
+    this.configRevision++;
+    this.state.translationThinkingLevel = level;
     this.notify();
   }
 

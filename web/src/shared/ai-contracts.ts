@@ -10,6 +10,12 @@ export interface ModelInfo {
   capabilities: AiTask[];
   allowedTasks: AiTask[];
   configured: boolean;
+  enabled: boolean;
+  disabledReason?: string;
+  inputPrice?: string;
+  outputPrice?: string;
+  imagePrice?: string;
+  thinkingLevels?: Array<'minimal' | 'low' | 'medium' | 'high'>;
 }
 
 export interface ModelsResponse {
@@ -30,6 +36,7 @@ export const TranslateRequestSchema = z.object({
   revision: z.number(),
   configRevision: z.number().default(1),
   modelKey: z.string(),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   sourceLanguage: z.string().default('ja'),
   targetLanguage: z.string().default('vi'),
   text: z.string().min(1),
@@ -61,6 +68,9 @@ export const SummarizeRequestSchema = z.object({
   recordingId: z.string(),
   sourceHash: z.string(),
   targetLanguage: z.string().default('vi'),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  modelKey: z.string().optional(),
+  translationModelKey: z.string().optional(),
   captions: z.array(CaptionInputSchema).min(1, 'Cần ít nhất một caption để tóm tắt'),
 });
 
@@ -92,6 +102,7 @@ export const GenerateImageRequestSchema = z.object({
   sourceHash: z.string(),
   summaryHash: z.string(),
   modelKey: z.string(),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   summary: z.object({
     title: z.string(),
     overview: z.string(),

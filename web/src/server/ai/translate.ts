@@ -1,5 +1,5 @@
 import 'server-only';
-import { resolveTaskConfig } from '@/config/ai.server';
+import { resolveTaskConfig, AiConfigError } from '@/config/ai.server';
 import {
   buildTranslationSystemPrompt,
   buildTranslationPayload,
@@ -34,9 +34,13 @@ export async function* executeTranslation(
     systemInstruction,
     userPrompt: userPayload,
     signal,
+    thinkingLevel: req.thinkingLevel,
   };
 
   if (resolved.model.provider === 'google') {
+    if (req.thinkingLevel && !resolved.model.thinkingLevels?.includes(req.thinkingLevel)) {
+      throw new AiConfigError('UNSUPPORTED_MODEL', `Mức suy luận ${req.thinkingLevel} không được model ${resolved.model.modelId} hỗ trợ.`);
+    }
     yield* streamGoogleText(params);
   } else {
     yield* streamOpenAiText(params);

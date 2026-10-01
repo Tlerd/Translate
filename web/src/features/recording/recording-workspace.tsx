@@ -191,6 +191,7 @@ export function RecordingWorkspace({
               summary={summary}
               summaryIsStale={summaryIsStale}
               targetLanguage={recording.targetLanguage}
+              translationModelKey={recording.config.translationModelKey}
               onSummaryGenerated={handleSummaryGenerated}
               onSelectCaption={handleSelectCaption}
             />

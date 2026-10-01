@@ -12,6 +12,7 @@ interface RecordingContextValue {
   stopRecording: () => Promise<void>;
   switchMode: (mode: ClassroomMode) => void;
   setTranslationModel: (modelKey: string) => void;
+  setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
   setReadingPauseMs: (milliseconds: number) => void;
 }
@@ -43,6 +44,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (!active || controller.snapshot().state !== 'stopped' || pauseChangedByUserRef.current) return;
       controller.setPauseMs(settings.pauseMs);
       controller.setReadingPauseMs(settings.readingPauseMs);
+      controller.setTranslationModel(settings.translationModel);
+      controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
     }).catch((error) => console.warn('Không thể tải thời gian chốt câu:', error));
     return () => { active = false; };
   }, []);
@@ -51,6 +54,16 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     pauseChangedByUserRef.current = true;
     controllerRef.current!.setPauseMs(milliseconds);
     void saveSettings({ pauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
+  };
+
+  const updateTranslationModel = (modelKey: string) => {
+    controllerRef.current!.setTranslationModel(modelKey);
+    void saveSettings({ translationModel: modelKey }).catch((error) => console.warn('Không thể lưu model dịch:', error));
+  };
+
+  const updateTranslationThinkingLevel = (level: string) => {
+    controllerRef.current!.setTranslationThinkingLevel(level);
+    void saveSettings({ translationThinkingLevel: level }).catch((error) => console.warn('Không thể lưu mức suy luận:', error));
   };
 
   const updateReadingPauseMs = (milliseconds: number) => {
@@ -65,7 +78,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     startRecording: (options) => controllerRef.current!.start(options),
     stopRecording: () => controllerRef.current!.stop(),
     switchMode: (mode) => controllerRef.current!.switchMode(mode),
-    setTranslationModel: (modelKey) => controllerRef.current!.setTranslationModel(modelKey),
+    setTranslationModel: updateTranslationModel,
+    setTranslationThinkingLevel: updateTranslationThinkingLevel,
     setPauseMs: updatePauseMs,
     setReadingPauseMs: updateReadingPauseMs,
   };

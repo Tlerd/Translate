@@ -31,10 +31,14 @@ export async function executeGenerateImage(
 
   let rawBuffer: Buffer;
   if (resolved.model.provider === 'google') {
+    if (req.thinkingLevel && !resolved.model.thinkingLevels?.includes(req.thinkingLevel)) {
+      throw new AiConfigError('UNSUPPORTED_MODEL', `Mức suy luận ${req.thinkingLevel} không được model ${resolved.model.modelId} hỗ trợ.`);
+    }
     rawBuffer = await generateGoogleImage(
       prompt,
       resolved.model.modelId,
-      resolved.apiKey
+      resolved.apiKey,
+      req.thinkingLevel
     );
   } else {
     rawBuffer = await generateOpenAiImage(

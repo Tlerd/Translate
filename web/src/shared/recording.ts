@@ -92,6 +92,7 @@ export interface ImageItem {
 
 export interface AppSettings {
   translationModel: string;
+  translationThinkingLevel: string;
   summaryModel: string;
   imageModel: string;
   imageEnabled: boolean;
@@ -105,7 +106,8 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  translationModel: 'google:gemini-3.5-flash-lite',
+  translationModel: 'google:gemini-3.1-flash-lite',
+  translationThinkingLevel: 'auto',
   summaryModel: 'google:gemini-3.8-flash',
   imageModel: 'google:gemini-3.1-flash-image',
   imageEnabled: false,
