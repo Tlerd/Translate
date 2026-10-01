@@ -42,3 +42,18 @@ Chưa đủ bằng chứng để kết luận mic iPhone hỏng hoặc cần mua
 Tài liệu gốc: [Google Live Transcription](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe), [giới hạn Transcribe/diarization](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe), [Apple: nhiệt độ iPhone](https://support.apple.com/118431), [Apple: ghi âm và mic tương thích](https://support.apple.com/guide/iphone/iph4d2a39a3b/ios).
 
 Phạm vi lần sửa này là web. Chưa chỉnh app local Realme C3; mã nguồn mobile không được đưa lên Git.
+
+
+## Lựa chọn nhận giọng Gemini 3.5
+
+- Gemini 3.5 Transcribe Live (`google`): WebSocket, hiện chữ liên tục; mặc định cũ vẫn giữ.
+- Gemini 3.5 Transcribe (`google-transcribe`): gửi WAV PCM16/16 kHz mono theo đoạn, chốt sau khoảng nghỉ đã chọn (mặc định 0,9 giây), tối đa khoảng 15 giây nếu nói liên tục. Chữ hiện sau khi API trả lời; dùng verbatim, không dùng smart tự biên tập. Dừng thu chờ đoạn cuối và dịch trước khi lưu kết thúc.
+- Trình duyệt: dùng dịch vụ nhận giọng của trình duyệt, không tính phí Gemini ASR; API dịch vẫn tính riêng.
+
+Giá Google tra ngày 01/10/2026: 5 giờ = 300 phút. Nhận giọng Live khoảng 300 × 0,009 = 2,70 USD; theo đoạn khoảng 300 × 0,005 = 1,50 USD. Các đơn giá/phút là ước tính từ token, không phải mức phí cố định.
+
+Ví dụ tổng các yêu cầu dịch bằng Gemini 3.1 Flash-Lite có 100.000 token đầu vào (gồm prompt/context) và 100.000 token đầu ra: 0,1 × 0,25 + 0,1 × 1,50 = 0,175 USD. Tổng nhận giọng và dịch trong ví dụ: Live khoảng 2,88 USD; theo đoạn khoảng 1,68 USD. Không bao gồm tóm tắt, ảnh, phân người nói, retry và dịch lại; nội dung thực tế có thể tăng token nhiều hơn.
+
+Nguồn: https://ai.google.dev/gemini-api/docs/pricing và https://ai.google.dev/gemini-api/docs/transcribe
+
+Giới hạn kiểm chứng: đã kiểm thử queue theo thứ tự, WAV, khoảng nghỉ, đoạn cuối, lỗi API, guard và luồng controller → dịch → lưu bằng fixture. Chưa thử cuộc thu 5 giờ trên iPhone hoặc chất lượng giọng thật với model unary. Nếu API lỗi, web báo rõ đoạn không có chữ và giữ audio cục bộ; không tự suy đoán chữ. Queue chậm quá hai phút dừng nhận thêm PCM để tránh tăng RAM vô hạn, với cảnh báo; audio gốc vẫn lưu. Giới hạn phân người nói cũ vẫn áp dụng, độc lập với các đoạn nhận giọng.

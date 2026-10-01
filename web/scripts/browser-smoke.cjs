@@ -354,6 +354,10 @@ async function run() {
 
     await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    assert.equal(await page.locator('#speech-provider option').count(), 3);
+    await page.locator('#speech-provider').selectOption('google-transcribe');
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'google-transcribe');
+    assert.match(await page.locator('body').innerText(), /1,50 USD/);
     await page.locator('#speech-provider').selectOption('browser');
     assert.equal(await page.locator('#speech-provider').inputValue(), 'browser');
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();

@@ -15,7 +15,7 @@ interface RecordingContextValue {
   setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
   setReadingPauseMs: (milliseconds: number) => void;
-  setSpeechProvider: (provider: 'google' | 'browser') => void;
+  setSpeechProvider: (provider: 'google' | 'google-transcribe' | 'browser') => void;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -74,7 +74,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     void saveSettings({ readingPauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
   };
 
-  const updateSpeechProvider = (provider: 'google' | 'browser') => {
+  const updateSpeechProvider = (provider: 'google' | 'google-transcribe' | 'browser') => {
     controllerRef.current!.setSpeechProvider(provider);
     void saveSettings({ speechProvider: provider }).catch((error) => console.warn('Không thể lưu cách nhận giọng:', error));
   };

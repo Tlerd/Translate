@@ -114,14 +114,21 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           <select
             id="speech-provider"
             value={state.speechProvider}
-            onChange={(event) => setSpeechProvider(event.target.value as 'google' | 'browser')}
+            onChange={(event) => setSpeechProvider(event.target.value as 'google' | 'google-transcribe' | 'browser')}
             disabled={isRecording}
             style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-primary)' }}
           >
-            <option value="google">Google (API)</option>
+            <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
+            <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
             <option value="browser">Trình duyệt</option>
           </select>
         </div>
+
+        {state.speechProvider !== 'browser' && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+          {state.speechProvider === 'google' ? 'Chữ trực tiếp · 5 giờ nhận giọng ≈ 2,70 USD.' : 'Chữ sau mỗi đoạn nghỉ, tối đa 15 giây + thời gian API · 5 giờ nhận giọng ≈ 1,50 USD.'}
+          {' '}Ví dụ dịch bằng Gemini 3.1 Flash-Lite với tổng 100.000 token vào + 100.000 token ra: thêm ≈ 0,175 USD (5 giờ nhận giọng + dịch ≈ 2,88 USD Live / 1,68 USD theo đoạn). Chưa gồm tóm tắt, ảnh, phân người nói và các lượt dịch lại.
+          {' '}<a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe" target="_blank" rel="noreferrer">Bảng giá Google</a>
+        </p>}
 
         <div className={styles.modelSettings} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <label htmlFor="translation-model" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Model dịch:</label>
@@ -254,9 +261,9 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
         {isRecording && (
           <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
-            <span>Nhận giọng: {state.speechProvider === 'google' ? 'Google (API)' : 'Trình duyệt'}</span>
+            <span>Nhận giọng: {state.speechProvider === 'google' ? 'Gemini 3.5 Transcribe Live' : state.speechProvider === 'google-transcribe' ? 'Gemini 3.5 Transcribe' : 'Trình duyệt'}</span>
             <span title={state.micDeviceLabel ? `Thiết bị micro: ${state.micDeviceLabel}` : undefined}>Mic: {{ live: 'đang bật', muted: 'đang tắt', ended: 'đã ngắt', suspended: 'tạm dừng', idle: 'chưa bật' }[state.micState]}</span>
-            {state.speechProvider === 'google' && <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>}
+            {state.speechProvider !== 'browser' && <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>}
             <span>Kết quả nhận: {state.transcriptCount}</span>
             <span>Kết quả cuối: {state.lastTranscriptAt === null ? 'chưa có' : new Date(state.lastTranscriptAt).toLocaleTimeString()}</span>
             {state.translationLatencyMs !== null && <span>Dịch: {state.translationLatencyMs}ms</span>}

@@ -1,4 +1,5 @@
 import { WebSpeechRecognizer, type SpeechRecognitionCallbacks } from './speech-recognition';
+import { GeminiTranscribeRecognizer } from './gemini-transcribe-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { GeminiPcmCapture } from './gemini-pcm-capture';
 import { WebAudioRecorder } from './audio-recorder';
@@ -34,7 +35,7 @@ export interface ControllerState {
   epoch: number;
   pauseMs: number;
   readingPauseMs: number;
-  speechProvider: 'google' | 'browser';
+  speechProvider: 'google' | 'google-transcribe' | 'browser';
   micState: 'idle' | 'live' | 'muted' | 'ended' | 'suspended';
   receivedAudioMs: number;
   lastTranscriptAt: number | null;
@@ -46,7 +47,7 @@ export interface ControllerState {
 }
 
 export interface StartOptions {
-  speechProvider?: 'google' | 'browser';
+  speechProvider?: 'google' | 'google-transcribe' | 'browser';
   mode?: ClassroomMode;
   sourceLanguage?: string;
   targetLanguage?: string;
@@ -82,7 +83,7 @@ export class ClassroomController {
 
   private listeners: Set<(state: ControllerState) => void> = new Set();
 
-  private speechRecognizer: WebSpeechRecognizer | GeminiLiveRecognizer | null = null;
+  private speechRecognizer: WebSpeechRecognizer | GeminiLiveRecognizer | GeminiTranscribeRecognizer | null = null;
   private pcmCapture: GeminiPcmCapture | null = null;
   private pcmPreparation: Promise<void> | null = null;
   private pcmAttached = false;
@@ -162,7 +163,7 @@ export class ClassroomController {
     if (this.starting) return this.starting;
     if (this.state.state === 'recording' && this.state.recordingId) return this.state.recordingId;
     this.speakerAbort?.abort();
-    if ((options.speechProvider ?? this.state.speechProvider) === 'google') {
+    if ((options.speechProvider ?? this.state.speechProvider) !== 'browser') {
       // Unlock Web Audio inside the record-button activation on iOS, before
       // IndexedDB, microphone permissions, or the token request can yield.
       this.pcmCapture = new GeminiPcmCapture();
@@ -246,7 +247,7 @@ export class ClassroomController {
       if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
       const durationMs = Date.now() - this.startTime;
       this.state.durationMs = durationMs;
-      if (this.state.speechProvider === 'google' && this.pcmCapture?.state === 'suspended') this.state.micState = 'suspended';
+      if (this.state.speechProvider !== 'browser' && this.pcmCapture?.state === 'suspended') this.state.micState = 'suspended';
       this.notify();
     }, 500);
 
@@ -365,7 +366,7 @@ export class ClassroomController {
 
     // Speech Recognizer
     const callbacks: SpeechRecognitionCallbacks = {
-        onTranscript: (text, isFinal, epoch, providerItemId, providerRevision) => {
+        onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
           this.state.lastTranscriptAt = Date.now();
           this.state.transcriptCount++;
@@ -381,7 +382,7 @@ export class ClassroomController {
             const oldestId = this.seenSpeechSnapshots.keys().next().value;
             if (oldestId) this.seenSpeechSnapshots.delete(oldestId);
           }
-          const currentMs = Date.now() - this.startTime;
+          const currentMs = timing?.endMs ?? Date.now() - this.startTime;
           const existingLocation = this.speechItemLocations.get(providerItemId);
           if (!existingLocation && this.state.mode === 'lecture' && this.hasPendingTranscript) {
             // Web Speech keeps multiple result indices alive at once. A new
@@ -394,7 +395,7 @@ export class ClassroomController {
           const currentCaptionId = this.assembler!.currentCaptionId;
           const blockId = existingLocation?.blockId ?? this.activeBlockId;
           const isLateResult = captionId < currentCaptionId;
-          const startMs = existingLocation?.startMs ?? Math.max(0, currentMs - 2000);
+          const startMs = existingLocation?.startMs ?? timing?.startMs ?? Math.max(0, currentMs - 2000);
           this.speechItemLocations.delete(providerItemId);
           this.speechItemLocations.set(providerItemId, { captionId, blockId, startMs });
           if (this.speechItemLocations.size > 256) {
@@ -444,7 +445,7 @@ export class ClassroomController {
       this.pcmInputCallback = (samples, rate) => {
         if (this.sessionEpoch !== currentEpoch || this.state.state !== 'recording') return;
         this.state.receivedAudioMs += samples.length / rate * 1000;
-        if (this.pcmReady && this.speechRecognizer instanceof GeminiLiveRecognizer) this.speechRecognizer.pushPcm(samples, rate);
+        if (this.pcmReady && (this.speechRecognizer instanceof GeminiLiveRecognizer || this.speechRecognizer instanceof GeminiTranscribeRecognizer)) this.speechRecognizer.pushPcm(samples, rate);
         else if (this.pcmQueueMs < 10_000) { this.pcmQueue.push({ samples, rate }); this.pcmQueueMs += samples.length / rate * 1000; }
         else {
           const message = 'Nhận giọng mất kết nối quá 10 giây: có thể thiếu chữ trực tiếp. Audio vẫn được lưu trên máy; hãy kiểm tra mạng/API.';
@@ -455,12 +456,17 @@ export class ClassroomController {
         await this.pcmPreparation;
         await this.pcmCapture.start(this.audioRecorder!.stream!, this.pcmInputCallback);
         this.pcmAttached = true;
-        await this.connectGoogleSpeech(currentEpoch, sourceLanguage);
+        if (speechProvider === 'google-transcribe') {
+          const recognizer = new GeminiTranscribeRecognizer(callbacks, sourceLanguage, mode === 'readingPractice' ? readingPauseMs : pauseMs);
+          this.speechRecognizer = recognizer; recognizer.start(currentEpoch); this.pcmReady = true;
+          for (const item of this.pcmQueue) recognizer.pushPcm(item.samples, item.rate);
+          this.pcmQueue = []; this.pcmQueueMs = 0;
+        } else await this.connectGoogleSpeech(currentEpoch, sourceLanguage);
       }
       catch (err) {
         this.state.error = `Nhận giọng Gemini chưa hoạt động: ${err instanceof Error ? err.message : String(err)}. Audio đang được lưu trên máy.`;
         this.state.speechState = 'stopped'; this.notify();
-        if (this.pcmAttached) this.scheduleGoogleRetry(currentEpoch, sourceLanguage);
+        if (this.pcmAttached && speechProvider === 'google') this.scheduleGoogleRetry(currentEpoch, sourceLanguage);
         else { this.state.micState = 'suspended'; this.notify(); }
       }
     }
@@ -509,7 +515,7 @@ export class ClassroomController {
       });
     }, Math.min(1000 * 2 ** this.speechRetries, 4000));
   }
-  public setSpeechProvider(provider: 'google' | 'browser'): void {
+  public setSpeechProvider(provider: 'google' | 'google-transcribe' | 'browser'): void {
     if (this.state.state === 'recording') return;
     this.state.speechProvider = provider; this.notify();
   }

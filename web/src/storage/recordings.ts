@@ -266,7 +266,7 @@ export async function loadSettings(): Promise<AppSettings> {
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
-      speechProvider: map.get('speechProvider') === 'browser' ? 'browser' : 'google',
+      speechProvider: map.get('speechProvider') === 'browser' ? 'browser' : map.get('speechProvider') === 'google-transcribe' ? 'google-transcribe' : 'google',
     };
   } catch {
     return DEFAULT_SETTINGS;

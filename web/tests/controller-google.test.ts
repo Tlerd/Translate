@@ -133,6 +133,18 @@ describe('ClassroomController Google speech integration', () => {
     vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers();
   });
 
+  it('uses unary input without a live socket and drains its last words into saved translations', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ text: '最後の言葉' })));
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google-transcribe' });
+    expect(shared.recognizers).toHaveLength(0);
+    shared.captures[0].emit(new Float32Array(8000).fill(0.2), 16000);
+    await controller.stop();
+    expect(controller.snapshot().state).toBe('stopped');
+    expect(controller.snapshot().captions).toEqual([expect.objectContaining({ source: '最後の言葉', translation: 'translated', isFinal: true, startMs: 0, endMs: 500 })]);
+    expect(shared.saveCaption).toHaveBeenCalled();
+  });
+
   it('initializes PCM in the gesture, acquires one microphone stream, and shares it with the recorder', async () => {
     const controller = new ClassroomController();
     await controller.start({ speechProvider: 'google' });

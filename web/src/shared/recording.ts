@@ -93,7 +93,7 @@ export interface ImageItem {
 }
 
 export interface AppSettings {
-  speechProvider: 'google' | 'browser';
+  speechProvider: 'google' | 'google-transcribe' | 'browser';
   translationModel: string;
   translationThinkingLevel: string;
   summaryModel: string;
