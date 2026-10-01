@@ -5,7 +5,7 @@
 | Thứ tự sử dụng | Model API | Giá vào / ra | Effort |
 |---|---|---|---|
 | Dịch mặc định, cân bằng tốc độ và chất lượng | `gemini-3.1-flash-lite` | $0.25 / $1.50 | minimal, low, medium, high |
-| Dịch tiết kiệm | `gemini-2.5-flash-lite` | $0.10 / $0.40 | tắt thinking hoặc budget theo mức hỗ trợ |
+| Dịch tiết kiệm, tài khoản cũ còn được Google hỗ trợ | `gemini-2.5-flash-lite` | $0.10 / $0.40 | tắt thinking hoặc budget theo mức hỗ trợ |
 | Ảnh mặc định, tiết kiệm | `gemini-3.1-flash-lite-image` — Nano Banana 2 Lite | khoảng $0.0336 / ảnh 1K | minimal, high |
 | Ảnh nhiều lựa chọn độ phân giải | `gemini-3.1-flash-image` — Nano Banana 2 | khoảng $0.067 / ảnh 1K | minimal, high |
 | Ảnh đời cũ, chỉ để nhận diện cấu hình cũ | `gemini-2.5-flash-image` — Nano Banana | khoảng $0.039 / ảnh 1024px | không |
@@ -30,6 +30,8 @@ Khoảng nghỉ chốt câu mặc định 0,9 giây. Cho phép chỉnh theo các
 ## Kiểm tra web ngày 01/10/2026
 
 - TypeScript và ESLint qua; production build qua.
-- 58/58 test unit/integration qua. SDK contract kiểm tra riêng budget Gemini 2.5, thinking level Gemini 3.1 và các trường native Interactions tạo ảnh 1K.
+- 59/59 test unit/integration qua. SDK contract kiểm tra riêng budget Gemini 2.5, thinking level Gemini 3.1 và các trường native Interactions tạo ảnh 1K; hạn chế tài khoản được báo lỗi, không tự đổi model.
 - 12/12 kiểm tra Playwright qua trên production build, gồm thứ tự model, effort theo model và lưu sau tải lại; popup sửa chữ; streaming trước khi hoàn tất; Dừng giữ câu/audio cuối; kết quả nhận dạng muộn.
 - Các kiểm tra Playwright dùng phản hồi micro/STT/AI giả lập ở ranh giới; không coi thời gian fixture là độ trễ API thật.
+- Git commit `30c47c8` đã triển khai production trên Vercel: `dpl_8uo8HS7u4ksxHorNbG46M5NpZX6w`, trạng thái Ready. Đã gọi Google thật qua UI: Gemini 3.1 Flash-Lite với effort minimal trả tóm tắt có dẫn nguồn; Nano Banana 2 Lite với effort minimal trả ảnh hiển thị và nút tải ảnh.
+- Kiểm tra thật Gemini 2.5 Flash-Lite trả HTTP 404 với key hiện tại: Google báo không còn mở model cho người dùng mới. Giữ lựa chọn có nhãn tài khoản cũ; dùng Gemini 3.1 Flash-Lite trên tài khoản hiện tại. Giá có trong tài liệu không có nghĩa mọi key đều được quyền gọi model.

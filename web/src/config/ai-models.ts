@@ -51,7 +51,7 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
     key: 'google:gemini-2.5-flash-lite',
     provider: 'google',
     modelId: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash-Lite · $0.10/$0.40 / 1M token',
+    name: 'Gemini 2.5 Flash-Lite · $0.10/$0.40 / 1M token · tài khoản cũ',
     capabilities: ['translate', 'summarize'],
     allowedTasks: ['translate', 'summarize'],
     endpointKind: 'google-generate-content',

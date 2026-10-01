@@ -87,6 +87,12 @@ describe('provider SDK boundaries', () => {
       .rejects.toThrow(/Google Image/);
   });
 
+  it('explains restricted Gemini 2.5 access without silently switching models', async () => {
+    sdk.googleContent.mockRejectedValue(new Error('This model is no longer available to new users.'));
+    await expect(generateGoogleText({ apiKey: 'key', modelId: 'gemini-2.5-flash-lite', userPrompt: 'p' })).rejects.toThrow(/Hãy chọn Gemini 3.1/);
+    expect(sdk.googleContent).toHaveBeenCalledTimes(1);
+  });
+
   it('passes AbortSignal to Google text SDK requests', async () => {
     sdk.googleContent.mockResolvedValue({ text: 'translated' });
     const controller = new AbortController();

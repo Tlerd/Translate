@@ -27,7 +27,7 @@ export async function* streamGoogleText(params: ProviderCallParams): AsyncIterab
       abortSignal: params.signal,
       thinkingConfig: params.thinkingLevel ? thinkingConfigForModel(params.modelId, params.thinkingLevel) : undefined,
     },
-  });
+  }).catch((error: unknown) => { throw readableGoogleError(error, params.modelId); });
 
   let receivedText = false;
   for await (const chunk of responseStream) {
@@ -58,7 +58,7 @@ export async function generateGoogleText(params: ProviderCallParams): Promise<st
       abortSignal: params.signal,
       thinkingConfig: params.thinkingLevel ? thinkingConfigForModel(params.modelId, params.thinkingLevel) : undefined,
     },
-  });
+  }).catch((error: unknown) => { throw readableGoogleError(error, params.modelId); });
 
   if (!response.text?.trim()) {
     throw new Error('Google AI không trả về nội dung văn bản.');
@@ -97,6 +97,14 @@ export async function generateGoogleImage(
   const buffer = Buffer.from(image.data, 'base64');
   if (!buffer.length) throw new Error('Google Image API trả về dữ liệu ảnh rỗng.');
   return buffer;
+}
+
+function readableGoogleError(error: unknown, modelId: string): unknown {
+  const message = error instanceof Error ? error.message : String(error);
+  if (modelId === 'gemini-2.5-flash-lite' && /no longer available to new users/i.test(message)) {
+    return new Error('Google không mở Gemini 2.5 Flash-Lite cho key/tài khoản này. Hãy chọn Gemini 3.1 Flash-Lite; model 2.5 chỉ dùng được với tài khoản còn được Google hỗ trợ.');
+  }
+  return error;
 }
 
 function thinkingConfigForModel(
