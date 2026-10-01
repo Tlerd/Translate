@@ -47,3 +47,7 @@ Thumbs.db
 *.wav
 conversation.json
 conversation.wav
+
+# Local Android release artifacts (deliver separately from source).
+releases/*.apk
+app/releases/*.apk

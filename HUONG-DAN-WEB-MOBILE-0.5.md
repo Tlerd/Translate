@@ -35,3 +35,11 @@ Khoảng nghỉ chốt câu mặc định 0,9 giây. Cho phép chỉnh theo các
 - Các kiểm tra Playwright dùng phản hồi micro/STT/AI giả lập ở ranh giới; không coi thời gian fixture là độ trễ API thật.
 - Git commit `30c47c8` đã triển khai production trên Vercel: `dpl_8uo8HS7u4ksxHorNbG46M5NpZX6w`, trạng thái Ready. Đã gọi Google thật qua UI: Gemini 3.1 Flash-Lite với effort minimal trả tóm tắt có dẫn nguồn; Nano Banana 2 Lite với effort minimal trả ảnh hiển thị và nút tải ảnh.
 - Kiểm tra thật Gemini 2.5 Flash-Lite trả HTTP 404 với key hiện tại: Google báo không còn mở model cho người dùng mới. Giữ lựa chọn có nhãn tài khoản cũ; dùng Gemini 3.1 Flash-Lite trên tài khoản hiện tại. Giá có trong tài liệu không có nghĩa mọi key đều được quyền gọi model.
+
+## APK Android 0.5.0
+
+- 83/83 test Flutter qua; `flutter analyze` không có vấn đề. Chưa kiểm tra micro và nhận dạng trên điện thoại thật.
+- File nằm trong `app/releases/`: ARM64 khoảng 53,6 MB, ARM32 khoảng 59,1 MB, Universal khoảng 167,4 MB. Chọn ARM64 cho điện thoại Android hiện đại; chọn Universal nếu chưa biết kiến trúc máy.
+- Cài APK, mở **Cấu hình AI & ngữ cảnh**, chọn Google/Gemini, dán **Gemini API key**, rồi **Lưu cấu hình**. Không dán OAuth client secret vào ô API key.
+- Bản release dùng khóa ký debug hiện có để cài thử trực tiếp; chưa phải bản ký phát hành lên Play Store. Mã SHA-256 của từng APK nằm trong `app/releases/SHA256SUMS-0.5.0.txt`.
+- Giữ tính năng chốt câu sau khoảng nghỉ 0,9 giây, chọn model gần nút bắt đầu, chỉnh transcript bằng popup, tóm tắt và tạo ảnh. Test dùng fixture không bảo đảm nhận dạng không sai hoặc độ trễ mạng trên mọi thiết bị.

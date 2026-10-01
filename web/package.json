@@ -9,7 +9,8 @@
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
-    "test:browser": "node scripts/browser-smoke.cjs"
+    "test:browser": "node scripts/browser-smoke.cjs",
+    "test:auth": "node scripts/auth-smoke.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

@@ -96,7 +96,7 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
       <div style={{ padding: '16px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link
-            href="/"
+            href="/app"
             onClick={onCloseMobile}
             style={{
               flex: 1,

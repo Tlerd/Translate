@@ -8,7 +8,7 @@ import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, accountControls }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { state: recordingState, stopRecording } = useRecording();
   const pathname = usePathname();
@@ -57,13 +57,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <Link href="/" className={styles.appTitle}>
+            <Link href="/app" className={styles.appTitle}>
               <Radio size={20} color="#38bdf8" />
               <span>Máy Dịch Lớp Học</span>
             </Link>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {accountControls}
             {/* Active recording persistent status banner */}
             {isRecording && (
               <div className={styles.activeSessionBanner}>

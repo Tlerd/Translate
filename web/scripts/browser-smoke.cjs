@@ -155,6 +155,12 @@ function installRecordingFixtures() {
 async function run() {
   const browser = await chromium.launch({ headless: true, executablePath: executablePath() });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  if (process.env.BROWSER_TEST_AUTH_SECRET) {
+    const { encode } = await import('next-auth/jwt');
+    const name = new URL(baseUrl).protocol === 'https:' ? '__Secure-authjs.session-token' : 'authjs.session-token';
+    const value = await encode({ secret: process.env.BROWSER_TEST_AUTH_SECRET, salt: name, token: { sub: 'browser-fixture', email: process.env.BROWSER_TEST_OWNER_EMAIL }, maxAge: 3600 });
+    await context.addCookies([{ name, value, url: baseUrl, httpOnly: true, sameSite: 'Lax', secure: new URL(baseUrl).protocol === 'https:' }]);
+  }
   await context.addInitScript(installRecordingFixtures);
   const page = await context.newPage();
   const errors = [];
@@ -162,7 +168,7 @@ async function run() {
   page.on('pageerror', (error) => errors.push(error.message));
   const check = (name) => { checks.push(name); console.log(`PASS ${name}`); };
   try {
-    await page.goto(baseUrl);
+    await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     assert(!(await page.locator('[data-nextjs-dialog]').count()), 'No Next.js error overlay');
     check('Trang tải, các nút ghi âm hiển thị');
@@ -276,7 +282,7 @@ async function run() {
     assert.notEqual(summaryRequest.sourceHash, sourceHash);
     check('Tải lại giữ chữ sửa; Tạo lại tóm tắt dùng bản ghi/hash mới');
 
-    await page.goto(baseUrl);
+    await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();

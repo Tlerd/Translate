@@ -1,0 +1,41 @@
+.page { min-height: 100%; background: #f5f5ef; color: #17271f; padding: 0 6vw; overflow: auto; }
+.nav { max-width: 1240px; margin: auto; height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #dce2d8; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 750; letter-spacing: -.7px; }
+.navLink { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.hero { max-width: 1240px; margin: auto; padding: 95px 0 85px; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 75px; }
+.eyebrow { font-size: 11px; letter-spacing: 2px; font-weight: 700; color: #55765b; }
+.hero h1 { font-size: clamp(44px, 5.4vw, 76px); line-height: 1.08; letter-spacing: -3px; margin: 24px 0; }
+.hero h1 span { color: #517b45; }
+.lead { font-size: 18px; line-height: 1.7; max-width: 480px; color: #526258; margin-bottom: 30px; }
+.primary { background: #214d35; color: white; display: inline-flex; justify-content: center; align-items: center; gap: 12px; padding: 17px 22px; border-radius: 12px; font-size: 15px; font-weight: 650; transition: background .2s; }
+.primary:hover { background: #326848; }
+.primary:disabled { opacity: .5; cursor: not-allowed; }
+.primary:focus-visible, .navLink:focus-visible, .back:focus-visible, .brand:focus-visible { outline: 3px solid #87ab58; outline-offset: 5px; }
+.hint { font-size: 12px; line-height: 1.7; color: #66766a; margin-top: 17px; max-width: 430px; }
+.preview { background: white; border: 1px solid #dce2d8; box-shadow: 0 25px 65px #254f3510; border-radius: 24px; overflow: hidden; transform: rotate(-1deg); }
+.previewTop { padding: 22px; display: flex; gap: 9px; align-items: center; border-bottom: 1px solid #edf0ea; font-size: 12px; font-weight: 600; }
+.previewTop > span:last-child { font-size: 9px; letter-spacing: 1px; margin-left: auto; color: #7b877c; }
+.dot { background: #93b45c; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.transcript { padding: 23px 28px; }
+.transcript > span { color: #899489; font-size: 10px; letter-spacing: 1px; }
+.transcript p { margin: 14px 0 8px; font-size: 18px; }
+.transcript strong { font-size: 15px; color: #487345; font-weight: 500; }
+.note { margin: 10px 20px 22px; padding: 20px; display: flex; gap: 13px; border-radius: 15px; background: #eef4e5; color: #385337; }
+.note svg { flex-shrink: 0; }
+.note strong { font-size: 13px; }
+.note p { font-size: 13px; line-height: 1.7; margin-top: 8px; }
+.features { max-width: 1240px; margin: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 45px; border-top: 1px solid #dce2d8; padding: 40px 0 60px; }
+.features svg { color: #597b4e; width: 23px; }
+.features h2 { font-size: 18px; margin: 18px 0 12px; }
+.features p { font-size: 14px; line-height: 1.8; color: #66766a; }
+.footer { max-width: 1240px; margin: auto; padding: 25px 0; border-top: 1px solid #dce2d8; display: flex; justify-content: space-between; gap: 20px; color: #778376; font-size: 12px; }
+.loginPage { display: flex; flex-direction: column; align-items: center; padding-top: 40px; }
+.loginCard { margin: 70px auto; background: white; border: 1px solid #dce2d8; border-radius: 24px; padding: 40px; max-width: 460px; width: 100%; }
+.loginCard h1 { font-size: 32px; letter-spacing: -1px; margin: 18px 0; }
+.loginCard > p { font-size: 14px; line-height: 1.8; color: #66766a; }
+.loginCard form { margin-top: 25px; }
+.loginCard button { width: 100%; }
+.google { background: white; color: #386fc9; border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; font-weight: 800; }
+.loginCard .error { color: #9a3727; background: #fff1eb; padding: 12px; border-radius: 8px; margin-top: 18px; }
+.back { display: inline-block; margin-top: 25px; font-size: 13px; color: #526258; }
+@media(max-width: 800px) { .page { padding: 0 6vw; } .hero { grid-template-columns: 1fr; gap: 40px; padding: 50px 0; } .hero h1 { letter-spacing: -2px; } .preview { transform: none; } .features { grid-template-columns: 1fr; gap: 30px; } .footer { flex-direction: column; } .loginPage { padding-top: 30px; } .loginCard { margin-top: 40px; padding: 28px 22px; } }

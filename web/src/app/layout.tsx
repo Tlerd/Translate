@@ -3,15 +3,13 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Máy Dịch Lớp Học & Đọc',
-  description: 'Rebuild web responsive: dịch sát nút, ghi âm, tóm tắt và minh họa buổi học',
+  description: 'Ghi âm, dịch lời nói và tạo ghi chú cho buổi học với tóm tắt và ảnh minh họa.',
   manifest: '/manifest.webmanifest',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: '#1e293b',
 };
 
