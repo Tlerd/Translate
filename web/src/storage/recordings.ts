@@ -273,6 +273,8 @@ export async function loadSettings(): Promise<AppSettings> {
   }
 }
 
+export const settingsUpdatedEvent = 'may-dich:settings-updated';
+
 export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
   const db = getDb();
   await db.transaction('rw', db.settings, async () => {
@@ -287,4 +289,7 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
       }
     }
   });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(settingsUpdatedEvent, { detail: settings }));
+  }
 }

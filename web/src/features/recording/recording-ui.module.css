@@ -350,12 +350,12 @@
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
-/* Quick Settings Toggle for Mobile */
-.mobileConfigToggle {
-  display: none;
+/* Quick link to AI Settings */
+.configLinkBadge {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 12px;
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -363,19 +363,26 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   transition: all 0.2s ease;
-  cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.mobileConfigToggle:hover {
+.configLinkBadge:hover {
   background-color: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.mobileConfigToggleOpen {
-  background-color: var(--bg-hover);
-  border-color: var(--accent);
   color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.configBadgeText {
+  display: inline;
+}
+
+@media (max-width: 480px) {
+  .configBadgeText {
+    display: none;
+  }
 }
 
 /* Config Section (Desktop: horizontal, Mobile: collapsible drawer) */

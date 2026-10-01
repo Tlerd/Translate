@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { ClassroomController, type ControllerState, type StartOptions } from './controller';
 import type { ClassroomMode } from '@/shared/recording';
-import { loadSettings, saveSettings } from '@/storage/recordings';
+import { loadSettings, saveSettings, settingsUpdatedEvent } from '@/storage/recordings';
+import type { AppSettings } from '@/shared/recording';
 
 interface RecordingContextValue {
   controller: ClassroomController;
@@ -40,16 +41,33 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const applySettings = (settings: Partial<AppSettings>) => {
+      const controller = controllerRef.current;
+      if (!controller || controller.snapshot().state !== 'stopped') return;
+      if (settings.pauseMs !== undefined) controller.setPauseMs(settings.pauseMs);
+      if (settings.readingPauseMs !== undefined) controller.setReadingPauseMs(settings.readingPauseMs);
+      if (settings.translationModel !== undefined) controller.setTranslationModel(settings.translationModel);
+      if (settings.translationThinkingLevel !== undefined) controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
+      if (settings.speechProvider !== undefined) controller.setSpeechProvider(settings.speechProvider);
+    };
+
     loadSettings().then((settings) => {
-      const controller = controllerRef.current!;
-      if (!active || controller.snapshot().state !== 'stopped' || settingsChangedByUserRef.current) return;
-      controller.setPauseMs(settings.pauseMs);
-      controller.setReadingPauseMs(settings.readingPauseMs);
-      controller.setTranslationModel(settings.translationModel);
-      controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
-      controller.setSpeechProvider(settings.speechProvider);
-    }).catch((error) => console.warn('Không thể tải thời gian chốt câu:', error));
-    return () => { active = false; };
+      if (!active || settingsChangedByUserRef.current) return;
+      applySettings(settings);
+    }).catch((error) => console.warn('Không thể tải cài đặt:', error));
+
+    const handleEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<AppSettings>>;
+      if (customEvent.detail) {
+        applySettings(customEvent.detail);
+      }
+    };
+    window.addEventListener(settingsUpdatedEvent, handleEvent);
+
+    return () => {
+      active = false;
+      window.removeEventListener(settingsUpdatedEvent, handleEvent);
+    };
   }, []);
 
   const updatePauseMs = (milliseconds: number) => {

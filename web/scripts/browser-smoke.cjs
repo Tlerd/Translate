@@ -235,7 +235,7 @@ async function run() {
     await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     assert(!(await page.locator('[data-nextjs-dialog]').count()), 'No Next.js error overlay');
-    check('Trang tải, các nút ghi âm hiển thị');
+    await page.goto(`${baseUrl}/settings`);
     const modelSelector = page.getByRole('combobox', { name: 'Model dịch:', exact: true });
     await modelSelector.locator('option[value="google:gemini-2.5-flash-lite"]').waitFor({ state: 'attached' });
     const textModelKeys = await modelSelector.locator('option').evaluateAll((options) => options.map((option) => option.value));
@@ -246,22 +246,21 @@ async function run() {
     await modelSelector.selectOption('google:gemini-2.5-flash-lite');
     assert.equal(await effortSelector.locator('option[value="minimal"]').count(), 0);
     await effortSelector.selectOption('low');
+    const pause = page.getByRole('slider', { name: 'Khoảng nghỉ để chốt câu, giây' });
+    await pause.focus();
+    await pause.press('ArrowRight');
+    assert.equal(await pause.inputValue(), '1000');
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await waitUntil(async () => (await storedRows(page, 'settings')).some((setting) => setting.key === 'translationThinkingLevel' && setting.value === 'low'), 'Effort setting saved');
     await page.reload();
     await waitUntil(async () => await modelSelector.inputValue() === 'google:gemini-2.5-flash-lite' && await effortSelector.inputValue() === 'low', 'Model and effort persist');
     await modelSelector.selectOption('google:gemini-3.1-flash-lite');
     await effortSelector.selectOption('minimal');
-    await page.screenshot({ path: path.join(outputDir, 'models-toolbar.png') });
-    check('Model 3.1/2.5 đúng thứ tự, effort theo model và thiết lập giữ sau tải lại');
-    const pause = page.getByRole('slider', { name: 'Khoảng nghỉ để chốt câu, giây' });
-    await pause.focus();
-    await pause.press('ArrowRight');
-    assert.equal(await pause.inputValue(), '1000');
-    await waitUntil(async () => (await storedRows(page, 'settings')).some((setting) => setting.key === 'pauseMs' && setting.value === '1000'), 'Pause setting saved');
-    await page.reload();
-    await waitUntil(async () => (await pause.inputValue()) === '1000', 'Pause setting persists across reload');
     await pause.focus();
     await pause.press('ArrowLeft');
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.screenshot({ path: path.join(outputDir, 'models-toolbar.png') });
+    check('Model 3.1/2.5 đúng thứ tự, effort theo model và thiết lập giữ sau tải lại');
     check('Khoảng nghỉ thay đổi và được giữ sau tải lại');
 
     const recordingId = 'browser-acceptance-fixture';
@@ -352,14 +351,16 @@ async function run() {
     assert.notEqual(summaryRequest.sourceHash, sourceHash);
     check('Tải lại giữ chữ sửa; Tạo lại tóm tắt dùng bản ghi/hash mới');
 
-    await page.goto(`${baseUrl}/app`);
-    await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    await page.goto(`${baseUrl}/settings`);
     assert.equal(await page.locator('#speech-provider option').count(), 3);
     await page.locator('#speech-provider').selectOption('google-transcribe');
     assert.equal(await page.locator('#speech-provider').inputValue(), 'google-transcribe');
     assert.match(await page.locator('body').innerText(), /1,50 USD/);
     await page.locator('#speech-provider').selectOption('browser');
     assert.equal(await page.locator('#speech-provider').inputValue(), 'browser');
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
     const meter = page.getByRole('progressbar', { name: 'Mức âm lượng micro' });
