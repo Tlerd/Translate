@@ -124,7 +124,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           </select>
         </div>
 
-        {state.speechProvider !== 'browser' && <details style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flexBasis: '100%', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
+        {state.speechProvider !== 'browser' && <details style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: '0 0 auto', width: '100%', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
           <summary style={{ cursor: 'pointer' }}>
             {state.speechProvider === 'google' ? 'Trực tiếp · 5 giờ nhận giọng ≈ 2,70 USD' : 'Theo đoạn · 5 giờ nhận giọng ≈ 1,50 USD'} — xem phí dịch
           </summary>
