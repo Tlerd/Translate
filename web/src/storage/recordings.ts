@@ -9,6 +9,7 @@ import type {
   ClassroomMode,
 } from '@/shared/recording';
 import { DEFAULT_SETTINGS } from '@/shared/recording';
+import { isAllowedSpeakerLabel, normalizeSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
 
 export interface CreateRecordingParams {
   id?: string;
@@ -21,6 +22,8 @@ export interface CreateRecordingParams {
   imageModelKey?: string;
   context?: string;
   glossary?: string;
+  transcriptionMode?: TranscriptionMode;
+  speakerCount?: SpeakerCount;
 }
 
 export async function createRecording(params: CreateRecordingParams): Promise<RecordingItem> {
@@ -45,6 +48,8 @@ export async function createRecording(params: CreateRecordingParams): Promise<Re
       imageModelKey: params.imageModelKey,
       context: params.context,
       glossary: params.glossary,
+      transcriptionMode: params.transcriptionMode,
+      speakerCount: params.speakerCount,
     },
   };
 
@@ -266,7 +271,10 @@ export async function loadSettings(): Promise<AppSettings> {
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
-      speechProvider: map.get('speechProvider') === 'browser' ? 'browser' : map.get('speechProvider') === 'google-transcribe' ? 'google-transcribe' : 'google',
+      // Preserve Live; migrate the removed browser provider to Transcribe.
+      speechProvider: map.get('speechProvider') === 'google' ? 'google' : 'google-transcribe',
+      transcriptionMode: normalizeTranscriptionMode(map.get('transcriptionMode')),
+      speakerCount: normalizeSpeakerCount(map.get('speakerCount')),
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -277,19 +285,38 @@ export const settingsUpdatedEvent = 'may-dich:settings-updated';
 
 export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
   const db = getDb();
+  const normalized: Partial<AppSettings> = { ...settings };
+  if (settings.speechProvider !== undefined) normalized.speechProvider = settings.speechProvider === 'google' ? 'google' : 'google-transcribe';
+  if (settings.transcriptionMode !== undefined) normalized.transcriptionMode = normalizeTranscriptionMode(settings.transcriptionMode);
+  if (settings.speakerCount !== undefined) normalized.speakerCount = normalizeSpeakerCount(settings.speakerCount);
+  if (settings.pauseMs !== undefined) normalized.pauseMs = normalizePauseMs(settings.pauseMs, DEFAULT_SETTINGS.pauseMs);
+  if (settings.readingPauseMs !== undefined) normalized.readingPauseMs = normalizePauseMs(settings.readingPauseMs, DEFAULT_SETTINGS.readingPauseMs);
   await db.transaction('rw', db.settings, async () => {
-    for (const [key, value] of Object.entries(settings)) {
+    for (const [key, value] of Object.entries(normalized)) {
       if (value !== undefined) {
-        const persistedValue = key === 'pauseMs'
-          ? normalizePauseMs(value, DEFAULT_SETTINGS.pauseMs)
-          : key === 'readingPauseMs'
-          ? normalizePauseMs(value, DEFAULT_SETTINGS.readingPauseMs)
-          : value;
-        await db.settings.put({ key, value: String(persistedValue) });
+        await db.settings.put({ key, value: String(value) });
       }
     }
   });
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(settingsUpdatedEvent, { detail: settings }));
+    window.dispatchEvent(new CustomEvent(settingsUpdatedEvent, { detail: normalized }));
   }
+}
+
+export async function updateCaptionSpeaker(
+  recordingId: string, captionId: number, speakerLabel: string | undefined, speakerCount: SpeakerCount,
+): Promise<CaptionItem> {
+  if (speakerLabel !== undefined && !isAllowedSpeakerLabel(speakerLabel, speakerCount)) {
+    throw new Error('Người nói phải nằm trong danh sách Speaker đã cấu hình.');
+  }
+  const db = getDb();
+  return db.transaction('rw', db.recordings, db.captions, async () => {
+    const recording = await db.recordings.get(recordingId);
+    if (!recording || recording.state === 'recording') throw new Error('Kết thúc buổi thu trước khi gán người nói.');
+    const caption = await db.captions.get([recordingId, captionId]);
+    if (!caption) throw new Error('Không tìm thấy câu cần gán người nói.');
+    const updated = { ...caption, speakerLabel };
+    await db.captions.put(updated);
+    return updated;
+  });
 }

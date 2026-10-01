@@ -6,7 +6,8 @@ import { TranscriptPane } from './transcript-pane';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
 import { SummaryPanel } from '@/features/summary/summary-panel';
 import { ImagePanel } from '@/features/images/image-panel';
-import { computeCaptionSourceHash, getAudioBlob, updateCaptionSources } from '@/storage/recordings';
+import { computeCaptionSourceHash, getAudioBlob, updateCaptionSources, updateCaptionSpeaker } from '@/storage/recordings';
+import { normalizeSpeakerCount } from '@/shared/transcription';
 import type { CaptionItem, SummaryItem, RecordingItem } from '@/shared/recording';
 import styles from './recording-ui.module.css';
 
@@ -15,6 +16,8 @@ interface RecordingWorkspaceProps {
   captions: CaptionItem[];
   summary?: SummaryItem;
   onSummaryUpdated?: (summary: SummaryItem) => void;
+  onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
+  speakerAssignmentBusy?: boolean;
 }
 
 export function RecordingWorkspace({
@@ -22,6 +25,8 @@ export function RecordingWorkspace({
   captions,
   summary: initialSummary,
   onSummaryUpdated,
+  onSpeakerChange,
+  speakerAssignmentBusy = false,
 }: RecordingWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary'>('transcript');
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
@@ -91,6 +96,13 @@ export function RecordingWorkspace({
     setCurrentSourceHash(nextHash);
   };
 
+  const speakerCount = normalizeSpeakerCount(recording.config.speakerCount ?? 8);
+  const handleSpeakerChange = async (captionId: number, speakerLabel: string | undefined) => {
+    if (onSpeakerChange) await onSpeakerChange(captionId, speakerLabel);
+    else await updateCaptionSpeaker(recording.id, captionId, speakerLabel, speakerCount);
+    setWorkspaceCaptions(previous => previous.map(caption => caption.id === captionId ? { ...caption, speakerLabel } : caption));
+  };
+
   return (
     <div className={styles.workspace}>
       {/* Tab bar */}
@@ -153,6 +165,8 @@ export function RecordingWorkspace({
           <TranscriptPane
             captions={workspaceCaptions}
             highlightCaptionId={highlightCaptionId}
+            speakerCount={speakerCount}
+            onSpeakerChange={!recordingInProgress && !speakerAssignmentBusy ? handleSpeakerChange : undefined}
           />
         ) : (
           <div style={{ height: '100%', overflowY: 'auto' }}>

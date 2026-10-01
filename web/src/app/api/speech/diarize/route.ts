@@ -1,13 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { extractDiarizedWordSegments } from '@/server/ai/gemini-diarize';
+import { isAllowedSpeakerLabel, isSpeakerCount, TRANSCRIPTION_MODEL } from '@/shared/transcription';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
 import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const MODEL = 'gemini-3.5-transcribe';
+const MODEL = TRANSCRIPTION_MODEL;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_MULTIPART_BYTES = MAX_FILE_BYTES + 64 * 1024;
 const MAX_DURATION_MS = 30 * 60 * 1000;
@@ -106,6 +107,11 @@ export async function POST(req: Request): Promise<Response> {
   if (durationMs === null) {
     return makeErrorResponse(400, 'INTERNAL_ERROR', 'Thời lượng audio phải nằm trong khoảng 1 ms đến 30 phút.');
   }
+  const rawSpeakerCount = form.get('speakerCount');
+  const speakerCount = typeof rawSpeakerCount === 'string' && /^[1-8]$/.test(rawSpeakerCount) ? Number(rawSpeakerCount) : null;
+  if (!isSpeakerCount(speakerCount)) {
+    return makeErrorResponse(400, 'INTERNAL_ERROR', 'Bắt buộc chọn số người nói từ 1 đến 8.');
+  }
   const mimeType = audioMimeType(uploaded);
   if (!mimeType) {
     return makeErrorResponse(415, 'INTERNAL_ERROR', 'Định dạng audio chưa được hỗ trợ.');
@@ -153,7 +159,7 @@ export async function POST(req: Request): Promise<Response> {
     if (controller.signal.aborted) {
       return makeErrorResponse(504, 'INTERNAL_ERROR', 'Phân tích audio đã hết thời gian chờ.');
     }
-    const segments = extractDiarizedWordSegments(interaction, durationMs);
+    const segments = extractDiarizedWordSegments(interaction, durationMs).filter(segment => isAllowedSpeakerLabel(segment.speakerLabel, speakerCount));
     if (!segments.length) {
       return makeErrorResponse(502, 'INTERNAL_ERROR', 'Gemini không trả về dữ liệu nhãn người nói có thời gian.');
     }

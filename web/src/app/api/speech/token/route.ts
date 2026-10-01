@@ -50,6 +50,9 @@ export async function POST(req: Request): Promise<Response> {
     return makeErrorResponse(400, 'INTERNAL_ERROR', 'Mã ngôn ngữ không hợp lệ.');
   }
 
+  const transcriptionMode = typeof body === 'object' && body !== null && 'transcriptionMode' in body ? body.transcriptionMode : 'verbatim';
+  if (transcriptionMode !== 'verbatim' && transcriptionMode !== 'smart') return makeErrorResponse(400, 'INTERNAL_ERROR', 'Chế độ phiên âm không hợp lệ.');
+
   const apiKey = getServerEnv().GOOGLE_API_KEY;
   if (!apiKey) {
     return makeErrorResponse(503, 'MISSING_CONFIG', 'Chưa cấu hình GOOGLE_API_KEY cho nhận giọng Gemini.');
@@ -69,7 +72,7 @@ export async function POST(req: Request): Promise<Response> {
             responseModalities: [Modality.TEXT],
             inputAudioTranscription: {
               languageCodes: languageCode ? [languageCode] : [],
-              mode: AudioTranscriptionConfigMode.VERBATIM,
+              mode: transcriptionMode === 'smart' ? AudioTranscriptionConfigMode.SMART : AudioTranscriptionConfigMode.VERBATIM,
             },
           },
         },

@@ -3,6 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClassroomController } from '@/features/recording/controller';
 import { AppDatabase, resetDbInstance } from '@/storage/db';
 
+// These regressions exercise caption revisions with the existing event fixture.
+vi.mock('@/features/recording/gemini-pcm-capture', () => ({
+  GeminiPcmCapture: class {
+    state = 'running';
+    async prepare() {}
+    async start() {}
+    async stop() {}
+  },
+}));
+vi.mock('@/features/recording/gemini-transcribe-recognition', async () => {
+  const { WebSpeechRecognizer } = await vi.importActual<typeof import('@/features/recording/speech-recognition')>('@/features/recording/speech-recognition');
+  return { GeminiTranscribeRecognizer: class extends WebSpeechRecognizer {
+    pushPcm() {}
+    updateSettings() {}
+  } };
+});
+
+
 class FakeMediaRecorder {
   static isTypeSupported() { return true; }
   state: RecordingState = 'inactive';
@@ -57,7 +75,7 @@ function completedResponse(text: string) {
   }), { status: 200 });
 }
 
-describe('ClassroomController Web Speech result rows', () => {
+describe('ClassroomController provider result rows', () => {
   beforeEach(() => {
     FakeSpeechRecognition.instances = [];
     resetDbInstance(new AppDatabase(`speech_items_${Date.now()}_${Math.random()}`));
@@ -79,7 +97,7 @@ describe('ClassroomController Web Speech result rows', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 10_000, speechProvider: 'browser' });
+    await controller.start({ pauseMs: 10_000 });
     const recognition = FakeSpeechRecognition.instances[0];
     recognition.send(0, [
       { transcript: 'first phrase', isFinal: false },
@@ -109,7 +127,7 @@ describe('ClassroomController Web Speech result rows', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 10_000, speechProvider: 'browser' });
+    await controller.start({ pauseMs: 10_000 });
     const oldRecognition = FakeSpeechRecognition.instances[0];
     oldRecognition.send(0, [{ transcript: 'before reconnect', isFinal: true }]);
     oldRecognition.onend?.();

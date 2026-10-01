@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SpeechRecognitionCallbacks } from '@/features/recording/speech-recognition';
 
-interface GoogleCallbacks {
-  onTranscript: (text: string, isFinal: boolean, epoch: number, providerItemId: string, revision: number) => void;
-  onError: (error: string, epoch: number) => void;
-  onStateChange: (state: 'idle' | 'listening' | 'reconnecting' | 'stopped') => void;
-}
+type GoogleCallbacks = SpeechRecognitionCallbacks;
 interface PcmCaptureFixture {
   state: string;
   stream: MediaStream | null;
@@ -13,11 +10,13 @@ interface PcmCaptureFixture {
   emit: (samples?: Float32Array, rate?: number) => void;
 }
 interface GoogleRecognizerFixture {
+  mode?: string;
   callbacks: GoogleCallbacks;
   epoch: number;
   pushes: Array<{ samples: Float32Array; rate: number }>;
   stopImpl: () => Promise<void>;
   finalOnStop: (() => void) | null;
+  updateSettings: (settings: unknown) => void;
   emit: (text: string, isFinal: boolean, itemId?: string, revision?: number) => void;
 }
 interface RecorderFixture {
@@ -29,6 +28,7 @@ interface RecorderFixture {
 const shared = vi.hoisted(() => ({
   events: [] as string[],
   recognizers: [] as GoogleRecognizerFixture[],
+  liveRecognizers: [] as GoogleRecognizerFixture[],
   captures: [] as PcmCaptureFixture[],
   recorders: [] as RecorderFixture[],
   createRecording: vi.fn(),
@@ -39,8 +39,8 @@ const shared = vi.hoisted(() => ({
   streamTranslate: vi.fn(),
 }));
 
-vi.mock('@/features/recording/gemini-live-recognition', () => ({
-  GeminiLiveRecognizer: class {
+vi.mock('@/features/recording/gemini-transcribe-recognition', () => ({
+  GeminiTranscribeRecognizer: class {
     callbacks: GoogleCallbacks;
     epoch = 0;
     pushes: Array<{ samples: Float32Array; rate: number }> = [];
@@ -50,6 +50,30 @@ vi.mock('@/features/recording/gemini-live-recognition', () => ({
     async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
     pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
     finalizeUtterance() {}
+    updateSettings = vi.fn();
+    async stop() {
+      shared.events.push('recognizer.stop');
+      this.finalOnStop?.();
+      await this.stopImpl();
+    }
+    emit(text: string, isFinal: boolean, itemId = 'gemini-item-1', revision = 1) {
+      this.callbacks.onTranscript(text, isFinal, this.epoch, itemId, revision);
+    }
+  },
+}));
+
+vi.mock('@/features/recording/gemini-live-recognition', () => ({
+  GeminiLiveRecognizer: class {
+    callbacks: GoogleCallbacks;
+    epoch = 0;
+    pushes: Array<{ samples: Float32Array; rate: number }> = [];
+    stopImpl: () => Promise<void> = async () => undefined;
+    finalOnStop: (() => void) | null = null;
+    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
+    async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
+    pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
+    finalizeUtterance() {}
+    updateSettings = vi.fn();
     async stop() {
       shared.events.push('recognizer.stop');
       this.finalOnStop?.();
@@ -114,6 +138,7 @@ describe('ClassroomController Google speech integration', () => {
   let getUserMedia: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    shared.liveRecognizers.length = 0;
     shared.events.length = 0; shared.recognizers.length = 0; shared.captures.length = 0; shared.recorders.length = 0;
     shared.createRecording.mockReset().mockResolvedValue(recording);
     shared.updateRecording.mockReset().mockResolvedValue(undefined);
@@ -133,21 +158,54 @@ describe('ClassroomController Google speech integration', () => {
     vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers();
   });
 
-  it('uses unary input without a live socket and drains its last words into saved translations', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ text: '最後の言葉' })));
+  it('switches between Live and chunks while sharing one microphone and draining old text', async () => {
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google-transcribe' });
-    expect(shared.recognizers).toHaveLength(0);
-    shared.captures[0].emit(new Float32Array(8000).fill(0.2), 16000);
+    await controller.start({ speechProvider: 'google', speakerCount: 8 });
+    expect(shared.liveRecognizers).toHaveLength(1);
+    const live = shared.liveRecognizers[0];
+    live.finalOnStop = () => live.emit('Live final words', true);
+    controller.setSpeechProvider('google-transcribe');
+    await vi.waitFor(() => expect(shared.recognizers).toHaveLength(1));
+    shared.captures[0].emit();
+    expect(shared.recognizers[0].pushes).toHaveLength(1);
+    expect(getUserMedia).toHaveBeenCalledOnce();
     await controller.stop();
-    expect(controller.snapshot().state).toBe('stopped');
-    expect(controller.snapshot().captions).toEqual([expect.objectContaining({ source: '最後の言葉', translation: 'translated', isFinal: true, startMs: 0, endMs: 500 })]);
+    expect(controller.snapshot().captions[0].source).toBe('Live final words');
+    expect(shared.getAudioBlob).not.toHaveBeenCalled();
+  });
+
+  it('reconnects Live with smart mode and keeps the required speaker roster', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google' });
+    controller.setTranscriptionSettings({ transcriptionMode: 'smart', speakerCount: 8 });
+    await vi.waitFor(() => expect(shared.liveRecognizers).toHaveLength(2));
+    expect(shared.liveRecognizers[1].mode).toBe('smart');
+    shared.captures[0].emit();
+    expect(shared.liveRecognizers[1].pushes).toHaveLength(1);
+    await controller.stop();
+    expect(controller.snapshot()).toMatchObject({ speechProvider: 'google', transcriptionMode: 'smart', speakerCount: 8 });
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(shared.getAudioBlob).not.toHaveBeenCalled();
+  });
+
+  it('drains the last words from the chunk transcriber into saved translations', async () => {
+    const controller = new ClassroomController();
+    await controller.start();
+    expect(shared.recognizers).toHaveLength(1);
+    const recognizer = shared.recognizers[0];
+    recognizer.finalOnStop = () => recognizer.emit('最後の言葉', true);
+    const samples = new Float32Array(8000).fill(0.2);
+    shared.captures[0].emit(samples, 16000);
+    expect(recognizer.pushes).toEqual([{ samples, rate: 16000 }]);
+    await controller.stop();
+    expect(controller.snapshot()).toMatchObject({ state: 'stopped', speechProvider: 'google-transcribe' });
+    expect(controller.snapshot().captions).toEqual([expect.objectContaining({ source: '最後の言葉', translation: 'translated', isFinal: true })]);
     expect(shared.saveCaption).toHaveBeenCalled();
   });
 
   it('initializes PCM in the gesture, acquires one microphone stream, and shares it with the recorder', async () => {
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
+    await controller.start({  });
 
     expect(getUserMedia).toHaveBeenCalledOnce();
     expect(shared.events.indexOf('pcm.prepare')).toBeLessThan(shared.events.indexOf('recorder.start'));
@@ -167,7 +225,7 @@ describe('ClassroomController Google speech integration', () => {
       finishTranslation = () => { onDone('complete', 'test-model'); resolve(); };
     }));
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
+    await controller.start({  });
     const recognizer = shared.recognizers[0] as GoogleRecognizerFixture;
     recognizer.finalOnStop = () => recognizer.emit('drained final words', true);
 
@@ -184,7 +242,7 @@ describe('ClassroomController Google speech integration', () => {
 
   it('finishes archival stop and retains captions when capture and recognizer cleanup reject', async () => {
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
+    await controller.start({  });
     (shared.captures[0] as PcmCaptureFixture).stopImpl = async () => { throw new Error('PCM close failed'); };
     (shared.recorders[0] as RecorderFixture).stopImpl = async () => { throw new Error('audio close failed'); };
     const recognizer = shared.recognizers[0] as GoogleRecognizerFixture;
@@ -199,26 +257,25 @@ describe('ClassroomController Google speech integration', () => {
     expect(shared.events).toContain('recognizer.stop');
   });
 
-  it('keeps audio capture alive and reports a failed recognizer renewal', async () => {
-    vi.useFakeTimers();
+  it('retains microphone input and earlier captions when a unary request fails', async () => {
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
-    const recognizer = shared.recognizers[0] as GoogleRecognizerFixture;
-    recognizer.stopImpl = async () => { throw new Error('renewal close failed'); };
-
-    await vi.advanceTimersByTimeAsync(8.5 * 60_000);
-
+    await controller.start();
+    const recognizer = shared.recognizers[0];
+    recognizer.emit('saved before quota', true);
+    recognizer.callbacks.onError('quota exceeded for a segment', controller.snapshot().epoch);
+    shared.captures[0].emit(new Float32Array([0.2]), 16000);
     expect(controller.snapshot().state).toBe('recording');
-    expect(controller.snapshot().error).toContain('renewal close failed');
-    expect(shared.captures[0].stream).toBe(stream);
-    recognizer.stopImpl = async () => undefined;
+    expect(controller.snapshot().error).toContain('quota exceeded');
+    expect(controller.snapshot().captions[0].source).toBe('saved before quota');
+    expect(recognizer.pushes).toHaveLength(1);
+    expect(shared.recognizers).toHaveLength(1);
     await controller.stop();
   });
 
   it('exposes a suspended PCM context and resumes it from a new tap without erasing captions', async () => {
     vi.useFakeTimers();
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
+    await controller.start({  });
     shared.recognizers[0].emit('words before suspension', true);
     shared.captures[0].state = 'suspended';
     await vi.advanceTimersByTimeAsync(500);
@@ -230,24 +287,10 @@ describe('ClassroomController Google speech integration', () => {
     await controller.stop();
   });
 
-  it('buffers PCM during a broken connection and forwards it after a bounded reconnect', async () => {
-    vi.useFakeTimers();
-    const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
-    shared.recognizers[0].callbacks.onError('connection closed', controller.snapshot().epoch);
-    const samples = new Float32Array([0.25, 0.5]);
-    shared.captures[0].emit(samples, 48_000);
-    expect(shared.recognizers[0].pushes).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(shared.recognizers).toHaveLength(2);
-    expect(shared.recognizers[1].pushes).toEqual([{ samples, rate: 48_000 }]);
-    await controller.stop();
-  });
-
   it('labels speakers without changing corrected source text or its history', async () => {
     shared.getAudioBlob.mockResolvedValue({ blob: new Blob(['audio']), mimeType: 'audio/webm' });
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google' });
+    await controller.start({  });
     const recognizer = shared.recognizers[0];
     await new Promise((resolve) => setTimeout(resolve, 25));
     recognizer.emit('original wording', true, 'speaker-test', 1);
@@ -257,16 +300,63 @@ describe('ClassroomController Google speech integration', () => {
     await vi.waitFor(() => expect(controller.snapshot().captions[0]?.source).toBe('corrected wording'));
     await new Promise((resolve) => setTimeout(resolve, 20));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ segments: [
-      { speakerLabel: 'speaker-1', startMs: 0, endMs: 10_000 },
+      { speakerLabel: 'spk_1', startMs: 0, endMs: 10_000 },
     ] }), { status: 200 })));
 
     await controller.stop();
     await controller.assignSpeakers();
 
     expect(controller.snapshot().captions[0]).toMatchObject({
-      source: 'corrected wording', speakerLabel: 'speaker-1',
+      source: 'corrected wording', speakerLabel: 'spk_1',
       sourceHistory: [{ text: 'original wording' }],
     });
     expect(shared.saveCaption.mock.calls.at(-1)?.[0].source).toBe('corrected wording');
+  });
+
+  it('applies saved mode, roster, and pause settings to subsequent audio without restarting capture', async () => {
+    const controller = new ClassroomController();
+    await controller.start();
+    const recognizer = shared.recognizers[0];
+    controller.setTranscriptionSettings({ transcriptionMode: 'smart', speakerCount: 8 });
+    controller.setReadingPauseMs(6000);
+    controller.switchMode('readingPractice');
+    expect(controller.snapshot()).toMatchObject({ transcriptionMode: 'smart', speakerCount: 8, readingPauseMs: 6000 });
+    expect(recognizer.updateSettings).toHaveBeenCalledWith({ transcriptionMode: 'smart', speakerCount: 8 });
+    expect(recognizer.updateSettings).toHaveBeenCalledWith({ pauseMs: 6000 });
+    expect(shared.recognizers).toHaveLength(1);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    await controller.stop();
+    expect(shared.updateRecording).toHaveBeenLastCalledWith('google-recording', expect.objectContaining({ config: expect.objectContaining({ transcriptionMode: 'smart', speakerCount: 8 }) }));
+  });
+
+  it('saves and clears manual smart speaker labels without another audio API call', async () => {
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    const controller = new ClassroomController();
+    await controller.start({ transcriptionMode: 'smart', speakerCount: 8 });
+    shared.recognizers[0].emit('clean smart text', true);
+    await expect(controller.setCaptionSpeaker(1, 'spk_8')).rejects.toThrow('Kết thúc');
+    await controller.stop();
+    await controller.assignSpeakers();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(shared.getAudioBlob).not.toHaveBeenCalled();
+    await controller.setCaptionSpeaker(1, 'spk_8');
+    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'clean smart text', translation: 'translated', speakerLabel: 'spk_8' });
+    expect(shared.saveCaption).toHaveBeenLastCalledWith(expect.objectContaining({ speakerLabel: 'spk_8', source: 'clean smart text' }));
+    await expect(controller.setCaptionSpeaker(1, 'spk_9')).rejects.toThrow('danh sách');
+    await controller.setCaptionSpeaker(1, undefined);
+    expect(controller.snapshot().captions[0].speakerLabel).toBeUndefined();
+  });
+
+  it('keeps different native speakers in separate reading captions', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ mode: 'readingPractice', speakerCount: 2 });
+    const recognizer = shared.recognizers[0];
+    recognizer.callbacks.onTranscript('first speaker', true, recognizer.epoch, 'turn_1', 1, { startMs: 0, endMs: 500, speakerLabel: 'spk_1' });
+    recognizer.callbacks.onTranscript('second speaker', true, recognizer.epoch, 'turn_2', 1, { startMs: 600, endMs: 1000, speakerLabel: 'spk_2' });
+    await controller.stop();
+    expect(controller.snapshot().captions).toEqual([
+      expect.objectContaining({ source: 'first speaker', speakerLabel: 'spk_1' }),
+      expect.objectContaining({ source: 'second speaker', speakerLabel: 'spk_2' }),
+    ]);
   });
 });

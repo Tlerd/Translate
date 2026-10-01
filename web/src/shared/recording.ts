@@ -3,6 +3,8 @@
  * Strict type contracts matching DINH-HUONG-APP-WEB-VA-MODEL.md Section 8 & 9.
  */
 
+import type { SpeakerCount, TranscriptionMode } from './transcription';
+
 export type ClassroomMode = 'lecture' | 'readingPractice';
 
 export type RecordingState = 'recording' | 'stopped' | 'interrupted';
@@ -30,6 +32,8 @@ export interface RecordingItem {
     imageModelKey?: string;
     context?: string;
     glossary?: string;
+    transcriptionMode?: TranscriptionMode;
+    speakerCount?: SpeakerCount;
   };
 }
 
@@ -93,7 +97,9 @@ export interface ImageItem {
 }
 
 export interface AppSettings {
-  speechProvider: 'google' | 'google-transcribe' | 'browser';
+  speechProvider: 'google' | 'google-transcribe';
+  transcriptionMode: TranscriptionMode;
+  speakerCount: SpeakerCount;
   translationModel: string;
   translationThinkingLevel: string;
   summaryModel: string;
@@ -109,7 +115,9 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  speechProvider: 'google',
+  speechProvider: 'google-transcribe',
+  transcriptionMode: 'verbatim',
+  speakerCount: 1,
   translationModel: 'google:gemini-3.1-flash-lite',
   translationThinkingLevel: 'auto',
   summaryModel: 'google:gemini-3.8-flash',

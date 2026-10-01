@@ -36,6 +36,8 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
       } else {
         await startRecording({
           speechProvider: state.speechProvider,
+          transcriptionMode: state.transcriptionMode,
+          speakerCount: state.speakerCount,
           mode: state.mode,
           sourceLanguage: state.sourceLanguage,
           targetLanguage: state.targetLanguage,
@@ -144,6 +146,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           {/* Link to AI Settings */}
           <Link
             href="/settings"
+            aria-label="Cấu hình AI"
             className={styles.configLinkBadge}
             title="Đến Cấu hình AI để đổi model, cách nhận giọng hoặc khoảng nghỉ"
           >
@@ -164,11 +167,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
           <span>
             Nhận giọng:{' '}
-            {state.speechProvider === 'google'
-              ? 'Gemini 3.5 Transcribe Live'
-              : state.speechProvider === 'google-transcribe'
-              ? 'Gemini 3.5 Transcribe'
-              : 'Trình duyệt'}
+            Gemini 3.5 Transcribe{state.speechProvider === 'google' ? ' Live' : ''} · {state.transcriptionMode}
           </span>
           <span title={state.micDeviceLabel ? `Thiết bị micro: ${state.micDeviceLabel}` : undefined}>
             Mic:{' '}
@@ -182,9 +181,8 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               } as const)[state.micState]
             }
           </span>
-          {state.speechProvider !== 'browser' && (
-            <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>
-          )}
+          <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>
+          <span>{state.speakerCount} người nói</span>
           <span>Kết quả nhận: {state.transcriptCount}</span>
           <span>
             Kết quả cuối:{' '}
@@ -215,19 +213,17 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
       {/* Speaker Assignment button when session has captions and is not recording */}
       {!isRecording && state.recordingId && state.captions.length > 0 && (
         <div className={styles.speakerAssignment} role="status">
-          <button
+          {state.transcriptionMode === 'verbatim' ? <button
             type="button"
             disabled={state.speakerStatus === 'working'}
             onClick={() => void controller.assignSpeakers()}
             className={styles.speakerButton}
-            title="Phân biệt người nói dùng audio đã lưu trên máy; hỗ trợ tối đa 4 MB và 30 phút."
+            title="Phân biệt lại toàn buổi bằng Gemini Transcribe để thống nhất nhãn giữa các đoạn; tối đa 4 MB và 30 phút, phát sinh thêm một lượt API."
           >
             {state.speakerStatus === 'working'
               ? 'Đang phân biệt người nói…'
-              : state.speakerStatus === 'done'
-              ? 'Phân biệt lại người nói'
-              : 'Phân biệt người nói'}
-          </button>
+              : 'Phân biệt lại người nói'}
+          </button> : <span>Smart: gán Speaker cho từng câu trong bản dịch.</span>}
           {state.speakerMessage && <span>{state.speakerMessage}</span>}
         </div>
       )}

@@ -3,6 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClassroomController } from '@/features/recording/controller';
 import { AppDatabase, resetDbInstance } from '@/storage/db';
 
+// These regressions exercise caption revisions with the existing event fixture.
+vi.mock('@/features/recording/gemini-pcm-capture', () => ({
+  GeminiPcmCapture: class {
+    state = 'running';
+    async prepare() {}
+    async start() {}
+    async stop() {}
+  },
+}));
+vi.mock('@/features/recording/gemini-transcribe-recognition', async () => {
+  const { WebSpeechRecognizer } = await vi.importActual<typeof import('@/features/recording/speech-recognition')>('@/features/recording/speech-recognition');
+  return { GeminiTranscribeRecognizer: class extends WebSpeechRecognizer {
+    pushPcm() {}
+    updateSettings() {}
+  } };
+});
+
+
 class FakeMediaRecorder {
   static isTypeSupported() { return true; }
   state: RecordingState = 'inactive';
@@ -102,7 +120,7 @@ describe('ClassroomController stop boundary', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 10_000, speechProvider: 'browser' });
+    await controller.start({ pauseMs: 10_000 });
     FakeSpeechRecognition.instances[0].interim('unfinished source');
     await vi.waitFor(() => expect(controller.snapshot().captions.some((caption) => caption.translation === 'target-1')).toBe(true));
     expect(controller.snapshot().captions[0]).toMatchObject({ source: 'unfinished source', state: 'streaming' });
@@ -138,7 +156,7 @@ describe('ClassroomController stop boundary', () => {
     }), { status: 200 })));
 
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'browser' });
+    await controller.start({  });
     FakeSpeechRecognition.instances[0].final('final source');
     await vi.waitFor(() => expect(controller.snapshot().captions[0]?.state).toBe('failed'));
     expect(controller.snapshot().captions[0]).toMatchObject({
@@ -159,7 +177,7 @@ describe('ClassroomController stop boundary', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 600, speechProvider: 'browser' });
+    await controller.start({ pauseMs: 600 });
     const recognizer = FakeSpeechRecognition.instances[0];
     recognizer.interim('rough source');
     await vi.waitFor(() => expect(controller.snapshot().captions[0]?.source).toBe('rough source'));

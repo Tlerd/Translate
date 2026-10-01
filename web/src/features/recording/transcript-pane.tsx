@@ -2,16 +2,30 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import type { CaptionItem } from '@/shared/recording';
+import { displaySpeakerLabel, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
 import styles from './recording-ui.module.css';
 
 interface TranscriptPaneProps {
   captions: CaptionItem[];
   highlightCaptionId?: number | null;
+  speakerCount?: SpeakerCount;
+  onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
 }
 
-export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneProps) {
+export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, onSpeakerChange }: TranscriptPaneProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [pendingSpeakerId, setPendingSpeakerId] = useState<number | null>(null);
+  const [speakerError, setSpeakerError] = useState<string | null>(null);
+
+  const changeSpeaker = async (captionId: number, label: string) => {
+    if (!onSpeakerChange || pendingSpeakerId !== null) return;
+    setPendingSpeakerId(captionId);
+    setSpeakerError(null);
+    try { await onSpeakerChange(captionId, label || undefined); }
+    catch (error) { setSpeakerError(error instanceof Error ? error.message : String(error)); }
+    finally { setPendingSpeakerId(null); }
+  };
 
   useEffect(() => {
     if (autoScroll && bottomRef.current) {
@@ -43,6 +57,7 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
       className={styles.transcriptPane}
       onWheel={() => setAutoScroll(false)}
     >
+      {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
       {captions.map((cap) => {
         const isHighlighted = highlightCaptionId === cap.id;
         const isStreaming = cap.state === 'streaming';
@@ -58,7 +73,22 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
             <div className={styles.captionHeader}>
               <div className={styles.captionMeta}>
                 <span style={{ fontWeight: 600 }}>#{cap.id} • {formatTimestamp(cap.startMs)}</span>
-                {cap.speakerLabel && <span className={styles.speakerLabel}>{cap.speakerLabel}</span>}
+                {onSpeakerChange ? (
+                  <select
+                    aria-label={`Người nói cho câu ${cap.id}`}
+                    className={styles.speakerSelect}
+                    value={cap.speakerLabel ?? ''}
+                    disabled={pendingSpeakerId !== null}
+                    aria-busy={pendingSpeakerId === cap.id}
+                    onChange={(event) => void changeSpeaker(cap.id, event.target.value)}
+                  >
+                    <option value="">Chưa gán người nói</option>
+                    {cap.speakerLabel && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
+                      <option value={cap.speakerLabel} disabled>{displaySpeakerLabel(cap.speakerLabel)} (nhãn cũ)</option>
+                    )}
+                    {SPEAKER_COUNTS.slice(0, speakerCount).map(count => <option key={count} value={`spk_${count}`}>Speaker {count}</option>)}
+                  </select>
+                ) : cap.speakerLabel ? <span className={styles.speakerLabel}>{displaySpeakerLabel(cap.speakerLabel)}</span> : null}
               </div>
               {isStreaming && (
                 <span className={styles.streamingBadge}>

@@ -2,35 +2,54 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GeminiLiveRecognizer } from '@/features/recording/gemini-live-recognition';
+import { pcmWav } from '@/features/recording/gemini-transcribe-recognition';
+import { useRecording } from '@/features/recording/recording-context';
 
 export function SpeechConnectionTest() {
+  const { state } = useRecording();
   const [result, setResult] = useState<{ state: 'idle' | 'checking' | 'done' | 'error'; message: string }>({ state: 'idle', message: 'Kiểm tra quyền dùng model nhận giọng và kết nối đến Google.' });
-  const recognizer = useRef<GeminiLiveRecognizer | null>(null);
+  const request = useRef<AbortController | null>(null);
   const active = useRef(true);
+  const live = useRef<GeminiLiveRecognizer | null>(null);
   useEffect(() => {
     active.current = true;
-    return () => { active.current = false; void recognizer.current?.stop(0); };
+    return () => { active.current = false; request.current?.abort(); void live.current?.stop(0); };
   }, []);
 
   const check = async () => {
     setResult({ state: 'checking', message: 'Đang kiểm tra Gemini nhận giọng…' });
     const startedAt = Date.now();
-    const connection = new GeminiLiveRecognizer({ onTranscript: () => undefined, onError: () => undefined, onStateChange: () => undefined });
-    recognizer.current = connection;
+    const abort = new AbortController();
+    request.current = abort;
     try {
-      await connection.start(1, 'ja-JP');
+      if (state.speechProvider === 'google') {
+        const recognizer = new GeminiLiveRecognizer({ onTranscript: () => undefined, onError: () => undefined, onStateChange: () => undefined }, state.sourceLanguage, state.transcriptionMode);
+        live.current = recognizer;
+        try {
+          await recognizer.start(0);
+          if (active.current) setResult({ state: 'done', message: `Gemini Live kết nối thành công (${Date.now() - startedAt} ms).` });
+        } finally { await recognizer.stop(0); if (live.current === recognizer) live.current = null; }
+        return;
+      }
+      const form = new FormData();
+      form.set('audio', pcmWav(new Float32Array(16000)), 'connection-test.wav');
+      form.set('durationMs', '1000');
+      form.set('transcriptionMode', state.transcriptionMode);
+      form.set('speakerCount', String(state.speakerCount));
+      const response = await fetch('/api/speech/transcribe', { method: 'POST', body: form, signal: abort.signal });
+      const payload = await response.json();
+      if (!response.ok || typeof payload.text !== 'string') throw new Error(payload.error?.message ?? `HTTP ${response.status}`);
       if (active.current) setResult({ state: 'done', message: `Gemini nhận giọng kết nối thành công (${Date.now() - startedAt} ms). Key và quyền dùng model đã được Google chấp nhận.` });
     } catch (error) {
       if (active.current) setResult({ state: 'error', message: error instanceof Error ? error.message : 'Chưa kết nối được Gemini nhận giọng.' });
     } finally {
-      await connection.stop(0);
-      if (recognizer.current === connection) recognizer.current = null;
+      if (request.current === abort) request.current = null;
     }
   };
 
   return <section aria-label="Kiểm tra nhận giọng" style={{ margin: '0 auto 32px', padding: '20px 24px', maxWidth: 800 }}>
     <h2 style={{ fontSize: '1.1rem', marginBottom: 8 }}>Kết nối nhận giọng</h2>
-    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>Web dùng key Google đã cấu hình trên máy chủ. Nút này kiểm tra phiên kết nối trước khi bạn thu bài học.</p>
+    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>{state.speechProvider === 'google' ? 'Mở phiên Gemini Live bằng token tạm để kiểm tra quyền dùng model, không bật micro.' : 'Gửi 1 giây audio im lặng tới Gemini Transcribe để kiểm tra quyền dùng model. Lượt thử có thể tính phí Google API.'}</p>
     <button type="button" onClick={() => void check()} disabled={result.state === 'checking'} style={{ padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 8 }}>
       {result.state === 'checking' ? 'Đang kiểm tra…' : 'Kiểm tra API nhận giọng'}
     </button>

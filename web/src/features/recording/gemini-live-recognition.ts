@@ -1,3 +1,4 @@
+import type { TranscriptionMode } from '@/shared/transcription';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import type { AudioTranscriptionConfigMode, Modality } from '@google/genai';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
@@ -47,7 +48,7 @@ export class GeminiLiveRecognizer {
     transcriptEvents: 0, maxBufferedBytes: 0, lastError: null,
   };
 
-  constructor(callbacks: SpeechRecognitionCallbacks, languageCode = 'ja-JP') {
+  constructor(callbacks: SpeechRecognitionCallbacks, languageCode = 'ja-JP', private transcriptionMode: TranscriptionMode = 'verbatim') {
     this.callbacks = callbacks;
     this.languageCode = languageCode;
   }
@@ -79,7 +80,7 @@ export class GeminiLiveRecognizer {
     const response = await fetch('/api/speech/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ languageCode }),
+      body: JSON.stringify({ languageCode, transcriptionMode: this.transcriptionMode }),
       cache: 'no-store',
     });
     if (!response.ok) {
@@ -116,7 +117,7 @@ export class GeminiLiveRecognizer {
             generationConfig: { responseModalities: ['TEXT' as Modality] },
             inputAudioTranscription: {
               languageCodes: languageCode ? [languageCode] : [],
-              mode: 'VERBATIM' as AudioTranscriptionConfigMode,
+              mode: (this.transcriptionMode === 'smart' ? 'SMART' : 'VERBATIM') as AudioTranscriptionConfigMode,
             },
           },
         }));

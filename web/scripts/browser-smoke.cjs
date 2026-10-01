@@ -68,6 +68,28 @@ function installRecordingFixtures() {
   window.__translationDone = [];
   window.__failTranslation = '';
   window.__micSpeaking = false;
+  window.__transcriptionQueue = [];
+  window.__transcriptionRequests = [];
+  window.__liveSockets = [];
+  class FixtureLiveSocket {
+    constructor() {
+      this.readyState = 0; this.bufferedAmount = 0;
+      window.__liveSockets.push(this);
+      setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0);
+    }
+    send(raw) {
+      const message = JSON.parse(raw);
+      if (message.setup) {
+        this.mode = message.setup.inputAudioTranscription.mode;
+        setTimeout(() => this.message({ setupComplete: {} }), 0);
+      }
+      if (message.realtimeInput?.audioStreamEnd) this.message({ serverContent: { turnComplete: true } });
+    }
+    message(value) { this.onmessage?.({ data: new TextEncoder().encode(JSON.stringify(value)).buffer }); }
+    say(text) { this.message({ serverContent: { inputTranscription: { text } } }); }
+    close(code = 1000, reason = '') { this.readyState = 3; this.onclose?.({ code, reason }); }
+  }
+  window.WebSocket = FixtureLiveSocket;
   class FixtureRecorder extends EventTarget {
     static isTypeSupported() { return true; }
     constructor() { super(); this.state = 'inactive'; }
@@ -95,7 +117,19 @@ function installRecordingFixtures() {
   class FixtureAudioContext {
     state = 'suspended';
     onstatechange = null;
-    createMediaStreamSource() { return { connect() {} }; }
+    sampleRate = 16000;
+    destination = {};
+    createScriptProcessor() {
+      const processor = { onaudioprocess: null, connect() {}, disconnect() {} };
+      window.__speech = { say(text, isFinal) {
+        window.__transcriptionQueue.push(text);
+        const feed = (input) => processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input }, outputBuffer: { getChannelData: () => new Float32Array(input.length) } });
+        feed(new Float32Array(8000).fill(0.2));
+        if (isFinal) feed(new Float32Array(16000));
+      } };
+      return processor;
+    }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createAnalyser() {
       return { fftSize: 256, getByteTimeDomainData(data) { data.fill(window.__micSpeaking ? 160 : 128); } };
     }
@@ -127,6 +161,17 @@ function installRecordingFixtures() {
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (url, options) => {
+    if (String(url).endsWith('/api/speech/token')) return Response.json({ token: 'fixture-live-token', websocketUrl: 'wss://fixture.test/live', sessionLimitMs: 600000 });
+    if (String(url).endsWith('/api/speech/transcribe')) {
+      const form = options.body;
+      const mode = form.get('transcriptionMode');
+      const count = form.get('speakerCount');
+      window.__transcriptionRequests.push({ mode, count, durationMs: form.get('durationMs'), audioType: form.get('audio').type });
+      const text = window.__transcriptionQueue.shift() || '';
+      const turns = mode === 'verbatim' && text ? (window.__nextTurns || [{ text, speakerLabel: 'spk_1', startMs: 0, endMs: Math.min(500, Number(form.get('durationMs'))) }]) : [];
+      window.__nextTurns = null;
+      return Response.json({ text, turns, model: 'gemini-3.5-transcribe' });
+    }
     if (!String(url).endsWith('/api/translate')) return originalFetch(url, options);
     const request = JSON.parse(options.body);
     window.__translationRequests.push(request);
@@ -284,7 +329,7 @@ async function run() {
     };
     await page.locator('input[type=file]').setInputFiles({ name: 'recording.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) });
     await page.waitForURL(`**/recordings/${recordingId}`);
-    await page.getByText('Giảng viên', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).inputValue(), 'Giảng viên');
     const history = page.getByText('Lời nhận dạng trước đó (1)', { exact: true });
     await history.click();
     await page.getByText('私の趣味は音楽です', { exact: true }).waitFor();
@@ -352,25 +397,29 @@ async function run() {
     check('Tải lại giữ chữ sửa; Tạo lại tóm tắt dùng bản ghi/hash mới');
 
     await page.goto(`${baseUrl}/settings`);
-    assert.equal(await page.locator('#speech-provider option').count(), 3);
+    await page.locator('#transcription-mode').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#speech-provider option').count(), 2);
     await page.locator('#speech-provider').selectOption('google-transcribe');
-    assert.equal(await page.locator('#speech-provider').inputValue(), 'google-transcribe');
+    assert.equal(await page.locator('#transcription-mode option').count(), 2);
+    assert.equal(await page.locator('#speaker-count option').count(), 8);
+    assert.equal(await page.locator('#speaker-count').getAttribute('required'), '');
     assert.match(await page.locator('body').innerText(), /1,50 USD/);
-    await page.locator('#speech-provider').selectOption('browser');
-    assert.equal(await page.locator('#speech-provider').inputValue(), 'browser');
+    await page.locator('#transcription-mode').selectOption('smart');
+    await page.locator('#speaker-count').selectOption('8');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
-    await page.goto(`${baseUrl}/app`);
+    await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
     await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
     const meter = page.getByRole('progressbar', { name: 'Mức âm lượng micro' });
-    await page.getByText('Nhận giọng: Trình duyệt', { exact: true }).waitFor();
+    await page.getByText('Nhận giọng: Gemini 3.5 Transcribe · smart', { exact: true }).waitFor();
+    await page.getByText('8 người nói', { exact: true }).waitFor();
     await page.getByText('Mic: đang bật', { exact: true }).waitFor();
-    await waitUntil(() => page.evaluate(() => Boolean(window.__speech)), 'Speech fixture starts');
+    await waitUntil(() => page.evaluate(() => Boolean(window.__speech)), 'PCM fixture starts');
     await page.evaluate(() => { window.__micSpeaking = true; });
     await waitUntil(async () => Number(await meter.getAttribute('aria-valuenow')) > 0, 'Micro meter rises during fixture speech');
     await page.evaluate(() => { window.__micSpeaking = false; });
-    check('Chọn được nhận giọng trình duyệt; mức mic và trạng thái audio hiện rõ');
+    check('Cấu hình smart + 8 người áp dụng ngay qua điều hướng; giữ lựa chọn Live và Gemini Transcribe');
     const started = Date.now();
     await page.evaluate(() => window.__speech.say('私は音楽が好きです。', true));
     await page.getByText('私は音楽が好きです。', { exact: true }).waitFor();
@@ -396,6 +445,17 @@ async function run() {
     assert(audio.some((chunk) => chunk.blob.size > 0), 'Final audio chunk persists after Stop');
     assert.equal((await storedRows(page, 'captionItems', recordingId)).length, 3, 'New recording keeps earlier captions');
     check('0,9s chốt luyện đọc; Dừng giữ đủ 3 câu, bản dịch cuối và audio cuối');
+    const nativeRequests = await page.evaluate(() => window.__transcriptionRequests);
+    assert(nativeRequests.every(request => request.mode === 'smart' && request.count === '8' && request.audioType === 'audio/wav'));
+    const speakerSelector = page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true });
+    assert.equal(await speakerSelector.locator('option').count(), 9);
+    await speakerSelector.selectOption('spk_8');
+    await waitUntil(async () => (await storedRows(page, 'captionItems', liveRecordingId))[0].speakerLabel === 'spk_8', 'Manual smart speaker persists');
+    const labelledCaption = (await storedRows(page, 'captionItems', liveRecordingId))[0];
+    assert.equal(labelledCaption.source, '私は音楽が好きです。');
+    assert.equal(labelledCaption.translation, 'Tôi thích âm nhạc.');
+    assert.equal(await page.getByRole('button', { name: /Phân biệt.*người nói/ }).count(), 0);
+    check('Smart gán Speaker 8 thủ công và lưu nguyên bản dịch, không gọi diarization');
 
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
@@ -413,19 +473,72 @@ async function run() {
 
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
-    await page.evaluate(() => window.__speech.say('遅れて届いた結果', false));
-    await page.getByText('遅れて届いた結果', { exact: true }).waitFor();
-    await page.waitForTimeout(1100); // The fixture is silent for longer than the chosen 900 ms pause.
-    await page.evaluate(() => window.__speech.say('遅れて届いた結果を全部残します。', true));
-    await page.getByText('遅れて届いた結果を全部残します。', { exact: true }).waitFor();
+    await page.evaluate(() => window.__speech.say('遅れて届いた結果を全部残します。', false));
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    await page.getByText('遅れて届いた結果を全部残します。', { exact: true }).waitFor();
     const correctedRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
     const corrected = await storedRows(page, 'captionItems', correctedRecordingId);
-    assert.equal(corrected.length, 1, 'A late STT final corrects its existing reading caption');
+    assert.equal(corrected.length, 1, 'Pending unary audio becomes a single final reading caption');
     assert.equal(corrected[0].source, '遅れて届いた結果を全部残します。');
     assert.equal(corrected[0].state, 'done');
-    check('Kết quả nhận giọng cuối đến muộn sửa đúng câu, không nhân đôi dòng');
+    check('Dừng chờ nhận giọng theo đoạn và lưu đủ lời cuối, không nhân đôi dòng');
+    await page.locator('a[href="/settings"]').first().click();
+    await page.locator('#transcription-mode').selectOption('verbatim');
+    await page.locator('#speaker-count').selectOption('2');
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
+    await page.getByRole('button', { name: 'Giảng bài', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
+    await page.evaluate(() => {
+      window.__nextTurns = [
+        { text: '一人目。', speakerLabel: 'spk_1', startMs: 0, endMs: 200 },
+        { text: '二人目。', speakerLabel: 'spk_2', startMs: 300, endMs: 500 },
+      ];
+      window.__speech.say('一人目。二人目。', true);
+    });
+    await page.getByText('Speaker 1', { exact: true }).waitFor();
+    await page.getByText('Speaker 2', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).inputValue(), 'spk_1');
+    assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 2', exact: true }).inputValue(), 'spk_2');
+    const diarizedRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
+    const nativeCaptions = await storedRows(page, 'captionItems', diarizedRecordingId);
+    assert.deepEqual(nativeCaptions.map(caption => caption.speakerLabel), ['spk_1', 'spk_2']);
+    const lastTranscription = await page.evaluate(() => window.__transcriptionRequests.at(-1));
+    assert.equal(lastTranscription.mode, 'verbatim');
+    assert.equal(lastTranscription.count, '2');
+    await page.screenshot({ path: path.join(outputDir, 'transcribe-speakers-desktop.png') });
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.waitForTimeout(300); // Wait for the sidebar's responsive transition.
+    await page.screenshot({ path: path.join(outputDir, 'transcribe-speakers-mobile.png') });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Speaker controls fit mobile screen');
+    check('Verbatim nhận hai Speaker trong cùng lượt phiên âm, lưu nhãn và hiển thị trên mobile');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
+    await page.locator('#speech-provider').waitFor({ state: 'visible' });
+    await page.locator('#speech-provider').selectOption('google');
+    await page.locator('#transcription-mode').selectOption('smart');
+    await page.locator('#speaker-count').selectOption('8');
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
+    await page.getByText('Nhận giọng: Gemini 3.5 Transcribe Live · smart', { exact: true }).waitFor();
+    await waitUntil(() => page.evaluate(() => window.__liveSockets.at(-1)?.mode === 'SMART'), 'Live smart socket setup');
+    await page.evaluate(() => window.__liveSockets.at(-1).say('私は音楽が好きです。'));
+    await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).selectOption('spk_8');
+    const liveSocketRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
+    await waitUntil(async () => (await storedRows(page, 'captionItems', liveSocketRecordingId))[0].speakerLabel === 'spk_8', 'Live manual speaker persists');
+    assert(await page.evaluate(() => window.__liveSockets.every(socket => socket.readyState === 3)), 'Live socket closes after stop');
+    await page.goto(`${baseUrl}/settings`);
+    await page.locator('#speech-provider').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'google');
+    check('Live smart nhận chữ qua WebSocket, dịch, lưu Speaker 8 và giữ lựa chọn sau reload');
     assert.deepEqual(errors, [], 'No uncaught browser errors');
     check('Không có lỗi JavaScript chưa xử lý');
     fs.writeFileSync(path.join(outputDir, 'results.json'), JSON.stringify({

@@ -30,6 +30,7 @@ function formRequest(file: File, durationMs = 2_000): Request {
   const form = new FormData();
   form.set('audio', file);
   form.set('durationMs', String(durationMs));
+  form.set('speakerCount', '2');
   return new Request('http://localhost/api/speech/diarize', { method: 'POST', body: form });
 }
 

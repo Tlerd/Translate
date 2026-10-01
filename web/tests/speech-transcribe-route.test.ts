@@ -12,10 +12,12 @@ import { POST } from '@/app/api/speech/transcribe/route';
 
 const transcriptInteraction = { output_text: 'えっと、こんにちは。こんにちは。' };
 
-function formRequest(file: File, durationMs = 2_000): Request {
+function formRequest(file: File, durationMs = 2_000, options: { mode?: string; speakerCount?: string | null } = {}): Request {
   const form = new FormData();
   form.set('audio', file);
   form.set('durationMs', String(durationMs));
+  form.set('transcriptionMode', options.mode ?? 'verbatim');
+  if (options.speakerCount !== null) form.set('speakerCount', options.speakerCount ?? '2');
   return new Request('http://localhost/api/speech/transcribe', { method: 'POST', body: form });
 }
 
@@ -34,9 +36,44 @@ describe('POST /api/speech/transcribe', () => {
   it('uses verbatim unary transcription and cleans up the provider upload', async () => {
     const response = await POST(formRequest(new File(['audio-data'], 'recording.wav', { type: 'audio/wav' })));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ model: 'gemini-3.5-transcribe', text: transcriptInteraction.output_text });
-    expect(mocks.create.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.5-transcribe', generation_config: { transcription_config: { mode: { type: 'verbatim' } } } });
+    expect(await response.json()).toEqual({ model: 'gemini-3.5-transcribe', text: transcriptInteraction.output_text, turns: [] });
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.5-transcribe', generation_config: { transcription_config: { mode: { type: 'verbatim', diarization_mode: 'speaker', timestamp_granularities: ['word'] } } } });
     expect(mocks.remove).toHaveBeenCalledWith(expect.objectContaining({ name: 'files/temp-1' }));
+  });
+
+  it('sends smart without incompatible diarization or timestamp fields', async () => {
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2_000, { mode: 'smart', speakerCount: '8' }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).turns).toEqual([]);
+    expect(mocks.create.mock.calls[0][0].generation_config.transcription_config).toEqual({ language_codes: [], mode: 'smart' });
+  });
+
+  it('returns speaker turns and preserves the verbatim source exactly', async () => {
+    mocks.create.mockResolvedValueOnce({
+      output_text: 'Um, hello. Hi!',
+      steps: [{ type: 'model_output', content: [{ type: 'text', annotations: [
+        { type: 'word_info', text: 'Um', speaker: 'spk_1', start_offset: '0.000s', end_offset: '0.200s' },
+        { type: 'word_info', text: 'hello', speaker: 'spk_1', start_offset: '0.300s', end_offset: '0.600s' },
+        { type: 'word_info', text: 'Hi', speaker: 'spk_2', start_offset: '1.000s', end_offset: '1.500s' },
+      ] }] }],
+    });
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' })));
+    expect(await response.json()).toMatchObject({ text: 'Um, hello. Hi!', turns: [
+      { text: 'Um, hello.', speakerLabel: 'spk_1', startMs: 0, endMs: 600 },
+      { text: 'Hi!', speakerLabel: 'spk_2', startMs: 1000, endMs: 1500 },
+    ] });
+  });
+
+  it.each([null, '', '0', '9', '1.5', 'NaN', '01'])('rejects missing or invalid required speaker count %s before upload', async (speakerCount) => {
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2000, { speakerCount }));
+    expect(response.status).toBe(400);
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown transcription modes before upload', async () => {
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2000, { mode: 'other' }));
+    expect(response.status).toBe(400);
+    expect(mocks.upload).not.toHaveBeenCalled();
   });
 
   it('does not convert provider errors into successful transcription', async () => {

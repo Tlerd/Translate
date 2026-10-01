@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { createToken } = vi.hoisted(() => ({ createToken: vi.fn() }));
 vi.mock('@google/genai', () => ({
   Modality: { TEXT: 'TEXT' },
-  AudioTranscriptionConfigMode: { VERBATIM: 'VERBATIM' },
+  AudioTranscriptionConfigMode: { VERBATIM: 'VERBATIM', SMART: 'SMART' },
   GoogleGenAI: class {
     authTokens = { create: createToken };
     constructor(public options: unknown) {}
@@ -44,6 +44,23 @@ describe('POST /api/speech/token', () => {
       } },
     });
     expect(args.config).not.toHaveProperty('apiKey');
+  });
+
+  it('constrains smart Live credentials to SMART mode', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ languageCode: 'vi-VN', transcriptionMode: 'smart' }),
+    }));
+    expect(response.status).toBe(200);
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config.inputAudioTranscription)
+      .toEqual({ languageCodes: ['vi-VN'], mode: 'SMART' });
+  });
+
+  it('rejects unsupported modes without minting credentials', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ transcriptionMode: 'unknown' }),
+    }));
+    expect(response.status).toBe(400);
+    expect(createToken).not.toHaveBeenCalled();
   });
 
   it('rejects malformed language hints before requesting a token', async () => {

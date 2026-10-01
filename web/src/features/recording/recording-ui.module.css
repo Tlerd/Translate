@@ -133,6 +133,8 @@
 .captionMeta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -704,4 +706,14 @@
     font-size: 0.72rem;
     padding: 3px 8px;
   }
+}
+.speakerSelect {
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
 }

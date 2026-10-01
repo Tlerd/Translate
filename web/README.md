@@ -21,6 +21,20 @@
    - Nút **Chỉnh sửa kịch bản** mở popup sửa từng dòng và tìm/thay thế. **Hủy** không ghi dữ liệu; **Lưu** giữ số câu và thời gian, đánh dấu bản dịch cũ cần cập nhật. Tóm tắt cũ hiển thị cảnh báo và nút **Tạo lại** dùng bản ghi đã sửa. Ảnh minh họa cũ chỉ hiện nếu khớp nguồn hiện tại.
    - **Tạo ảnh:** Bước sau của phần B, có model sinh ảnh riêng (Google Gemini Flash Image / OpenAI Images). Chỉ tạo ảnh khi người dùng chủ động bấm sau khi đã có bản tóm tắt.
 
+### Nhận giọng và người nói
+
+Web hỗ trợ `gemini-3.5-transcribe-live` qua WebSocket và `gemini-3.5-transcribe` qua Interactions API. Live hỗ trợ verbatim/smart; chưa có diarization trực tiếp, nên gán Speaker thủ công hoặc chạy phân biệt lại sau buổi verbatim (thêm phí API). Phiên Live tự gia hạn trước giới hạn 10 phút. Tại **Cấu hình AI** (`/settings`), chọn:
+
+- **Verbatim** (mặc định): giữ nguyên lời nói, từ đệm và lặp từ; nhận nhãn người nói cùng timestamps trong cùng lượt API.
+- **Smart**: làm sạch và định dạng lời nói; Google không hỗ trợ diarization hoặc timestamps ở chế độ này. Gán người nói thủ công cho từng câu sau khi kết thúc buổi.
+- **Số người nói 1–8** (bắt buộc): giới hạn danh sách nhãn Speaker của ứng dụng. Google tự phát hiện giọng; API không có tham số ép số người nói. Từ 3 người trở lên đang ở mức thử nghiệm.
+
+Nhãn tự động có phạm vi từng đoạn audio, nên Speaker 1 ở hai đoạn có thể là hai giọng khác nhau. Sau buổi verbatim, có thể bấm **Phân biệt lại người nói** để phân tích toàn buổi (audio cục bộ ≤4 MB, ≤30 phút; thêm một lượt API). Nhãn thủ công, chế độ và số người nói được lưu vào bản ghi và đồng bộ chữ lên cloud.
+
+**Lưu cài đặt** cập nhật controller ngay qua `settingsUpdatedEvent`, không cần tải lại trang. Audio đang chờ được chốt bằng cấu hình cũ, các đoạn kế tiếp dùng cấu hình mới. Cấu hình Live được giữ lại; Web Speech cũ chuyển sang Transcribe. Đổi bộ nhận diện hoặc mode Live sẽ chốt phiên cũ rồi mở phiên mới, dùng chung micro đang thu.
+
+Tham khảo [hướng dẫn phiên âm Google](https://ai.google.dev/gemini-api/docs/transcribe) và [bảng giá Google](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe). Ước tính theo đoạn là 0,005 USD/phút (5 giờ ≈1,50 USD), Live là 0,009 USD/phút (5 giờ ≈2,70 USD), chưa gồm dịch, tóm tắt, ảnh hay xử lý lại; phí thực tế dựa trên token.
+
 ## 2. Hướng dẫn chạy và kiểm thử Local
 
 ### Cài đặt dependencies

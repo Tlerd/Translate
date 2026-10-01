@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Save, ShieldCheck, Cpu, ArrowLeft, Mic, Clock, Sparkles } from 'lucide-react';
+import { Save, ShieldCheck, Cpu, ArrowLeft, Mic, Clock, Sparkles, Users } from 'lucide-react';
 import { fetchModels } from '@/lib/api-client';
 import { loadSettings, saveSettings } from '@/storage/recordings';
 import type { AppSettings } from '@/shared/recording';
 import type { ModelsResponse } from '@/shared/ai-contracts';
+import { SPEAKER_COUNTS, TRANSCRIPTION_MODEL, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
 
 export function AiSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -125,15 +126,30 @@ export function AiSettings() {
             gap: 10,
           }}
         >
-          <label htmlFor="speech-provider" style={{ fontSize: '0.92rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: '0.92rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Mic size={18} color="var(--accent)" />
-            <span>Phương thức nhận giọng (Speech Provider)</span>
+            <span>Nhận diện giọng nói · Gemini 3.5 Transcribe / Live</span>
+          </div>
+          <label htmlFor="speech-provider">Bộ nhận diện giọng nói</label>
+          <select id="speech-provider" required value={settings.speechProvider}
+            onChange={(e) => setSettings({ ...settings, speechProvider: e.target.value as AppSettings['speechProvider'] })}
+            style={{ padding: '10px 12px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
+            <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
+            <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
+          </select>
+          {settings.speechProvider === 'google' && <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Live hiện chữ trực tiếp, hỗ trợ verbatim/smart. Gán Speaker thủ công sau buổi; verbatim có thể phân biệt lại người nói qua Transcribe (thêm phí API). Kết nối được tự gia hạn trước giới hạn 10 phút.</p>}
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <code>{TRANSCRIPTION_MODEL}</code> nhận giọng theo đoạn. Chữ xuất hiện sau khoảng nghỉ hoặc mỗi 15 giây khi nói liên tục, cộng thời gian xử lý API.
+          </p>
+          <label htmlFor="transcription-mode" style={{ fontSize: '0.88rem', fontWeight: 600 }}>
+            Chế độ phiên âm (Transcription mode)
           </label>
           <select
-            id="speech-provider"
-            aria-label="Phương thức nhận giọng"
-            value={settings.speechProvider}
-            onChange={(e) => setSettings({ ...settings, speechProvider: e.target.value as 'google' | 'google-transcribe' | 'browser' })}
+            id="transcription-mode"
+            required
+            aria-describedby="transcription-mode-help"
+            value={settings.transcriptionMode}
+            onChange={(e) => setSettings({ ...settings, transcriptionMode: e.target.value as TranscriptionMode })}
             style={{
               padding: '10px 12px',
               backgroundColor: 'var(--bg-primary)',
@@ -143,25 +159,44 @@ export function AiSettings() {
               fontSize: '0.88rem',
             }}
           >
-            <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
-            <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
-            <option value="browser">Trình duyệt</option>
+            <option value="verbatim">Verbatim (mặc định) · nguyên văn</option>
+            <option value="smart">Smart · phiên âm thông minh, gán người nói thủ công</option>
           </select>
-
-          {settings.speechProvider !== 'browser' && (
+          <p id="transcription-mode-help" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            {settings.speechProvider === 'google' ? 'Live chưa hỗ trợ diarization trực tiếp. Chọn Speaker thủ công sau buổi; verbatim có thể dùng nút phân biệt lại người nói.' : settings.transcriptionMode === 'verbatim'
+              ? 'Giữ nguyên từ đệm, lặp từ và lời tự sửa. Tự gán Speaker bằng diarization; bạn có thể sửa nhãn sau khi kết thúc buổi.'
+              : 'Loại bỏ từ đệm, lặp từ, xử lý lời tự sửa và định dạng văn bản dễ đọc. Google không hỗ trợ diarization trong smart; chọn Speaker cho từng câu sau khi kết thúc buổi.'}
+          </p>
+          <label htmlFor="speaker-count" style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={18} color="var(--accent)" /> Số người nói (bắt buộc)
+          </label>
+          <select
+            id="speaker-count"
+            required
+            aria-describedby="speaker-count-help"
+            value={settings.speakerCount}
+            onChange={(e) => setSettings({ ...settings, speakerCount: Number(e.target.value) as SpeakerCount })}
+            style={{ padding: '10px 12px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.88rem' }}
+          >
+            {SPEAKER_COUNTS.map((count) => <option key={count} value={count}>{count} người · Speaker 1{count > 1 ? ` – ${count}` : ''}</option>)}
+          </select>
+          <p id="speaker-count-help" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Danh sách nhãn từ Speaker 1 đến Speaker {settings.speakerCount}. {settings.speechProvider === 'google' ? 'Live dùng danh sách này để gán người nói thủ công sau buổi.' : 'Google tự phát hiện giọng trong từng đoạn; nhãn giữa các đoạn có thể thay đổi. Nhận diện từ 3 người trở lên đang ở mức thử nghiệm.'}
+          </p>
             <details style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
               <summary style={{ cursor: 'pointer', color: 'var(--accent)' }}>
-                {settings.speechProvider === 'google' ? 'Trực tiếp · 5 giờ nhận giọng ≈ 2,70 USD' : 'Theo đoạn · 5 giờ nhận giọng ≈ 1,50 USD'} — xem phí dịch
+                Theo đoạn · 5 giờ nhận giọng ≈ 1,50 USD — xem cước Google API
               </summary>
               <p style={{ margin: '8px 0', whiteSpace: 'normal' }}>
-                {settings.speechProvider === 'google' ? 'Chữ trực tiếp.' : 'Chữ sau mỗi đoạn nghỉ, tối đa 15 giây + thời gian API.'}{' '}
-                Ví dụ dịch bằng Gemini 3.1 Flash-Lite với tổng 100.000 token vào + 100.000 token ra: thêm ≈ 0,175 USD (5 giờ nhận giọng + dịch ≈ 2,88 USD Live / 1,68 USD theo đoạn). Chưa gồm tóm tắt, ảnh, phân người nói và các lượt dịch lại.{' '}
+                Ước tính theo bảng giá Google: audio vào ≈ 0,003 USD/phút, chữ ra ≈ 0,002 USD/phút, tổng ≈ 0,005 USD/phút. Phí thực tế tính theo token. Verbatim dùng diarization ngay trong cùng lượt nhận giọng; smart gán nhãn thủ công.{' '}
+                Ví dụ dịch bằng Gemini 3.1 Flash-Lite với tổng 100.000 token vào + 100.000 token ra: thêm ≈ 0,175 USD (5 giờ nhận giọng + dịch ≈ 1,68 USD). Chưa gồm tóm tắt, ảnh, phân biệt lại người nói hoặc dịch lại.{' '}
                 <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                   Bảng giá Google
                 </a>
               </p>
             </details>
-          )}
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Live: audio vào ≈ 0,005 USD/phút + chữ ra ≈ 0,004 USD/phút, tổng ≈ 0,009 USD/phút (5 giờ ≈ 2,70 USD). Phí thực tế tính theo token, chưa gồm dịch hoặc xử lý lại; xem <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe-live" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>bảng giá Google cho Live</a>. Ước tính theo đoạn bên trên chỉ áp dụng cho Transcribe.</p>
+          <a href="https://ai.google.dev/gemini-api/docs/transcribe" target="_blank" rel="noreferrer" style={{ fontSize: '0.82rem', color: 'var(--accent)', textDecoration: 'underline' }}>Tài liệu phiên âm và người nói của Google</a>
         </div>
 
         {/* 2. Model Translation & Thinking Level */}

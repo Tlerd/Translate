@@ -1,5 +1,6 @@
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { Pcm16kResampler, floatToPcm16 } from './pcm-resampler';
+import { isAllowedSpeakerLabel, type SpeakerCount, type TranscriptionMode, type TranscriptionTurn } from '@/shared/transcription';
 
 /** Unary transcription: ordered WAV segments, never a live WebSocket session. */
 export class GeminiTranscribeRecognizer {
@@ -15,7 +16,18 @@ export class GeminiTranscribeRecognizer {
   private failed = false;
   private chain: Promise<void> = Promise.resolve();
 
-  constructor(private callbacks: SpeechRecognitionCallbacks, private language: string, private pauseMs = 900) {}
+  constructor(
+    private callbacks: SpeechRecognitionCallbacks, private language: string, private pauseMs = 900,
+    private transcriptionMode: TranscriptionMode = 'verbatim', private speakerCount: SpeakerCount = 1,
+  ) {}
+
+  updateSettings(settings: { pauseMs?: number; transcriptionMode?: TranscriptionMode; speakerCount?: SpeakerCount }): void {
+    if ((settings.transcriptionMode !== undefined && settings.transcriptionMode !== this.transcriptionMode) ||
+        (settings.speakerCount !== undefined && settings.speakerCount !== this.speakerCount)) this.finalizeUtterance();
+    if (settings.pauseMs !== undefined) this.pauseMs = settings.pauseMs;
+    if (settings.transcriptionMode !== undefined) this.transcriptionMode = settings.transcriptionMode;
+    if (settings.speakerCount !== undefined) this.speakerCount = settings.speakerCount;
+  }
 
   start(epoch: number): void {
     this.epoch = epoch;
@@ -52,6 +64,8 @@ export class GeminiTranscribeRecognizer {
     const sequence = ++this.sequence;
     const id = `transcribe_${this.epoch}_${sequence}`;
     const timing = { startMs: this.processedSamples / 16, endMs: (this.processedSamples + count) / 16 };
+    const transcriptionMode = this.transcriptionMode;
+    const speakerCount = this.speakerCount;
     this.processedSamples += count;
     this.queuedSamples += count;
     if (this.queuedSamples > 120 * 16000) {
@@ -64,10 +78,22 @@ export class GeminiTranscribeRecognizer {
         form.set('audio', pcmWav(pcm), `${id}.wav`);
         form.set('durationMs', String(Math.ceil(count / 16)));
         form.set('language', this.language);
+        form.set('transcriptionMode', transcriptionMode);
+        form.set('speakerCount', String(speakerCount));
         const response = await fetch('/api/speech/transcribe', { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
         const result = await response.json();
         if (!response.ok || typeof result.text !== 'string') throw new Error(result.error?.message ?? `HTTP ${response.status}`);
-        if (result.text.trim()) this.callbacks.onTranscript(result.text, true, this.epoch, id, 1, timing);
+        const candidates: TranscriptionTurn[] = transcriptionMode === 'verbatim' && Array.isArray(result.turns) ? result.turns : [];
+        const turns = candidates.every(turn => turn && typeof turn.text === 'string' && turn.text.trim() && Number.isFinite(turn.startMs) && Number.isFinite(turn.endMs) && turn.startMs >= 0 && turn.startMs <= count / 16 && turn.endMs >= turn.startMs && turn.endMs <= count / 16 + 1000) ? candidates : [];
+        if (turns.length) {
+          for (const [index, turn] of turns.entries()) {
+            this.callbacks.onTranscript(turn.text, true, this.epoch, `${id}_speaker_${index + 1}`, 1, {
+              startMs: timing.startMs + turn.startMs,
+              endMs: Math.min(timing.endMs, timing.startMs + turn.endMs),
+              ...(turn.speakerLabel && isAllowedSpeakerLabel(turn.speakerLabel, speakerCount) ? { speakerLabel: turn.speakerLabel } : {}),
+            });
+          }
+        } else if (result.text.trim()) this.callbacks.onTranscript(result.text, true, this.epoch, id, 1, timing);
       } catch (error) {
         this.callbacks.onError(`Không nhận được chữ cho đoạn ${sequence}: ${error instanceof Error ? error.message : String(error)}. Audio vẫn được lưu trên máy.`, this.epoch);
       } finally { this.queuedSamples -= count; }

@@ -16,7 +16,6 @@ interface RecordingContextValue {
   setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
   setReadingPauseMs: (milliseconds: number) => void;
-  setSpeechProvider: (provider: 'google' | 'google-transcribe' | 'browser') => void;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -43,22 +42,25 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     const applySettings = (settings: Partial<AppSettings>) => {
       const controller = controllerRef.current;
-      if (!controller || controller.snapshot().state !== 'stopped') return;
+      if (!controller) return;
       if (settings.pauseMs !== undefined) controller.setPauseMs(settings.pauseMs);
       if (settings.readingPauseMs !== undefined) controller.setReadingPauseMs(settings.readingPauseMs);
       if (settings.translationModel !== undefined) controller.setTranslationModel(settings.translationModel);
       if (settings.translationThinkingLevel !== undefined) controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
       if (settings.speechProvider !== undefined) controller.setSpeechProvider(settings.speechProvider);
+      controller.setTranscriptionSettings({ transcriptionMode: settings.transcriptionMode, speakerCount: settings.speakerCount });
     };
 
     loadSettings().then((settings) => {
       if (!active || settingsChangedByUserRef.current) return;
+      if (controllerRef.current?.snapshot().state !== 'stopped') return;
       applySettings(settings);
     }).catch((error) => console.warn('Không thể tải cài đặt:', error));
 
     const handleEvent = (event: Event) => {
       const customEvent = event as CustomEvent<Partial<AppSettings>>;
       if (customEvent.detail) {
+        settingsChangedByUserRef.current = true;
         applySettings(customEvent.detail);
       }
     };
@@ -94,12 +96,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     void saveSettings({ readingPauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
   };
 
-  const updateSpeechProvider = (provider: 'google' | 'google-transcribe' | 'browser') => {
-    settingsChangedByUserRef.current = true;
-    controllerRef.current!.setSpeechProvider(provider);
-    void saveSettings({ speechProvider: provider }).catch((error) => console.warn('Không thể lưu cách nhận giọng:', error));
-  };
-
   const value: RecordingContextValue = {
     controller: controllerRef.current,
     state,
@@ -110,7 +106,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setTranslationThinkingLevel: updateTranslationThinkingLevel,
     setPauseMs: updatePauseMs,
     setReadingPauseMs: updateReadingPauseMs,
-    setSpeechProvider: updateSpeechProvider,
   };
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;

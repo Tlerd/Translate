@@ -27,6 +27,22 @@ class FakeWebSocket {
 describe('Gemini live recognizer', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+  it('uses the same smart mode for token constraints and WebSocket setup', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ token: 'token', websocketUrl: 'wss://example.test/live' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const recognizer = new GeminiLiveRecognizer({ onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() }, 'vi-VN', 'smart');
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(1);
+    try {
+      await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ transcriptionMode: 'smart' });
+      const socket = FakeWebSocket.last!;
+      socket.open(); socket.message({ setupComplete: {} }); await starting;
+      expect(JSON.parse(socket.sent[0]).setup.inputAudioTranscription.mode).toBe('SMART');
+    } finally { await recognizer.stop(0); }
+  });
+
   it('decodes Google binary setup and UTF-8 transcripts instead of timing out or losing text', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({

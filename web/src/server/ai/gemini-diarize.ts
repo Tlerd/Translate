@@ -1,4 +1,5 @@
 import type { Interactions } from '@google/genai';
+import { isAllowedSpeakerLabel, type SpeakerCount, type TranscriptionTurn } from '@/shared/transcription';
 
 export interface DiarizedWordSegment {
   speakerLabel: string;
@@ -42,4 +43,36 @@ export function extractDiarizedWordSegments(
     ) return [];
     return [{ speakerLabel: word.speaker, startMs, endMs, text: word.text }];
   }).sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+}
+
+/** Keep the exact output_text (including punctuation and fillers) when splitting voices. */
+export function diarizedTranscriptTurns(text: string, words: DiarizedWordSegment[], speakerCount: SpeakerCount): TranscriptionTurn[] {
+  if (!words.length) return [];
+  const turns: TranscriptionTurn[] = [];
+  let cursor = 0;
+  let turnStart = 0;
+  let speaker = words[0].speakerLabel;
+  let startMs = words[0].startMs;
+  let endMs = words[0].endMs;
+  const append = (end: number) => {
+    const source = text.slice(turnStart, end).trim();
+    if (source) turns.push({ text: source, startMs, endMs, ...(isAllowedSpeakerLabel(speaker, speakerCount) ? { speakerLabel: speaker } : {}) });
+  };
+  for (const word of words) {
+    const token = word.text.trim();
+    if (!token) continue;
+    const index = text.indexOf(token, cursor);
+    // Inconsistent annotations must not replace the provider's actual transcript.
+    if (index < 0) return [];
+    if (word.speakerLabel !== speaker) {
+      append(index);
+      turnStart = index;
+      speaker = word.speakerLabel;
+      startMs = word.startMs;
+      endMs = word.endMs;
+    } else endMs = Math.max(endMs, word.endMs);
+    cursor = index + token.length;
+  }
+  append(text.length);
+  return turns;
 }

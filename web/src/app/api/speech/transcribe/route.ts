@@ -2,11 +2,13 @@ import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
 import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { diarizedTranscriptTurns, extractDiarizedWordSegments } from '@/server/ai/gemini-diarize';
+import { isSpeakerCount, TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const MODEL = 'gemini-3.5-transcribe';
+const MODEL = TRANSCRIPTION_MODEL;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_MULTIPART_BYTES = MAX_FILE_BYTES + 64 * 1024;
 const MAX_DURATION_MS = 20 * 1000;
@@ -84,7 +86,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const bodyBuffer = new ArrayBuffer(boundedBody.byteLength);
     new Uint8Array(bodyBuffer).set(boundedBody);
-    const formRequest = new Request('http://local/speech/diarize', {
+    const formRequest = new Request('http://local/speech/transcribe', {
       method: 'POST',
       headers: { 'content-type': contentType },
       body: bodyBuffer,
@@ -104,6 +106,15 @@ export async function POST(req: Request): Promise<Response> {
   const durationMs = parseDurationMs(form.get('durationMs'));
   if (durationMs === null) {
     return makeErrorResponse(400, 'INTERNAL_ERROR', 'Thời lượng audio phải nằm trong khoảng 1 ms đến 20 giây.');
+  }
+  const mode = form.get('transcriptionMode') ?? 'verbatim';
+  if (mode !== 'verbatim' && mode !== 'smart') {
+    return makeErrorResponse(400, 'INTERNAL_ERROR', 'Chế độ phiên âm phải là verbatim hoặc smart.');
+  }
+  const rawSpeakerCount = form.get('speakerCount');
+  const speakerCount = typeof rawSpeakerCount === 'string' && /^[1-8]$/.test(rawSpeakerCount) ? Number(rawSpeakerCount) : null;
+  if (!isSpeakerCount(speakerCount)) {
+    return makeErrorResponse(400, 'INTERNAL_ERROR', 'Bắt buộc chọn số người nói từ 1 đến 8.');
   }
   const mimeType = audioMimeType(uploaded);
   if (!mimeType) {
@@ -141,9 +152,10 @@ export async function POST(req: Request): Promise<Response> {
       generation_config: {
         transcription_config: {
           language_codes: typeof form.get('language') === 'string' && /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/.test(String(form.get('language'))) ? [String(form.get('language'))] : [],
-          mode: {
+          mode: mode === 'smart' ? 'smart' : {
             type: 'verbatim',
-            
+            diarization_mode: 'speaker',
+            timestamp_granularities: ['word'],
           },
         },
       },
@@ -154,7 +166,10 @@ export async function POST(req: Request): Promise<Response> {
     }
     const text = interaction.output_text;
     if (typeof text !== 'string') return makeErrorResponse(502, 'INTERNAL_ERROR', 'Gemini không trả về chữ hợp lệ.');
-    return Response.json({ text, model: MODEL }, { headers: { 'Cache-Control': 'no-store' } });
+    const turns = mode === 'verbatim'
+      ? diarizedTranscriptTurns(text, extractDiarizedWordSegments(interaction, durationMs), speakerCount)
+      : [];
+    return Response.json({ text, turns, model: MODEL }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: unknown) {
     return googleProviderErrorResponse('speech.transcribe', error, controller.signal.aborted);
   } finally {
