@@ -101,9 +101,6 @@
   justify-content: center;
 }
 
-.appTitleTextShort {
-  display: none;
-}
 
 .accountWrapper {
   display: flex;
@@ -209,39 +206,72 @@
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
+  .topBar {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .topBarLeft {
+    gap: 6px;
+  }
+
+  .topBarRight {
+    gap: 6px;
+  }
+
   .appTitleText {
     display: none;
   }
 
-  .appTitleTextShort {
-    display: inline;
+  .appTitle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    padding: 0;
+    gap: 0;
+    transition: all 0.15s ease;
   }
 
-  .accountWrapper button {
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .appTitle:hover {
+    background-color: var(--bg-hover);
+    transform: translateY(-1px);
+  }
+
+  .accountWrapper {
+    gap: 6px;
   }
 
   .activeSessionBanner {
     padding: 3px 6px;
     font-size: 0.72rem;
   }
+
+  .stopButton span {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .recordingText {
+    display: none;
+  }
 }
 
 @media (max-width: 380px) {
   .topBar {
     gap: 4px;
-    padding: 0 6px;
+    padding: 0 4px;
   }
 
+  .topBarLeft,
   .topBarRight {
     gap: 4px;
   }
-
-  .recordingText {
-    display: none;
-  }
 }
+

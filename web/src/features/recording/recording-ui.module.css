@@ -379,7 +379,29 @@
   display: inline;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .toolbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .primaryActionRow {
+    gap: 8px;
+  }
+
+  .primaryActionsLeft {
+    gap: 8px;
+  }
+
+  .primaryActionsRight {
+    gap: 6px;
+  }
+
+  .recordActionBtn {
+    padding: 7px 14px;
+    font-size: 0.88rem;
+  }
+
   .configBadgeText {
     display: none;
   }

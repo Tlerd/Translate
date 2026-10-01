@@ -58,12 +58,11 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
             >
               {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
             </button>
-            <Link href="/app" className={styles.appTitle}>
+            <Link href="/app" className={styles.appTitle} title="Máy Dịch Lớp Học" aria-label="Máy Dịch Lớp Học">
               <span className={styles.appLogo}>
                 <Radio size={18} color="var(--accent)" />
               </span>
               <span className={styles.appTitleText}>Máy Dịch Lớp Học</span>
-              <span className={styles.appTitleTextShort}>Máy Dịch</span>
             </Link>
           </div>
 

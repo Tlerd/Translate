@@ -1,0 +1,55 @@
+.signOutForm {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.signOutButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.signOutButton:hover {
+  background-color: var(--bg-hover);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+}
+
+.signOutButton:active {
+  transform: scale(0.96);
+}
+
+.signOutText {
+  display: inline;
+}
+
+/* On mobile, turn into an icon button */
+@media (max-width: 640px) {
+  .signOutButton {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .signOutText {
+    display: none;
+  }
+}
