@@ -7,6 +7,8 @@ export interface AudioRecorderCallbacks {
   onChunk: (blob: Blob, sequence: number, timestampMs: number, mimeType: string) => Promise<void> | void;
   onVolume: (volume: number) => void; // 0.0 to 1.0
   onError: (error: string) => void;
+  onMicState?: (state: 'live' | 'muted' | 'ended' | 'suspended') => void;
+  onMicInfo?: (label: string) => void;
 }
 
 export class WebAudioRecorder {
@@ -26,6 +28,10 @@ export class WebAudioRecorder {
 
   constructor(callbacks: AudioRecorderCallbacks) {
     this.callbacks = callbacks;
+  }
+  public get stream(): MediaStream | null { return this.mediaStream; }
+  public async resume(): Promise<void> {
+    if (this.audioContext?.state === 'suspended') await this.audioContext.resume();
   }
 
   public static getBestSupportedMimeType(): string {
@@ -63,9 +69,17 @@ export class WebAudioRecorder {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          channelCount: { ideal: 1 },
         },
       });
       this.mediaStream = stream;
+      this.callbacks.onMicInfo?.(stream.getAudioTracks?.()[0]?.label || 'Micro mặc định của hệ thống');
+      for (const track of stream.getAudioTracks?.() ?? stream.getTracks()) {
+        track.addEventListener?.('mute', () => this.callbacks.onMicState?.('muted'));
+        track.addEventListener?.('unmute', () => this.callbacks.onMicState?.('live'));
+        track.addEventListener?.('ended', () => { if (this.isRecording) this.callbacks.onMicState?.('ended'); });
+      }
+      this.callbacks.onMicState?.('live');
 
       // Audio analysis for volume level
       try {
@@ -81,17 +95,19 @@ export class WebAudioRecorder {
 
           this.audioContext = audioCtx;
           this.analyser = analyser;
+          audioCtx.onstatechange = () => { if (this.isRecording) this.callbacks.onMicState?.(audioCtx.state === 'running' ? 'live' : 'suspended'); };
+          await audioCtx.resume();
 
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const dataArray = new Uint8Array(analyser.fftSize);
           this.volumeIntervalId = setInterval(() => {
             if (!this.analyser) return;
-            this.analyser.getByteFrequencyData(dataArray);
+            this.analyser.getByteTimeDomainData(dataArray);
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
-              sum += dataArray[i];
+              const amplitude = (dataArray[i] - 128) / 128;
+              sum += amplitude * amplitude;
             }
-            const average = sum / dataArray.length;
-            const normalized = Math.min(1.0, average / 128.0);
+            const normalized = Math.min(1.0, Math.sqrt(sum / dataArray.length));
             this.callbacks.onVolume(normalized);
           }, 100);
         }
@@ -129,7 +145,7 @@ export class WebAudioRecorder {
 
       return this.mimeType;
     } catch (err) {
-      this.stop();
+      await this.stop();
       throw err;
     }
   }

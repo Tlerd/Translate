@@ -102,7 +102,7 @@ describe('ClassroomController stop boundary', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 10_000 });
+    await controller.start({ pauseMs: 10_000, speechProvider: 'browser' });
     FakeSpeechRecognition.instances[0].interim('unfinished source');
     await vi.waitFor(() => expect(controller.snapshot().captions.some((caption) => caption.translation === 'target-1')).toBe(true));
     expect(controller.snapshot().captions[0]).toMatchObject({ source: 'unfinished source', state: 'streaming' });
@@ -138,7 +138,7 @@ describe('ClassroomController stop boundary', () => {
     }), { status: 200 })));
 
     const controller = new ClassroomController();
-    await controller.start();
+    await controller.start({ speechProvider: 'browser' });
     FakeSpeechRecognition.instances[0].final('final source');
     await vi.waitFor(() => expect(controller.snapshot().captions[0]?.state).toBe('failed'));
     expect(controller.snapshot().captions[0]).toMatchObject({
@@ -159,7 +159,7 @@ describe('ClassroomController stop boundary', () => {
     }));
 
     const controller = new ClassroomController();
-    await controller.start({ pauseMs: 600 });
+    await controller.start({ pauseMs: 600, speechProvider: 'browser' });
     const recognizer = FakeSpeechRecognition.instances[0];
     recognizer.interim('rough source');
     await vi.waitFor(() => expect(controller.snapshot().captions[0]?.source).toBe('rough source'));

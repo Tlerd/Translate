@@ -53,6 +53,7 @@ export class WebSpeechRecognizer {
   private revisionsByResult = new Map<number, number>();
   private stopWaiter: (() => void) | null = null;
   private recognitionCounter = 0;
+  private activeRecognitionId: number | null = null;
 
   constructor(callbacks: SpeechRecognitionCallbacks, lang = 'ja-JP') {
     this.callbacks = callbacks;
@@ -68,6 +69,7 @@ export class WebSpeechRecognizer {
     if (lang) this.lang = lang;
     this.currentEpoch = epoch;
     this.revisionsByResult.clear();
+    this.activeRecognitionId = null;
     this.shouldRestart = true;
     this.initAndStart(epoch);
   }
@@ -87,6 +89,7 @@ export class WebSpeechRecognizer {
 
       const recognition = new RecognitionConstructor();
       const recognitionId = ++this.recognitionCounter;
+      this.activeRecognitionId = recognitionId;
       this.revisionsByResult.clear();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -94,7 +97,7 @@ export class WebSpeechRecognizer {
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
-        if (epoch !== this.currentEpoch) {
+        if (epoch !== this.currentEpoch || recognitionId !== this.activeRecognitionId) {
           recognition.abort();
           return;
         }
@@ -103,37 +106,31 @@ export class WebSpeechRecognizer {
       };
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
-        if (epoch !== this.currentEpoch) return;
+        if (epoch !== this.currentEpoch || recognitionId !== this.activeRecognitionId) return;
 
-        let interimText = '';
-        let interimResultIndex: number | null = null;
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           const transcript = res[0]?.transcript || '';
+          const revision = (this.revisionsByResult.get(i) || 0) + 1;
+          this.revisionsByResult.set(i, revision);
           if (res.isFinal) {
-            const revision = (this.revisionsByResult.get(i) || 0) + 1;
-            this.revisionsByResult.set(i, revision);
             this.callbacks.onTranscript(transcript.trim(), true, epoch, `speech-${epoch}-${recognitionId}-${i}`, revision);
           } else {
-            interimText += transcript;
-            interimResultIndex = i;
+            if (transcript.trim()) {
+              this.callbacks.onTranscript(
+                transcript.trim(),
+                false,
+                epoch,
+                `speech-${epoch}-${recognitionId}-${i}`,
+                revision
+              );
+            }
           }
-        }
-        if (interimText.trim() && interimResultIndex !== null) {
-          const revision = (this.revisionsByResult.get(interimResultIndex) || 0) + 1;
-          this.revisionsByResult.set(interimResultIndex, revision);
-          this.callbacks.onTranscript(
-            interimText.trim(),
-            false,
-            epoch,
-            `speech-${epoch}-${recognitionId}-${interimResultIndex}`,
-            revision
-          );
         }
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
-        if (epoch !== this.currentEpoch) return;
+        if (epoch !== this.currentEpoch || recognitionId !== this.activeRecognitionId) return;
         // Ignore aborted error if triggered by user stop
         if (event.error === 'aborted' && !this.shouldRestart) return;
 
@@ -148,6 +145,8 @@ export class WebSpeechRecognizer {
       };
 
       recognition.onend = () => {
+        if (recognitionId !== this.activeRecognitionId) return;
+        this.activeRecognitionId = null;
         this.isRunning = false;
         if (epoch !== this.currentEpoch || !this.shouldRestart) {
           this.callbacks.onStateChange('stopped');

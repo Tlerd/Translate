@@ -15,6 +15,7 @@ interface RecordingContextValue {
   setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
   setReadingPauseMs: (milliseconds: number) => void;
+  setSpeechProvider: (provider: 'google' | 'browser') => void;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -46,6 +47,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       controller.setReadingPauseMs(settings.readingPauseMs);
       controller.setTranslationModel(settings.translationModel);
       controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
+      controller.setSpeechProvider(settings.speechProvider);
     }).catch((error) => console.warn('Không thể tải thời gian chốt câu:', error));
     return () => { active = false; };
   }, []);
@@ -72,6 +74,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     void saveSettings({ readingPauseMs: milliseconds }).catch((error) => console.warn('Không thể lưu thời gian chốt câu:', error));
   };
 
+  const updateSpeechProvider = (provider: 'google' | 'browser') => {
+    controllerRef.current!.setSpeechProvider(provider);
+    void saveSettings({ speechProvider: provider }).catch((error) => console.warn('Không thể lưu cách nhận giọng:', error));
+  };
+
   const value: RecordingContextValue = {
     controller: controllerRef.current,
     state,
@@ -82,6 +89,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setTranslationThinkingLevel: updateTranslationThinkingLevel,
     setPauseMs: updatePauseMs,
     setReadingPauseMs: updateReadingPauseMs,
+    setSpeechProvider: updateSpeechProvider,
   };
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;

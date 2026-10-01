@@ -1,0 +1,339 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspaceTabs {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspaceContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.transcriptPane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  gap: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.emptyTranscript {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+  gap: 12px;
+}
+
+.captionCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.captionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.speakerLabel {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.captionText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.sourceHistory {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.sourceHistory summary {
+  width: fit-content;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.sourceHistory ol {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.sourceHistory li {
+  padding-left: 2px;
+  overflow-wrap: anywhere;
+}
+
+.historyRevision {
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+}
+
+.toolbarControls {
+  display: flex;
+  flex: 1 1 640px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+
+.recordAction {
+  flex: 0 0 auto;
+}
+
+.speechSettings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px;
+}
+
+.speechSettings select {
+  max-width: 100%;
+}
+
+.modelSettings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px;
+}
+
+.modelSettings select {
+  max-width: 100%;
+}
+
+.modeSwitch {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pauseSetting {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 8px;
+}
+
+.toolbarStatus {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 12px;
+}
+
+.volumeMeter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volumeTrack {
+  width: 60px;
+  height: 6px;
+  background-color: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.audioDiagnostics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 4px 10px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbarError,
+.speakerAssignment {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.toolbarError {
+  color: var(--danger);
+}
+
+.speakerAssignment {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.speakerButton,
+.resumeMicButton {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.speakerButton:disabled {
+  color: var(--text-muted);
+  cursor: progress;
+}
+
+.resumeMicButton {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+@media (max-width: 768px) {
+  .workspaceTabs {
+    justify-content: flex-start;
+    padding: 6px 10px !important;
+    gap: 6px;
+  }
+
+  .transcriptPane {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  .captionCard {
+    padding: 11px 12px !important;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 10px !important;
+    gap: 8px;
+  }
+
+  .toolbarControls {
+    flex: 0 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .recordAction {
+    align-self: flex-start;
+  }
+
+  .modelSettings {
+    width: 100%;
+  }
+
+  .speechSettings {
+    width: 100%;
+  }
+
+  .speechSettings select {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .modelSettings select {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .pauseSetting {
+    width: 100%;
+    column-gap: 6px;
+  }
+
+  .pauseSetting input[type='range'] {
+    flex: 1 1 100px;
+  }
+
+  .toolbarStatus {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .audioDiagnostics {
+    flex: 1 1 100%;
+  }
+
+  .speakerAssignment {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .recordingToolbar .speechSettings,
+  .recordingToolbar .modelSettings,
+  .recordingToolbar .modeSwitch,
+  .recordingTools {
+    display: none !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .captionHeader {
+    align-items: flex-start;
+  }
+
+  .captionText {
+    font-size: 0.92rem !important;
+  }
+}

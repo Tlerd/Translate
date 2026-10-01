@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { AiSettings } from '@/features/settings/ai-settings';
+import { SpeechConnectionTest } from '@/features/settings/speech-connection-test';
 
 export default function SettingsPage() {
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <AiSettings />
+      <SpeechConnectionTest />
     </div>
   );
 }

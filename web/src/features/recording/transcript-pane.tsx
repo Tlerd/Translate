@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import type { CaptionItem } from '@/shared/recording';
+import styles from './recording-ui.module.css';
 
 interface TranscriptPaneProps {
   captions: CaptionItem[];
@@ -27,19 +28,7 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
 
   if (captions.length === 0) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: 'var(--text-muted)',
-          padding: 32,
-          textAlign: 'center',
-          gap: 12,
-        }}
-      >
+      <div data-testid="transcript-empty-state" className={styles.emptyTranscript} style={{ color: 'var(--text-muted)' }}>
         <p style={{ fontSize: '1rem' }}>Chưa có nội dung nói.</p>
         <p style={{ fontSize: '0.85rem' }}>
           Bấm <strong>Bắt đầu thu</strong> và nói vào micro (tiếng Nhật, tiếng Việt hoặc tiếng Anh).
@@ -50,14 +39,8 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
 
   return (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflowY: 'auto',
-        padding: '16px 20px',
-        gap: 16,
-      }}
+      data-testid="transcript-pane"
+      className={styles.transcriptPane}
       onWheel={() => setAutoScroll(false)}
     >
       {captions.map((cap) => {
@@ -68,6 +51,7 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
           <div
             key={cap.id}
             id={`caption-${cap.id}`}
+            data-testid="caption-card"
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -80,18 +64,18 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
               gap: 8,
               transition: 'background-color 0.3s, border-color 0.3s',
             }}
+            className={styles.captionCard}
           >
             {/* Header: Timestamp and ID */}
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
                 fontSize: '0.75rem',
                 color: 'var(--text-muted)',
               }}
+              className={styles.captionHeader}
             >
               <span style={{ fontWeight: 600 }}>#{cap.id} • {formatTimestamp(cap.startMs)}</span>
+              {cap.speakerLabel && <span className={styles.speakerLabel}>{cap.speakerLabel}</span>}
               {isStreaming && (
                 <span
                   style={{
@@ -115,19 +99,34 @@ export function TranscriptPane({ captions, highlightCaptionId }: TranscriptPaneP
             </div>
 
             {/* Original source */}
-            <div style={{ fontSize: '0.98rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+            <div data-testid="caption-source" className={styles.captionText} style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>
               {cap.source}
             </div>
+
+            {cap.sourceHistory?.length ? (
+              <details className={styles.sourceHistory}>
+                <summary>Lời nhận dạng trước đó ({cap.sourceHistory.length})</summary>
+                <ol>
+                  {cap.sourceHistory.map((item) => (
+                    <li key={`${item.revision}-${item.text}`}>
+                      <span>{item.text}</span>
+                      <span className={styles.historyRevision}>Bản {item.revision}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            ) : null}
 
             {/* Translation */}
             <div
               style={{
                 fontSize: '0.95rem',
                 color: isStreaming ? 'var(--accent)' : 'var(--text-secondary)',
-                lineHeight: 1.5,
                 borderTop: '1px dashed var(--border-color)',
                 paddingTop: 8,
               }}
+              className={styles.captionText}
+              data-testid="caption-translation"
             >
               {cap.translation || (isStreaming ? '...' : '')}
               {!isStreaming && cap.translation && cap.targetSourceRevision !== cap.revision && (

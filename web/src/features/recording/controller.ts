@@ -1,4 +1,6 @@
-import { WebSpeechRecognizer } from './speech-recognition';
+import { WebSpeechRecognizer, type SpeechRecognitionCallbacks } from './speech-recognition';
+import { GeminiLiveRecognizer } from './gemini-live-recognition';
+import { GeminiPcmCapture } from './gemini-pcm-capture';
 import { WebAudioRecorder } from './audio-recorder';
 import { LiveUtteranceAssembler, type TranscriptSnapshot } from './utterance-assembler';
 import { LiveTranslationScheduler, type ScheduledTranslationEvent } from './translation-scheduler';
@@ -8,6 +10,7 @@ import {
   updateRecording,
   addAudioChunk,
   saveCaption,
+  getAudioBlob,
 } from '@/storage/recordings';
 import type {
   ClassroomMode,
@@ -31,9 +34,19 @@ export interface ControllerState {
   epoch: number;
   pauseMs: number;
   readingPauseMs: number;
+  speechProvider: 'google' | 'browser';
+  micState: 'idle' | 'live' | 'muted' | 'ended' | 'suspended';
+  receivedAudioMs: number;
+  lastTranscriptAt: number | null;
+  transcriptCount: number;
+  translationLatencyMs: number | null;
+  speakerStatus: 'idle' | 'working' | 'done' | 'error' | 'unavailable';
+  speakerMessage: string | null;
+  micDeviceLabel: string | null;
 }
 
 export interface StartOptions {
+  speechProvider?: 'google' | 'browser';
   mode?: ClassroomMode;
   sourceLanguage?: string;
   targetLanguage?: string;
@@ -61,11 +74,27 @@ export class ClassroomController {
     epoch: 0,
     pauseMs: 900,
     readingPauseMs: 900,
+    speechProvider: 'google', micState: 'idle', receivedAudioMs: 0,
+    lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
+    speakerStatus: 'idle', speakerMessage: null,
+    micDeviceLabel: null,
   };
 
   private listeners: Set<(state: ControllerState) => void> = new Set();
 
-  private speechRecognizer: WebSpeechRecognizer | null = null;
+  private speechRecognizer: WebSpeechRecognizer | GeminiLiveRecognizer | null = null;
+  private pcmCapture: GeminiPcmCapture | null = null;
+  private pcmPreparation: Promise<void> | null = null;
+  private pcmAttached = false;
+  private pcmInputCallback: ((samples: Float32Array, rate: number) => void) | null = null;
+  private pcmReady = false;
+  private pcmQueue: Array<{samples: Float32Array; rate: number}> = [];
+  private pcmQueueMs = 0;
+  private renewalTimer: ReturnType<typeof setTimeout> | null = null;
+  private speechRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private speechRetries = 0;
+  private googleConnecting = false;
+  private speechCallbacks: SpeechRecognitionCallbacks | null = null;
   private audioRecorder: WebAudioRecorder | null = null;
   private assembler: LiveUtteranceAssembler | null = null;
   private scheduler: LiveTranslationScheduler | null = null;
@@ -77,12 +106,15 @@ export class ClassroomController {
   private activeBlockId = 1;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private hasPendingTranscript = false;
+  private providerSpeechEnded = false;
   private seenSpeechSnapshots = new Map<string, { text: string; isFinal: boolean; revision: number }>();
   private speechItemLocations = new Map<string, { captionId: number; blockId: number; startMs: number }>();
   private pendingCaptionWrites = new Set<Promise<void>>();
   private captionWriteChain: Promise<void> = Promise.resolve();
   private starting: Promise<string> | null = null;
   private stopping: Promise<void> | null = null;
+  private speakerTask: Promise<void> | null = null;
+  private speakerAbort: AbortController | null = null;
 
   constructor() {
     this.checkStoragePersistence();
@@ -128,10 +160,24 @@ export class ClassroomController {
   public async start(options: StartOptions = {}): Promise<string> {
     if (this.stopping) await this.stopping;
     if (this.starting) return this.starting;
+    if (this.state.state === 'recording' && this.state.recordingId) return this.state.recordingId;
+    this.speakerAbort?.abort();
+    if ((options.speechProvider ?? this.state.speechProvider) === 'google') {
+      // Unlock Web Audio inside the record-button activation on iOS, before
+      // IndexedDB, microphone permissions, or the token request can yield.
+      this.pcmCapture = new GeminiPcmCapture();
+      this.pcmAttached = false;
+      this.pcmPreparation = this.pcmCapture.prepare();
+      void this.pcmPreparation.catch(() => undefined); // handled with start below
+    }
     const task = this.startInternal(options);
     this.starting = task;
     try {
       return await task;
+    } catch (error) {
+      await this.pcmCapture?.stop();
+      this.pcmCapture = null;
+      throw error;
     } finally {
       if (this.starting === task) this.starting = null;
     }
@@ -146,6 +192,7 @@ export class ClassroomController {
     const currentEpoch = this.sessionEpoch;
 
     const mode = options.mode || this.state.mode;
+    const speechProvider = options.speechProvider ?? this.state.speechProvider;
     const sourceLanguage = options.sourceLanguage || this.state.sourceLanguage;
     const targetLanguage = options.targetLanguage || this.state.targetLanguage;
     const translationModelKey = options.translationModelKey || this.state.translationModelKey;
@@ -181,8 +228,14 @@ export class ClassroomController {
       epoch: currentEpoch,
       pauseMs,
       readingPauseMs,
+      speechProvider, micState: 'idle', receivedAudioMs: 0,
+      lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
+      speakerStatus: 'idle', speakerMessage: null,
+      micDeviceLabel: null,
     };
     this.hasPendingTranscript = false;
+    this.providerSpeechEnded = false;
+    this.speechRetries = 0;
     this.captionRevisions.clear();
     this.seenSpeechSnapshots.clear();
     this.speechItemLocations.clear();
@@ -193,6 +246,7 @@ export class ClassroomController {
       if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
       const durationMs = Date.now() - this.startTime;
       this.state.durationMs = durationMs;
+      if (this.state.speechProvider === 'google' && this.pcmCapture?.state === 'suspended') this.state.micState = 'suspended';
       this.notify();
     }, 500);
 
@@ -202,6 +256,7 @@ export class ClassroomController {
     // Live Translation Scheduler
     this.scheduler = new LiveTranslationScheduler({
       runner: async (source, direction, history, signal, requestSnapshot, onDelta) => {
+        const requestedAt = Date.now();
         return new Promise<string>((resolve, reject) => {
           let accumulated = '';
           let completedText = '';
@@ -224,6 +279,7 @@ export class ClassroomController {
               previousTurns: history,
             },
             (delta) => {
+              if (!accumulated && this.sessionEpoch === currentEpoch) this.state.translationLatencyMs = Date.now() - requestedAt;
               accumulated += delta;
               onDelta?.(delta);
             },
@@ -278,13 +334,15 @@ export class ClassroomController {
         onVolume: (vol) => {
           if (this.sessionEpoch !== currentEpoch) return;
           this.state.audioVolume = vol;
-          if (vol >= 0.035) {
+          if (vol >= 0.015 && !this.providerSpeechEnded) {
             this.clearSilenceTimer();
           } else if (!this.silenceTimer) {
             this.scheduleSilenceClose(currentEpoch);
           }
           this.notify();
         },
+        onMicState: (micState) => { if (this.sessionEpoch === currentEpoch) { this.state.micState = micState; this.notify(); } },
+        onMicInfo: (label) => { if (this.sessionEpoch === currentEpoch) { this.state.micDeviceLabel = label; this.notify(); } },
         onError: (err) => {
           if (this.sessionEpoch !== currentEpoch) return;
           this.state.error = err;
@@ -294,15 +352,24 @@ export class ClassroomController {
 
       await this.audioRecorder.start(2000);
     } catch (err) {
-      console.warn('Could not start audio recorder:', err);
-      // Audio recorder failure does not prevent STT
+      this.state.error = `Không thu được micro: ${err instanceof Error ? err.message : String(err)}`;
+      this.state.state = 'stopped';
+      if (this.durationIntervalId) clearInterval(this.durationIntervalId);
+      this.durationIntervalId = null;
+      this.assembler?.close(); this.assembler = null;
+      this.scheduler?.close(); this.scheduler = null;
+      await updateRecording(recordingId, { state: 'interrupted', audioState: 'missing' });
+      this.notify();
+      throw err;
     }
 
     // Speech Recognizer
-    this.speechRecognizer = new WebSpeechRecognizer(
-      {
+    const callbacks: SpeechRecognitionCallbacks = {
         onTranscript: (text, isFinal, epoch, providerItemId, providerRevision) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
+          this.state.lastTranscriptAt = Date.now();
+          this.state.transcriptCount++;
+          this.speechRetries = 0;
           const previousSnapshot = this.seenSpeechSnapshots.get(providerItemId);
           if (previousSnapshot && providerRevision <= previousSnapshot.revision) return;
           if (previousSnapshot?.text === text && previousSnapshot.isFinal === isFinal) {
@@ -316,8 +383,15 @@ export class ClassroomController {
           }
           const currentMs = Date.now() - this.startTime;
           const existingLocation = this.speechItemLocations.get(providerItemId);
+          if (!existingLocation && this.state.mode === 'lecture' && this.hasPendingTranscript) {
+            // Web Speech keeps multiple result indices alive at once. A new
+            // provider item starts a new caption row; close the previous
+            // interim first so its later final can correct that same row.
+            this.clearSilenceTimer();
+            this.assembler!.finalizeCurrentUtterance(true);
+          }
+          const captionId = existingLocation?.captionId ?? this.assembler!.currentCaptionId;
           const currentCaptionId = this.assembler!.currentCaptionId;
-          const captionId = existingLocation?.captionId ?? currentCaptionId;
           const blockId = existingLocation?.blockId ?? this.activeBlockId;
           const isLateResult = captionId < currentCaptionId;
           const startMs = existingLocation?.startMs ?? Math.max(0, currentMs - 2000);
@@ -328,6 +402,7 @@ export class ClassroomController {
             if (oldestProviderId) this.speechItemLocations.delete(oldestProviderId);
           }
           if (!isLateResult) {
+            this.providerSpeechEnded = isFinal;
             this.hasPendingTranscript = !isFinal || this.state.mode === 'readingPractice';
             this.clearSilenceTimer();
             if (this.hasPendingTranscript) this.scheduleSilenceClose(currentEpoch);
@@ -347,6 +422,10 @@ export class ClassroomController {
         onError: (err, epoch) => {
           if (epoch !== this.sessionEpoch) return;
           this.state.error = err;
+          if (this.state.speechProvider === 'google') {
+            this.pcmReady = false;
+            this.scheduleGoogleRetry(epoch, sourceLanguage);
+          }
           this.notify();
         },
         onStateChange: (speechState) => {
@@ -354,16 +433,86 @@ export class ClassroomController {
           this.state.speechState = speechState;
           this.notify();
         },
-      },
-      sourceLanguage
-    );
-
-    this.speechRecognizer.start(currentEpoch, sourceLanguage);
+      };
+    this.speechCallbacks = callbacks;
+    if (speechProvider === 'browser') {
+      this.speechRecognizer = new WebSpeechRecognizer(callbacks, sourceLanguage);
+      this.speechRecognizer.start(currentEpoch, sourceLanguage);
+    } else {
+      this.pcmCapture ??= new GeminiPcmCapture();
+      this.pcmReady = false; this.pcmQueue = []; this.pcmQueueMs = 0;
+      this.pcmInputCallback = (samples, rate) => {
+        if (this.sessionEpoch !== currentEpoch || this.state.state !== 'recording') return;
+        this.state.receivedAudioMs += samples.length / rate * 1000;
+        if (this.pcmReady && this.speechRecognizer instanceof GeminiLiveRecognizer) this.speechRecognizer.pushPcm(samples, rate);
+        else if (this.pcmQueueMs < 10_000) { this.pcmQueue.push({ samples, rate }); this.pcmQueueMs += samples.length / rate * 1000; }
+        else {
+          const message = 'Nhận giọng mất kết nối quá 10 giây: có thể thiếu chữ trực tiếp. Audio vẫn được lưu trên máy; hãy kiểm tra mạng/API.';
+          if (this.state.error !== message) { this.state.error = message; this.notify(); }
+        }
+      };
+      try {
+        await this.pcmPreparation;
+        await this.pcmCapture.start(this.audioRecorder!.stream!, this.pcmInputCallback);
+        this.pcmAttached = true;
+        await this.connectGoogleSpeech(currentEpoch, sourceLanguage);
+      }
+      catch (err) {
+        this.state.error = `Nhận giọng Gemini chưa hoạt động: ${err instanceof Error ? err.message : String(err)}. Audio đang được lưu trên máy.`;
+        this.state.speechState = 'stopped'; this.notify();
+        if (this.pcmAttached) this.scheduleGoogleRetry(currentEpoch, sourceLanguage);
+        else { this.state.micState = 'suspended'; this.notify(); }
+      }
+    }
 
     return recordingId;
   }
 
   private captionRevisions = new Map<number, number>();
+  private async connectGoogleSpeech(epoch: number, language: string): Promise<void> {
+    if (epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping || this.googleConnecting) return;
+    this.googleConnecting = true;
+    try {
+    this.state.speechState = 'reconnecting'; this.notify();
+    const recognizer = new GeminiLiveRecognizer(this.speechCallbacks, language);
+    this.speechRecognizer = recognizer;
+    await recognizer.start(epoch, language);
+    if (epoch !== this.sessionEpoch || this.stopping) { await recognizer.stop(0); return; }
+    this.pcmReady = true;
+    for (const item of this.pcmQueue) recognizer.pushPcm(item.samples, item.rate);
+    this.pcmQueue = []; this.pcmQueueMs = 0;
+    this.renewalTimer = setTimeout(() => {
+      this.renewalTimer = null;
+      if (this.state.state !== 'recording' || epoch !== this.sessionEpoch || this.stopping) return;
+      this.pcmReady = false;
+      void recognizer.stop().then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
+        this.state.error = `Không nối lại được nhận giọng: ${error instanceof Error ? error.message : String(error)}. Audio vẫn được lưu.`;
+        this.notify();
+        this.scheduleGoogleRetry(epoch, language);
+      });
+    }, 8.5 * 60_000);
+    } finally { this.googleConnecting = false; }
+  }
+  private scheduleGoogleRetry(epoch: number, language: string): void {
+    if (this.speechRetryTimer || this.stopping || this.state.state !== 'recording' || epoch !== this.sessionEpoch || this.speechRetries >= 3) return;
+    this.speechRetryTimer = setTimeout(() => {
+      this.speechRetryTimer = null;
+      if (this.stopping || this.state.state !== 'recording' || epoch !== this.sessionEpoch) return;
+      if (this.googleConnecting) { this.scheduleGoogleRetry(epoch, language); return; }
+      this.speechRetries++;
+      if (this.renewalTimer) clearTimeout(this.renewalTimer);
+      this.renewalTimer = null;
+      const old = this.speechRecognizer;
+      void Promise.resolve(old?.stop(0)).then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
+        this.state.error = `Chưa nối lại được nhận giọng (${this.speechRetries}/3): ${error instanceof Error ? error.message : String(error)}. Audio vẫn lưu trên máy.`;
+        this.notify(); this.scheduleGoogleRetry(epoch, language);
+      });
+    }, Math.min(1000 * 2 ** this.speechRetries, 4000));
+  }
+  public setSpeechProvider(provider: 'google' | 'browser'): void {
+    if (this.state.state === 'recording') return;
+    this.state.speechProvider = provider; this.notify();
+  }
 
   private static clampPause(ms: number): number {
     return Math.max(600, Math.min(10_000, Math.round(ms)));
@@ -382,6 +531,7 @@ export class ClassroomController {
       if (epoch !== this.sessionEpoch || this.state.state !== 'recording') return;
       if (!this.hasPendingTranscript) return;
       const closedBlock = this.activeBlockId;
+      if (this.speechRecognizer instanceof GeminiLiveRecognizer) this.speechRecognizer.finalizeUtterance();
       this.assembler?.handleBlockClosed(closedBlock);
       this.scheduler?.onBlockClosed(closedBlock);
       this.hasPendingTranscript = false;
@@ -394,6 +544,12 @@ export class ClassroomController {
     event: ScheduledTranslationEvent
   ): Promise<void> {
     const existingIndex = this.state.captions.findIndex((c) => c.id === event.captionId);
+    const previous = existingIndex >= 0 ? this.state.captions[existingIndex] : undefined;
+    let sourceHistory = previous?.sourceHistory;
+    if (previous?.isFinal && previous.source !== event.sourceText) {
+      const history = [...(sourceHistory ?? []), { text: previous.source, revision: previous.revision }];
+      sourceHistory = history.length > 20 ? [history[0], ...history.slice(-19)] : history;
+    }
 
     const captionItem: CaptionItem = {
       id: event.captionId,
@@ -420,6 +576,8 @@ export class ClassroomController {
           : 'streaming',
       error: event.error,
       skipReason: event.skipReason,
+      speakerLabel: previous?.speakerLabel,
+      sourceHistory,
     };
 
     if (existingIndex >= 0) {
@@ -458,20 +616,32 @@ export class ClassroomController {
     const captureEndedAt = Date.now();
     const durationMs = captureEndedAt - this.startTime;
     this.clearSilenceTimer();
+    if (this.renewalTimer) clearTimeout(this.renewalTimer);
+    this.renewalTimer = null; this.pcmReady = false;
+    if (this.speechRetryTimer) clearTimeout(this.speechRetryTimer);
+    this.speechRetryTimer = null;
+    const stopErrors: string[] = [];
+    if (this.pcmCapture) {
+      try { await this.pcmCapture.stop(); } catch (error) { stopErrors.push(String(error)); }
+      this.pcmCapture = null;
+      this.pcmAttached = false;
+      this.pcmInputCallback = null;
+    }
+    this.pcmQueue = []; this.pcmQueueMs = 0;
 
     if (this.durationIntervalId) {
       clearInterval(this.durationIntervalId);
       this.durationIntervalId = null;
     }
 
-    if (this.speechRecognizer) {
-      await this.speechRecognizer.stop();
-      this.speechRecognizer = null;
+    if (this.audioRecorder) {
+      try { await this.audioRecorder.stop(); } catch (error) { stopErrors.push(String(error)); }
+      this.audioRecorder = null;
     }
 
-    if (this.audioRecorder) {
-      await this.audioRecorder.stop();
-      this.audioRecorder = null;
+    if (this.speechRecognizer) {
+      try { await this.speechRecognizer.stop(); } catch (error) { stopErrors.push(String(error)); }
+      this.speechRecognizer = null;
     }
 
     if (this.assembler) {
@@ -496,6 +666,8 @@ export class ClassroomController {
       durationMs,
       audioVolume: 0,
       speechState: 'stopped',
+      micState: 'idle',
+      error: stopErrors.length ? `Đã dừng thu, nhưng nhận kết quả cuối gặp lỗi: ${stopErrors.join('; ')}` : this.state.error,
     };
     this.notify();
 
@@ -505,6 +677,80 @@ export class ClassroomController {
         endedAt: new Date(captureEndedAt).toISOString(),
         durationMs,
       });
+      // Diarization labels existing rows; it never substitutes another model's
+      // transcript for the words already shown and saved.
+      if (this.state.speechProvider === 'google' && this.state.captions.length) void this.assignSpeakers();
+    }
+  }
+
+  public assignSpeakers(): Promise<void> {
+    if (this.speakerTask) return this.speakerTask;
+    const task = this.assignSpeakersInternal();
+    this.speakerTask = task;
+    void task.finally(() => { if (this.speakerTask === task) this.speakerTask = null; });
+    return task;
+  }
+
+  public async resumeMicrophone(): Promise<void> {
+    try {
+      // Both resume calls start in the user's tap, without a preceding await.
+      await Promise.all([this.audioRecorder?.resume(), this.pcmCapture?.prepare()]);
+      if (this.state.state === 'recording') {
+        if (this.pcmCapture && !this.pcmAttached && this.audioRecorder?.stream && this.pcmInputCallback) {
+          await this.pcmCapture.start(this.audioRecorder.stream, this.pcmInputCallback);
+          this.pcmAttached = true;
+        }
+        this.state.micState = 'live'; this.notify();
+        if (this.state.speechProvider === 'google' && !this.pcmReady) await this.connectGoogleSpeech(this.sessionEpoch, this.state.sourceLanguage);
+      }
+    } catch (error) {
+      this.state.error = `Không bật lại được micro: ${error instanceof Error ? error.message : String(error)}`;
+      this.notify();
+    }
+  }
+
+  private async assignSpeakersInternal(): Promise<void> {
+    const recordingId = this.state.recordingId;
+    if (!recordingId || this.state.state === 'recording') return;
+    this.state.speakerStatus = 'working'; this.state.speakerMessage = 'Đang phân biệt người nói từ audio…'; this.notify();
+    try {
+      const audio = this.state.durationMs <= 30 * 60_000 ? await getAudioBlob(recordingId, 4 * 1024 * 1024) : null;
+      if (!audio || audio.blob.size > 4 * 1024 * 1024 || this.state.durationMs > 30 * 60_000) {
+        this.state.speakerStatus = 'unavailable';
+        this.state.speakerMessage = 'Phân biệt người nói cần audio trên máy, tối đa 4 MB và 30 phút.';
+        this.notify(); return;
+      }
+      const abort = new AbortController(); this.speakerAbort = abort;
+      const timeout = setTimeout(() => abort.abort(), 4 * 60_000);
+      let response: Response;
+      try {
+        const form = new FormData();
+        form.set('audio', audio.blob, audio.mimeType.startsWith('audio/mp4') ? 'recording.m4a' : 'recording.webm');
+        form.set('durationMs', String(Math.max(1, Math.round(this.state.durationMs))));
+        response = await fetch('/api/speech/diarize', { method: 'POST', body: form, signal: abort.signal });
+      } finally { clearTimeout(timeout); }
+      const payload = await response.json() as { segments?: Array<{speakerLabel: string; startMs: number; endMs: number}>; error?: {message?: string} };
+      if (!response.ok || !payload.segments?.length) throw new Error(payload.error?.message ?? 'Không có nhãn người nói từ API.');
+      if (this.state.recordingId !== recordingId || this.snapshot().state === 'recording') return;
+      for (const caption of this.state.captions) {
+        const overlaps = new Map<string, number>();
+        for (const segment of payload.segments) {
+          const overlap = Math.max(0, Math.min(caption.endMs, segment.endMs) - Math.max(caption.startMs, segment.startMs));
+          if (overlap) overlaps.set(segment.speakerLabel, (overlaps.get(segment.speakerLabel) ?? 0) + overlap);
+        }
+        const labels = [...overlaps].sort((a, b) => b[1] - a[1]);
+        const total = labels.reduce((sum, [, ms]) => sum + ms, 0);
+        // An ambiguous row is left unlabelled instead of inventing a speaker.
+        if (labels[0] && labels[0][1] / total >= 0.65) caption.speakerLabel = labels[0][0];
+      }
+      await Promise.all(this.state.captions.map(caption => saveCaption({ ...caption })));
+      if (this.state.recordingId !== recordingId) return;
+      this.state.speakerStatus = 'done'; this.state.speakerMessage = 'Đã phân tích người nói; câu có giọng chồng nhau được giữ chưa gán nhãn.';
+      this.notify();
+    } catch (error) {
+      if (this.state.recordingId !== recordingId || this.snapshot().state === 'recording') return;
+      this.state.speakerStatus = 'error'; this.state.speakerMessage = `Chưa phân biệt được người nói: ${error instanceof Error ? error.message : String(error)}`;
+      this.notify();
     }
   }
 

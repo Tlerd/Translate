@@ -76,6 +76,7 @@ export class LiveTranslationScheduler {
   private latestSources: Map<number, string> = new Map();
   private latestTargets: Map<number, string> = new Map();
   private captionFinals: Map<number, boolean> = new Map();
+  private acceptedCaptionVersions = new Map<number, { revision: number; isFinal: boolean }>();
 
   private translatedSourceByCaption: Map<number, string> = new Map();
   private translatedRevisionByCaption: Map<number, number> = new Map();
@@ -130,6 +131,18 @@ export class LiveTranslationScheduler {
     if (this.closed) return;
 
     const captionId = snapshot.captionId;
+    const accepted = this.acceptedCaptionVersions.get(captionId);
+    if (
+      accepted &&
+      (snapshot.revision <= accepted.revision || (accepted.isFinal && !snapshot.isFinal))
+    ) return;
+    this.acceptedCaptionVersions.delete(captionId);
+    this.acceptedCaptionVersions.set(captionId, { revision: snapshot.revision, isFinal: snapshot.isFinal });
+    while (this.acceptedCaptionVersions.size > 1024) {
+      const oldestCaptionId = this.acceptedCaptionVersions.keys().next().value;
+      if (oldestCaptionId === undefined) break;
+      this.acceptedCaptionVersions.delete(oldestCaptionId);
+    }
     this.latestRevisions.set(captionId, snapshot.revision);
     this.latestSources.set(captionId, snapshot.text);
     if (snapshot.isFinal) {

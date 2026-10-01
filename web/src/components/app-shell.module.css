@@ -1,7 +1,10 @@
 .shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -25,11 +28,13 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }
 
 .topBar {
+  flex: 0 0 56px;
   height: 56px;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
@@ -43,6 +48,7 @@
 .topBarLeft {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 12px;
 }
 
@@ -69,6 +75,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .activeSessionBanner {
@@ -103,6 +110,8 @@
 
 .contentBody {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
   position: relative;
   display: flex;
@@ -137,5 +146,33 @@
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.6);
     z-index: 40;
+  }
+}
+
+@media (max-width: 420px) {
+  .topBar {
+    height: auto;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .topBarLeft {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .topBar > div:last-child {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .activeSessionBanner {
+    min-width: 0;
+    flex-wrap: wrap;
   }
 }

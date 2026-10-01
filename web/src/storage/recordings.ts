@@ -26,7 +26,7 @@ export interface CreateRecordingParams {
 export async function createRecording(params: CreateRecordingParams): Promise<RecordingItem> {
   const db = getDb();
   const now = new Date().toISOString();
-  const id = params.id ?? Date.now().toString();
+  const id = params.id ?? crypto.randomUUID();
   const title = params.title ?? `Buổi học ${new Date().toLocaleString('vi-VN')}`;
 
   const recording: RecordingItem = {
@@ -132,8 +132,17 @@ export async function getAudioChunks(recordingId: string): Promise<AudioChunk[]>
     .sortBy('sequence');
 }
 
-export async function getAudioBlob(recordingId: string): Promise<{ blob: Blob; mimeType: string } | null> {
-  const chunks = await getAudioChunks(recordingId);
+export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Promise<{ blob: Blob; mimeType: string } | null> {
+  const chunks: AudioChunk[] = [];
+  let bytes = 0;
+  let oversized = false;
+  await getDb().audioChunks.where('recordingId').equals(recordingId).each((chunk) => {
+    bytes += chunk.blob.size;
+    if (bytes > maxBytes) { oversized = true; chunks.length = 0; }
+    if (!oversized) chunks.push(chunk);
+  });
+  if (oversized) return null;
+  chunks.sort((a, b) => a.sequence - b.sequence);
   if (chunks.length === 0) return null;
   const mimeType = chunks[0]?.mimeType || 'audio/webm';
   const blobs = chunks.map((c) => c.blob);
@@ -257,6 +266,7 @@ export async function loadSettings(): Promise<AppSettings> {
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
+      speechProvider: map.get('speechProvider') === 'browser' ? 'browser' : 'google',
     };
   } catch {
     return DEFAULT_SETTINGS;

@@ -57,6 +57,8 @@ export interface CaptionItem {
   state: CaptionState;
   error?: string;
   skipReason?: string;
+  speakerLabel?: string;
+  sourceHistory?: Array<{ text: string; revision: number }>;
 }
 
 export interface SummarySection {
@@ -91,6 +93,7 @@ export interface ImageItem {
 }
 
 export interface AppSettings {
+  speechProvider: 'google' | 'browser';
   translationModel: string;
   translationThinkingLevel: string;
   summaryModel: string;
@@ -106,6 +109,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  speechProvider: 'google',
   translationModel: 'google:gemini-3.1-flash-lite',
   translationThinkingLevel: 'auto',
   summaryModel: 'google:gemini-3.8-flash',

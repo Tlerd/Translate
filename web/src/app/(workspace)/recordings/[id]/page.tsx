@@ -4,6 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Clock, Calendar, BookOpen, Layers } from 'lucide-react';
 import { getRecording, getCaptions, getSummary } from '@/storage/recordings';
+import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
 import type { RecordingItem, CaptionItem, SummaryItem } from '@/shared/recording';
 
@@ -24,7 +25,7 @@ export default function RecordingDetailPage({
     let isMounted = true;
     setLoading(true);
 
-    Promise.all([getRecording(id), getCaptions(id), getSummary(id)])
+    const reload = () => { void Promise.all([getRecording(id), getCaptions(id), getSummary(id)])
       .then(([rec, caps, sum]) => {
         if (!isMounted) return;
         setRecording(rec || null);
@@ -35,10 +36,13 @@ export default function RecordingDetailPage({
       .catch((err) => {
         console.error('Lỗi tải bản ghi:', err);
         if (isMounted) setLoading(false);
-      });
+      }); };
+    reload();
+    window.addEventListener(dataEvent, reload);
 
     return () => {
       isMounted = false;
+      window.removeEventListener(dataEvent, reload);
     };
   }, [id]);
 
@@ -55,7 +59,7 @@ export default function RecordingDetailPage({
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
         <p style={{ color: 'var(--text-muted)' }}>Không tìm thấy bản ghi #{id}.</p>
         <Link
-          href="/"
+          href="/app"
           style={{
             padding: '8px 16px',
             backgroundColor: 'var(--bg-active)',
@@ -101,7 +105,7 @@ export default function RecordingDetailPage({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link
-            href="/"
+            href="/app"
             style={{
               display: 'flex',
               alignItems: 'center',

@@ -8,6 +8,7 @@ import { SummaryPanel } from '@/features/summary/summary-panel';
 import { ImagePanel } from '@/features/images/image-panel';
 import { computeCaptionSourceHash, getAudioBlob, updateCaptionSources } from '@/storage/recordings';
 import type { CaptionItem, SummaryItem, RecordingItem } from '@/shared/recording';
+import styles from './recording-ui.module.css';
 
 interface RecordingWorkspaceProps {
   recording: RecordingItem;
@@ -91,9 +92,10 @@ export function RecordingWorkspace({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className={styles.workspace}>
       {/* Tab bar */}
       <div
+        className={styles.workspaceTabs}
         style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -145,7 +147,7 @@ export function RecordingWorkspace({
         </div>
 
         {activeTab === 'transcript' && workspaceCaptions.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className={recordingInProgress ? styles.recordingTools : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {recordingInProgress && <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Kết thúc buổi thu để chỉnh sửa</span>}
             <button
               type="button"
@@ -177,7 +179,7 @@ export function RecordingWorkspace({
       </div>
 
       {/* Main View Area */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div className={styles.workspaceContent}>
         {activeTab === 'transcript' ? (
           <TranscriptPane
             captions={workspaceCaptions}

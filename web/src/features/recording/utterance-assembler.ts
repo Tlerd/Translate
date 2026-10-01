@@ -17,6 +17,8 @@ export type SnapshotListener = (snapshot: TranscriptSnapshot) => void;
 interface ReadingPart {
   providerItemId: string;
   text: string;
+  revision: number;
+  isFinal: boolean;
   startMs: number;
   endMs: number;
 }
@@ -45,6 +47,7 @@ export class LiveUtteranceAssembler {
   private currentRevision = 0;
   private readingParts: ReadingPart[] = [];
   private finalizedReadingCaptions = new Map<number, FinalizedReadingCaption>();
+  private finalizedLectureCaptions = new Map<number, TranscriptSnapshot>();
   private activeBlockId = 1;
   private activeStartMs = 0;
   private activeEndMs = 0;
@@ -89,13 +92,19 @@ export class LiveUtteranceAssembler {
   }
 
   private upsertReadingPart(parts: ReadingPart[], snapshot: TranscriptSnapshot): ReadingPart[] {
+    const index = parts.findIndex((part) => part.providerItemId === snapshot.providerItemId);
+    if (index >= 0) {
+      const previous = parts[index];
+      if (snapshot.revision <= previous.revision || (previous.isFinal && !snapshot.isFinal)) return parts;
+    }
     const nextPart: ReadingPart = {
       providerItemId: snapshot.providerItemId,
       text: snapshot.text,
+      revision: snapshot.revision,
+      isFinal: snapshot.isFinal,
       startMs: snapshot.startMs,
       endMs: snapshot.endMs,
     };
-    const index = parts.findIndex((part) => part.providerItemId === snapshot.providerItemId);
     if (index >= 0) {
       const next = [...parts];
       next[index] = nextPart;
@@ -111,6 +120,16 @@ export class LiveUtteranceAssembler {
       const oldestCaptionId = this.finalizedReadingCaptions.keys().next().value;
       if (oldestCaptionId === undefined) break;
       this.finalizedReadingCaptions.delete(oldestCaptionId);
+    }
+  }
+
+  private rememberFinalizedLectureCaption(snapshot: TranscriptSnapshot): void {
+    this.finalizedLectureCaptions.delete(snapshot.captionId);
+    this.finalizedLectureCaptions.set(snapshot.captionId, snapshot);
+    while (this.finalizedLectureCaptions.size > 128) {
+      const oldestCaptionId = this.finalizedLectureCaptions.keys().next().value;
+      if (oldestCaptionId === undefined) break;
+      this.finalizedLectureCaptions.delete(oldestCaptionId);
     }
   }
 
@@ -136,9 +155,22 @@ export class LiveUtteranceAssembler {
 
     if (this.mode === 'lecture') {
       if (snapshot.captionId < this.captionCounter) {
-        // A final recognition result can arrive after silence already closed
-        // this caption. Publish the correction without changing the new caption.
-        this.emit(snapshot);
+        // Only the provider item that finalized this caption may correct it.
+        // Late interim or unrelated results must not rewrite a committed row.
+        const finalized = this.finalizedLectureCaptions.get(snapshot.captionId);
+        if (
+          finalized && snapshot.providerItemId === finalized.providerItemId &&
+          snapshot.isFinal && snapshot.revision > finalized.revision
+        ) {
+          const corrected = {
+            ...snapshot,
+            blockId: finalized.blockId,
+            startMs: finalized.startMs,
+            endMs: Math.max(finalized.endMs, snapshot.endMs),
+          };
+          this.rememberFinalizedLectureCaption(corrected);
+          this.emit(corrected);
+        }
         return;
       }
       this.activeBlockId = snapshot.blockId;
@@ -146,6 +178,7 @@ export class LiveUtteranceAssembler {
       this.latestLectureSnapshot = snapshot;
       this.emit(snapshot);
       if (snapshot.isFinal) {
+        this.rememberFinalizedLectureCaption(snapshot);
         this.captionCounter = Math.max(this.captionCounter, snapshot.captionId + 1);
         this.currentRevision = 0;
         this.latestLectureSnapshot = null;
@@ -156,6 +189,10 @@ export class LiveUtteranceAssembler {
     // --- Reading Practice Mode ---
     if (snapshot.captionId < this.captionCounter) {
       const finalized = this.finalizedReadingCaptions.get(snapshot.captionId);
+      const existingPart = finalized?.parts.find((part) => part.providerItemId === snapshot.providerItemId);
+      if (
+        !finalized || !existingPart || !snapshot.isFinal || snapshot.revision <= existingPart.revision
+      ) return;
       const parts = this.upsertReadingPart(finalized?.parts ?? [], snapshot);
       const corrected: FinalizedReadingCaption = {
         captionId: snapshot.captionId,
@@ -231,6 +268,10 @@ export class LiveUtteranceAssembler {
         isFinal: true,
       });
       if (advanceCaption) this.captionCounter = pending.captionId + 1;
+      // Keep the provider revision as the correction watermark; the emitted
+      // finalization revision is an assembler event, not a provider revision.
+      const finalSnapshot = { ...pending, isFinal: true };
+      this.rememberFinalizedLectureCaption(finalSnapshot);
       this.currentRevision = 0;
       this.latestLectureSnapshot = null;
       return;

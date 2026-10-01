@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { Plus, Search, Upload, Settings } from 'lucide-react';
 import { listRecordings } from '@/storage/recordings';
+import { dataEvent } from '@/storage/cloud-sync';
 import { importWebBundle, importApkExport } from '@/storage/export-import';
 import { RecordingList } from './recording-list';
 import { useRecording } from '@/features/recording/recording-context';
@@ -33,7 +34,9 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
     loadList();
     // Refresh periodically or on state change
     const interval = setInterval(loadList, 3000);
-    return () => clearInterval(interval);
+    const reload = () => { void loadList(); };
+    window.addEventListener(dataEvent, reload);
+    return () => { clearInterval(interval); window.removeEventListener(dataEvent, reload); };
   }, [loadList]);
 
   const handleImportClick = () => {

@@ -5,6 +5,7 @@ import { Mic, Square, Volume2, BookOpen, Layers } from 'lucide-react';
 import { useRecording } from './recording-context';
 import { fetchModels } from '@/lib/api-client';
 import type { ModelInfo } from '@/shared/ai-contracts';
+import styles from './recording-ui.module.css';
 
 interface RecorderToolbarProps {
   onStart?: () => void;
@@ -12,7 +13,7 @@ interface RecorderToolbarProps {
 }
 
 export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
-  const { state, startRecording, stopRecording, switchMode, setTranslationModel, setTranslationThinkingLevel, setPauseMs, setReadingPauseMs } = useRecording();
+  const { controller, state, startRecording, stopRecording, switchMode, setSpeechProvider, setTranslationModel, setTranslationThinkingLevel, setPauseMs, setReadingPauseMs } = useRecording();
 
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | null>(null);
@@ -41,6 +42,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         onStop?.();
       } else {
         await startRecording({
+          speechProvider: state.speechProvider,
           mode: state.mode,
           sourceLanguage: state.sourceLanguage,
           targetLanguage: state.targetLanguage,
@@ -59,6 +61,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
   return (
     <div
+      className={`${styles.toolbar} ${isRecording ? styles.recordingToolbar : ''}`}
       style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -70,7 +73,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         gap: 12,
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+      <div className={styles.toolbarControls} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
         {/* Main Action Button */}
         <button
           onClick={handleToggle}
@@ -91,6 +94,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               : '0 0 12px rgba(34, 197, 94, 0.4)',
             transition: 'all 0.2s',
           }}
+          className={styles.recordAction}
         >
           {isRecording ? (
             <>
@@ -105,7 +109,21 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           )}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+        <div className={styles.speechSettings}>
+          <label htmlFor="speech-provider" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nhận giọng:</label>
+          <select
+            id="speech-provider"
+            value={state.speechProvider}
+            onChange={(event) => setSpeechProvider(event.target.value as 'google' | 'browser')}
+            disabled={isRecording}
+            style={{ padding: '6px 8px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-primary)' }}
+          >
+            <option value="google">Google (API)</option>
+            <option value="browser">Trình duyệt</option>
+          </select>
+        </div>
+
+        <div className={styles.modelSettings} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <label htmlFor="translation-model" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Model dịch:</label>
           <select
             id="translation-model"
@@ -143,6 +161,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
         {/* Mode switcher */}
         <div
+          className={styles.modeSwitch}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -186,7 +205,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           </button>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+        <label className={styles.pauseSetting} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
           <span>Khoảng nghỉ để chốt câu</span>
           <input
             type="range"
@@ -209,18 +228,17 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
       </div>
 
       {/* Status & volume meter */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className={styles.toolbarStatus} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {isRecording && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className={styles.volumeMeter} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Volume2 size={16} color="var(--accent)" />
             <div
-              style={{
-                width: 60,
-                height: 6,
-                backgroundColor: 'var(--bg-primary)',
-                borderRadius: 3,
-                overflow: 'hidden',
-              }}
+              role="progressbar"
+              aria-label="Mức âm lượng micro"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(state.audioVolume * 100)}
+              className={styles.volumeTrack}
             >
               <div
                 style={{
@@ -231,6 +249,39 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
                 }}
               />
             </div>
+          </div>
+        )}
+
+        {isRecording && (
+          <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
+            <span>Nhận giọng: {state.speechProvider === 'google' ? 'Google (API)' : 'Trình duyệt'}</span>
+            <span title={state.micDeviceLabel ? `Thiết bị micro: ${state.micDeviceLabel}` : undefined}>Mic: {{ live: 'đang bật', muted: 'đang tắt', ended: 'đã ngắt', suspended: 'tạm dừng', idle: 'chưa bật' }[state.micState]}</span>
+            {state.speechProvider === 'google' && <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>}
+            <span>Kết quả nhận: {state.transcriptCount}</span>
+            <span>Kết quả cuối: {state.lastTranscriptAt === null ? 'chưa có' : new Date(state.lastTranscriptAt).toLocaleTimeString()}</span>
+            {state.translationLatencyMs !== null && <span>Dịch: {state.translationLatencyMs}ms</span>}
+          </div>
+        )}
+
+        {isRecording && state.error && <span role="alert" className={styles.toolbarError}>{state.error}</span>}
+        {isRecording && (state.micState === 'suspended' || state.micState === 'muted') && (
+          <button type="button" onClick={() => void controller.resumeMicrophone()} className={styles.resumeMicButton}>
+            Bật lại micro
+          </button>
+        )}
+
+        {!isRecording && state.recordingId && state.captions.length > 0 && (
+          <div className={styles.speakerAssignment} role="status">
+            <button
+              type="button"
+              disabled={state.speakerStatus === 'working'}
+              onClick={() => void controller.assignSpeakers()}
+              className={styles.speakerButton}
+              title="Phân biệt người nói dùng audio đã lưu trên máy; hỗ trợ tối đa 4 MB và 30 phút."
+            >
+              {state.speakerStatus === 'working' ? 'Đang phân biệt người nói…' : state.speakerStatus === 'done' ? 'Phân biệt lại người nói' : 'Phân biệt người nói'}
+            </button>
+            {state.speakerMessage && <span>{state.speakerMessage}</span>}
           </div>
         )}
 

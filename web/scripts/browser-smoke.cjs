@@ -67,6 +67,7 @@ function installRecordingFixtures() {
   window.__translationRequests = [];
   window.__translationDone = [];
   window.__failTranslation = '';
+  window.__micSpeaking = false;
   class FixtureRecorder extends EventTarget {
     static isTypeSupported() { return true; }
     constructor() { super(); this.state = 'inactive'; }
@@ -85,18 +86,33 @@ function installRecordingFixtures() {
     }
   }
   window.MediaRecorder = FixtureRecorder;
+  const fixtureTrack = new EventTarget();
+  fixtureTrack.stop = () => {};
+  const fixtureStream = { getTracks: () => [fixtureTrack], getAudioTracks: () => [fixtureTrack] };
   Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-    configurable: true, value: async () => ({ getTracks: () => [{ stop() {} }] }),
+    configurable: true, value: async () => fixtureStream,
   });
+  class FixtureAudioContext {
+    state = 'suspended';
+    onstatechange = null;
+    createMediaStreamSource() { return { connect() {} }; }
+    createAnalyser() {
+      return { fftSize: 256, getByteTimeDomainData(data) { data.fill(window.__micSpeaking ? 160 : 128); } };
+    }
+    async resume() { this.state = 'running'; this.onstatechange?.(); }
+    async close() { this.state = 'closed'; }
+  }
+  window.AudioContext = FixtureAudioContext;
   class FixtureSpeech extends EventTarget {
     constructor() { super(); this.results = []; this.index = 0; this.pending = false; }
     start() { window.__speech = this; this.onstart?.(); }
     say(text, isFinal) {
+      window.__micSpeaking = !isFinal;
       const result = { 0: { transcript: text, confidence: 1 }, length: 1, isFinal };
       this.results[this.index] = result;
       this.onresult?.({ resultIndex: this.index, results: this.results });
       this.pending = !isFinal;
-      if (isFinal) this.index++;
+      if (isFinal) { this.index++; window.__micSpeaking = false; }
     }
     stop() {
       queueMicrotask(() => {
@@ -167,6 +183,54 @@ async function run() {
   const checks = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const check = (name) => { checks.push(name); console.log(`PASS ${name}`); };
+  async function checkMobileTranscriptLayout() {
+    for (const viewport of [{ width: 360, height: 800 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(300);
+      const source = page.getByTestId('caption-source').first();
+      const translation = page.getByTestId('caption-translation').first();
+      await source.waitFor({ state: 'visible' });
+      await translation.waitFor({ state: 'visible' });
+      const layout = await page.evaluate(() => {
+        const paneElement = document.querySelector('[data-testid="transcript-pane"]');
+        const cardElement = document.querySelector('[data-testid="caption-card"]');
+        const sourceElement = document.querySelector('[data-testid="caption-source"]');
+        const translationElement = document.querySelector('[data-testid="caption-translation"]');
+        const pane = paneElement.getBoundingClientRect();
+        const card = cardElement.getBoundingClientRect();
+        const source = sourceElement.getBoundingClientRect();
+        const translation = translationElement.getBoundingClientRect();
+        return {
+          paneHeight: pane.height,
+          paneX: pane.x,
+          paneTop: pane.top,
+          paneRight: pane.right,
+          paneBottom: pane.bottom,
+          cardX: card.x,
+          cardRight: card.right,
+          sourceTop: source.top,
+          sourceBottom: source.bottom,
+          translationTop: translation.top,
+          translationBottom: translation.bottom,
+          paneOverflowY: getComputedStyle(paneElement).overflowY,
+          scrollHeight: paneElement.scrollHeight,
+          clientHeight: paneElement.clientHeight,
+          documentWidth: document.documentElement.scrollWidth,
+        };
+      });
+      assert(layout.paneHeight >= 140, `${viewport.width}x${viewport.height}: transcript pane must remain usable, got ${layout.paneHeight}px`);
+      assert(layout.paneX >= 0 && layout.paneRight <= viewport.width, `${viewport.width}px: transcript pane stays within screen width`);
+      assert(layout.cardX >= layout.paneX && layout.cardRight <= layout.paneRight, `${viewport.width}px: caption card stays within transcript pane`);
+      assert(layout.paneBottom <= viewport.height, `${viewport.height}px: transcript pane stays within visible viewport`);
+      assert(layout.sourceTop >= layout.paneTop && layout.sourceBottom <= layout.paneBottom, `${viewport.width}px: source box stays visible in transcript pane`);
+      assert(layout.translationTop >= layout.paneTop && layout.translationBottom <= layout.paneBottom, `${viewport.width}px: translation box stays visible in transcript pane`);
+      assert(layout.documentWidth <= viewport.width, `${viewport.width}px: no horizontal page overflow`);
+      assert(['auto', 'scroll'].includes(layout.paneOverflowY), 'Transcript content remains in its own scroll area');
+      await page.screenshot({ path: path.join(outputDir, `transcript-mobile-${viewport.width}x${viewport.height}.png`) });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    check('Nguồn và bản dịch giữ trong vùng cuộn ở 360x800 và 320x568');
+  }
   try {
     await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
@@ -206,6 +270,7 @@ async function run() {
       id: index + 1, recordingId, blockId: 1, startMs: index * 3000, endMs: index * 3000 + 2000,
       source, translation: ['Sở thích của tôi là âm nhạc.', 'Tôi thích nhạc cổ điển.', 'Ngày nghỉ tôi đi chơi với bạn.'][index],
       revision: 1, targetSourceRevision: 1, isFinal: true, state: 'done',
+      ...(index === 0 ? { speakerLabel: 'Giảng viên', sourceHistory: [{ text: '私の趣味は音楽です', revision: 1 }] } : {}),
     }));
     const sourceHash = createHash('sha256').update(JSON.stringify(captions.map((c) => ({ id: c.id, text: c.source })))).digest('hex');
     const bundle = {
@@ -220,6 +285,11 @@ async function run() {
     };
     await page.locator('input[type=file]').setInputFiles({ name: 'recording.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) });
     await page.waitForURL(`**/recordings/${recordingId}`);
+    await page.getByText('Giảng viên', { exact: true }).waitFor();
+    const history = page.getByText('Lời nhận dạng trước đó (1)', { exact: true });
+    await history.click();
+    await page.getByText('私の趣味は音楽です', { exact: true }).waitFor();
+    check('Nhãn người nói và lịch sử kết quả nhận dạng được hiển thị');
     const edit = page.getByRole('button', { name: 'Chỉnh sửa kịch bản', exact: true });
     await edit.click();
     const dialog = page.getByRole('dialog', { name: 'Chỉnh sửa kịch bản' });
@@ -284,9 +354,18 @@ async function run() {
 
     await page.goto(`${baseUrl}/app`);
     await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    await page.locator('#speech-provider').selectOption('browser');
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'browser');
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
+    const meter = page.getByRole('progressbar', { name: 'Mức âm lượng micro' });
+    await page.getByText('Nhận giọng: Trình duyệt', { exact: true }).waitFor();
+    await page.getByText('Mic: đang bật', { exact: true }).waitFor();
     await waitUntil(() => page.evaluate(() => Boolean(window.__speech)), 'Speech fixture starts');
+    await page.evaluate(() => { window.__micSpeaking = true; });
+    await waitUntil(async () => Number(await meter.getAttribute('aria-valuenow')) > 0, 'Micro meter rises during fixture speech');
+    await page.evaluate(() => { window.__micSpeaking = false; });
+    check('Chọn được nhận giọng trình duyệt; mức mic và trạng thái audio hiện rõ');
     const started = Date.now();
     await page.evaluate(() => window.__speech.say('私は音楽が好きです。', true));
     await page.getByText('私は音楽が好きです。', { exact: true }).waitFor();
@@ -296,6 +375,7 @@ async function run() {
     assert.equal(await page.evaluate(() => window.__translationDone.length), 0);
     check(`Chữ gốc và delta SSE hiện trước done (fixture: ${sourceLatencyMs}/${deltaLatencyMs} ms)`);
     await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
+    await checkMobileTranscriptLayout();
     await page.evaluate(() => window.__speech.say('次の文です。', true));
     await page.getByText('Đây là câu tiếp theo.', { exact: true }).waitFor();
     await page.evaluate(() => window.__speech.say('最後まで保存します。', false));
