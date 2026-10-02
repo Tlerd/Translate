@@ -1,4 +1,19 @@
 export const TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe';
+export const FLASH_TRANSCRIPTION_MODEL = 'gemini-3-flash-preview';
+export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash';
+
+export function normalizeSpeechProvider(value: unknown): SpeechProvider {
+  return value === 'google' || value === 'google-flash' ? value : 'google-transcribe';
+}
+
+export function segmentedTranscriptionModel(provider: SpeechProvider): typeof TRANSCRIPTION_MODEL | typeof FLASH_TRANSCRIPTION_MODEL {
+  return provider === 'google-flash' ? FLASH_TRANSCRIPTION_MODEL : TRANSCRIPTION_MODEL;
+}
+
+export function speechProviderName(provider: SpeechProvider): string {
+  if (provider === 'google-flash') return 'Gemini 3 Flash Preview';
+  return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
+}
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type SpeakerCount = typeof SPEAKER_COUNTS[number];
 export type TranscriptionMode = 'verbatim' | 'smart';

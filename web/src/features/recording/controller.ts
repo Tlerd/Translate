@@ -19,7 +19,7 @@ import type {
   CaptionItem,
   RecordingItem,
 } from '@/shared/recording';
-import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
+import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, segmentedTranscriptionModel, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
 
 export interface ControllerState {
   recordingId: string | null;
@@ -37,7 +37,7 @@ export interface ControllerState {
   epoch: number;
   pauseMs: number;
   readingPauseMs: number;
-  speechProvider: 'google' | 'google-transcribe';
+  speechProvider: SpeechProvider;
   transcriptionMode: TranscriptionMode;
   speakerCount: SpeakerCount;
   micState: 'idle' | 'live' | 'muted' | 'ended' | 'suspended';
@@ -51,7 +51,7 @@ export interface ControllerState {
 }
 
 export interface StartOptions {
-  speechProvider?: 'google' | 'google-transcribe';
+  speechProvider?: SpeechProvider;
   transcriptionMode?: TranscriptionMode;
   speakerCount?: SpeakerCount;
   mode?: ClassroomMode;
@@ -493,7 +493,7 @@ export class ClassroomController {
     const recognizer = new GeminiTranscribeRecognizer(
       this.speechCallbacks, this.state.sourceLanguage,
       this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs,
-      this.state.transcriptionMode, this.state.speakerCount,
+      this.state.transcriptionMode, this.state.speakerCount, segmentedTranscriptionModel(this.state.speechProvider),
     );
     this.speechRecognizer = recognizer;
     recognizer.start(epoch);
@@ -556,7 +556,7 @@ export class ClassroomController {
     this.renewalTimer = null; this.speechRetryTimer = null;
   }
 
-  public setSpeechProvider(provider: 'google' | 'google-transcribe'): void {
+  public setSpeechProvider(provider: SpeechProvider): void {
     if (provider === this.state.speechProvider) return;
     this.state.speechProvider = provider;
     this.restartRecognizer();

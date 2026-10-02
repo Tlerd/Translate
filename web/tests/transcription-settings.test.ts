@@ -12,9 +12,16 @@ beforeEach(() => {
 afterEach(() => { resetDbInstance(); vi.unstubAllGlobals(); });
 
 describe('transcription settings and speaker persistence', () => {
-  it.each(['google', 'browser', 'google-transcribe'])('migrates the old %s provider with safe provider migration with safe defaults', async (provider) => {
+  it.each(['google', 'browser', 'google-transcribe', 'google-flash'])('preserves supported %s providers and migrates the removed browser provider', async (provider) => {
     await getDb().settings.put({ key: 'speechProvider', value: provider });
-    expect(await loadSettings()).toMatchObject({ speechProvider: provider === 'google' ? 'google' : 'google-transcribe', transcriptionMode: 'verbatim', speakerCount: 1 });
+    expect(await loadSettings()).toMatchObject({ speechProvider: provider === 'browser' ? 'google-transcribe' : provider, transcriptionMode: 'verbatim', speakerCount: 1 });
+  });
+
+  it('persists and broadcasts Flash instead of normalizing it back to Transcribe', async () => {
+    const listener = vi.fn(); window.addEventListener(settingsUpdatedEvent, listener);
+    await saveSettings({ speechProvider: 'google-flash' });
+    expect((await loadSettings()).speechProvider).toBe('google-flash');
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.speechProvider).toBe('google-flash');
   });
 
   it('persists smart and eight speakers, and dispatches the exact normalized settings', async () => {

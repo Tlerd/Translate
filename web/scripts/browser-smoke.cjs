@@ -71,8 +71,10 @@ function installRecordingFixtures() {
   window.__transcriptionQueue = [];
   window.__transcriptionRequests = [];
   window.__liveSockets = [];
+  const NativeWebSocket = window.WebSocket;
   class FixtureLiveSocket {
-    constructor() {
+    constructor(url, protocols) {
+      if (!String(url).startsWith('wss://fixture.test/')) return new NativeWebSocket(url, protocols);
       this.readyState = 0; this.bufferedAmount = 0;
       window.__liveSockets.push(this);
       setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0);
@@ -166,11 +168,12 @@ function installRecordingFixtures() {
       const form = options.body;
       const mode = form.get('transcriptionMode');
       const count = form.get('speakerCount');
-      window.__transcriptionRequests.push({ mode, count, durationMs: form.get('durationMs'), audioType: form.get('audio').type });
+      const model = form.get('model') || 'gemini-3.5-transcribe';
+      window.__transcriptionRequests.push({ mode, count, model, durationMs: form.get('durationMs'), audioType: form.get('audio').type });
       const text = window.__transcriptionQueue.shift() || '';
-      const turns = mode === 'verbatim' && text ? (window.__nextTurns || [{ text, speakerLabel: 'spk_1', startMs: 0, endMs: Math.min(500, Number(form.get('durationMs'))) }]) : [];
+      const turns = model !== 'gemini-3-flash-preview' && mode === 'verbatim' && text ? (window.__nextTurns || [{ text, speakerLabel: 'spk_1', startMs: 0, endMs: Math.min(500, Number(form.get('durationMs'))) }]) : [];
       window.__nextTurns = null;
-      return Response.json({ text, turns, model: 'gemini-3.5-transcribe' });
+      return Response.json({ text, turns, model });
     }
     if (!String(url).endsWith('/api/translate')) return originalFetch(url, options);
     const request = JSON.parse(options.body);
@@ -398,7 +401,7 @@ async function run() {
 
     await page.goto(`${baseUrl}/settings`);
     await page.locator('#transcription-mode').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('#speech-provider option').count(), 2);
+    assert.equal(await page.locator('#speech-provider option').count(), 3);
     await page.locator('#speech-provider').selectOption('google-transcribe');
     assert.equal(await page.locator('#transcription-mode option').count(), 2);
     assert.equal(await page.locator('#speaker-count option').count(), 8);
@@ -483,7 +486,7 @@ async function run() {
     assert.equal(corrected[0].source, '遅れて届いた結果を全部残します。');
     assert.equal(corrected[0].state, 'done');
     check('Dừng chờ nhận giọng theo đoạn và lưu đủ lời cuối, không nhân đôi dòng');
-    await page.locator('a[href="/settings"]').first().click();
+    await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
     await page.locator('#transcription-mode').selectOption('verbatim');
     await page.locator('#speaker-count').selectOption('2');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
@@ -517,6 +520,40 @@ async function run() {
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Speaker controls fit mobile screen');
     check('Verbatim nhận hai Speaker trong cùng lượt phiên âm, lưu nhãn và hiển thị trên mobile');
     await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
+    await page.locator('#speech-provider').waitFor({ state: 'visible' });
+    await page.locator('#speech-provider').selectOption('google-flash');
+    assert.match(await page.locator('#transcription-mode-help').innerText(), /gán Speaker thủ công/);
+    assert.match(await page.locator('body').innerText(), /0,00192 USD/);
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.reload();
+    await page.locator('#speech-provider').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'google-flash');
+    await page.getByRole('button', { name: 'Kiểm tra API nhận giọng', exact: true }).click();
+    await page.getByText(/Gemini 3 Flash Preview kết nối thành công/).waitFor();
+    assert.equal(await page.evaluate(() => window.__transcriptionRequests.at(-1).model), 'gemini-3-flash-preview');
+    await page.screenshot({ path: path.join(outputDir, 'flash-settings-desktop.png') });
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outputDir, 'flash-settings-mobile.png'), fullPage: true });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Flash settings fit mobile screen');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
+    await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
+    await page.getByText('Nhận giọng: Gemini 3 Flash Preview · verbatim', { exact: true }).waitFor();
+    await waitUntil(() => page.evaluate(() => Boolean(window.__speech)), 'Flash PCM fixture starts');
+    await page.evaluate(() => window.__speech.say('私は音楽が好きです。', true));
+    await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => window.__transcriptionRequests.at(-1).model), 'gemini-3-flash-preview');
+    const flashRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
+    const flashCaptions = await storedRows(page, 'captionItems', flashRecordingId);
+    assert.equal(flashCaptions[0].source, '私は音楽が好きです。');
+    assert.equal(flashCaptions[0].translation, 'Tôi thích âm nhạc.');
+    assert.equal(flashCaptions[0].speakerLabel, undefined);
+    check('Flash chọn/lưu/reload, kiểm tra kết nối đúng model, thu PCM → phiên âm → dịch → lưu, giao diện mobile không tràn');
     await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
     await page.locator('#speech-provider').selectOption('google');

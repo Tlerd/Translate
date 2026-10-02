@@ -23,7 +23,9 @@
 
 ### Nhận giọng và người nói
 
-Web hỗ trợ `gemini-3.5-transcribe-live` qua WebSocket và `gemini-3.5-transcribe` qua Interactions API. Live hỗ trợ verbatim/smart; chưa có diarization trực tiếp, nên gán Speaker thủ công hoặc chạy phân biệt lại sau buổi verbatim (thêm phí API). Phiên Live tự gia hạn trước giới hạn 10 phút. Tại **Cấu hình AI** (`/settings`), chọn:
+Web hỗ trợ `gemini-3.5-transcribe-live` qua WebSocket, `gemini-3.5-transcribe` qua Interactions API và `gemini-3-flash-preview` qua Generate Content API. Flash nhận WAV theo đoạn (khoảng nghỉ hoặc tối đa khoảng 15 giây), dùng cùng `GOOGLE_API_KEY` và gửi audio inline, không cần upload lên Files API. Flash dùng prompt nguyên văn/smart, mức suy luận minimal; gán Speaker thủ công và lấy thời gian từ đoạn thu âm, không dùng cấu hình phiên âm chuyên biệt của Transcribe. Bảng giá Standard Flash: audio vào 1 USD / 1 triệu token (≈0,00192 USD/phút), text prompt vào 0,50 USD / 1 triệu token, chữ ra gồm thinking 3 USD / 1 triệu token. Không có giá tổng cố định theo phút.
+
+Live hỗ trợ verbatim/smart; chưa có diarization trực tiếp, nên gán Speaker thủ công hoặc chạy phân biệt lại sau buổi verbatim (thêm phí API). Phiên Live tự gia hạn trước giới hạn 10 phút. Tại **Cấu hình AI** (`/settings`), chọn:
 
 - **Verbatim** (mặc định): giữ nguyên lời nói, từ đệm và lặp từ; nhận nhãn người nói cùng timestamps trong cùng lượt API.
 - **Smart**: làm sạch và định dạng lời nói; Google không hỗ trợ diarization hoặc timestamps ở chế độ này. Gán người nói thủ công cho từng câu sau khi kết thúc buổi.

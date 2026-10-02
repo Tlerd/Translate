@@ -7,7 +7,7 @@ import { fetchModels } from '@/lib/api-client';
 import { loadSettings, saveSettings } from '@/storage/recordings';
 import type { AppSettings } from '@/shared/recording';
 import type { ModelsResponse } from '@/shared/ai-contracts';
-import { SPEAKER_COUNTS, TRANSCRIPTION_MODEL, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
+import { SPEAKER_COUNTS, segmentedTranscriptionModel, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
 
 export function AiSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -128,7 +128,7 @@ export function AiSettings() {
         >
           <div style={{ fontSize: '0.92rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Mic size={18} color="var(--accent)" />
-            <span>Nhận diện giọng nói · Gemini 3.5 Transcribe / Live</span>
+            <span>Nhận diện giọng nói · Gemini Transcribe / Flash</span>
           </div>
           <label htmlFor="speech-provider">Bộ nhận diện giọng nói</label>
           <select id="speech-provider" required value={settings.speechProvider}
@@ -136,11 +136,12 @@ export function AiSettings() {
             style={{ padding: '10px 12px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}>
             <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
             <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
+            <option value="google-flash">Gemini 3 Flash Preview · theo đoạn</option>
           </select>
           {settings.speechProvider === 'google' && <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Live hiện chữ trực tiếp, hỗ trợ verbatim/smart. Gán Speaker thủ công sau buổi; verbatim có thể phân biệt lại người nói qua Transcribe (thêm phí API). Kết nối được tự gia hạn trước giới hạn 10 phút.</p>}
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            <code>{TRANSCRIPTION_MODEL}</code> nhận giọng theo đoạn. Chữ xuất hiện sau khoảng nghỉ hoặc mỗi 15 giây khi nói liên tục, cộng thời gian xử lý API.
-          </p>
+          {settings.speechProvider !== 'google' && <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <code>{segmentedTranscriptionModel(settings.speechProvider)}</code> nhận giọng theo đoạn. Chữ xuất hiện sau khoảng nghỉ hoặc mỗi 15 giây khi nói liên tục, cộng thời gian xử lý API.
+          </p>}
           <label htmlFor="transcription-mode" style={{ fontSize: '0.88rem', fontWeight: 600 }}>
             Chế độ phiên âm (Transcription mode)
           </label>
@@ -163,7 +164,9 @@ export function AiSettings() {
             <option value="smart">Smart · phiên âm thông minh, gán người nói thủ công</option>
           </select>
           <p id="transcription-mode-help" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            {settings.speechProvider === 'google' ? 'Live chưa hỗ trợ diarization trực tiếp. Chọn Speaker thủ công sau buổi; verbatim có thể dùng nút phân biệt lại người nói.' : settings.transcriptionMode === 'verbatim'
+            {settings.speechProvider === 'google-flash'
+              ? `${settings.transcriptionMode === 'verbatim' ? 'Yêu cầu Flash giữ từ đệm, lặp từ và lời tự sửa.' : 'Yêu cầu Flash bỏ từ đệm, lặp từ và làm sạch văn bản.'} Flash phiên âm bằng prompt; gán Speaker thủ công sau buổi. Mốc thời gian tính theo đoạn thu âm.`
+              : settings.speechProvider === 'google' ? 'Live chưa hỗ trợ diarization trực tiếp. Chọn Speaker thủ công sau buổi; verbatim có thể dùng nút phân biệt lại người nói.' : settings.transcriptionMode === 'verbatim'
               ? 'Giữ nguyên từ đệm, lặp từ và lời tự sửa. Tự gán Speaker bằng diarization; bạn có thể sửa nhãn sau khi kết thúc buổi.'
               : 'Loại bỏ từ đệm, lặp từ, xử lý lời tự sửa và định dạng văn bản dễ đọc. Google không hỗ trợ diarization trong smart; chọn Speaker cho từng câu sau khi kết thúc buổi.'}
           </p>
@@ -181,8 +184,11 @@ export function AiSettings() {
             {SPEAKER_COUNTS.map((count) => <option key={count} value={count}>{count} người · Speaker 1{count > 1 ? ` – ${count}` : ''}</option>)}
           </select>
           <p id="speaker-count-help" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Danh sách nhãn từ Speaker 1 đến Speaker {settings.speakerCount}. {settings.speechProvider === 'google' ? 'Live dùng danh sách này để gán người nói thủ công sau buổi.' : 'Google tự phát hiện giọng trong từng đoạn; nhãn giữa các đoạn có thể thay đổi. Nhận diện từ 3 người trở lên đang ở mức thử nghiệm.'}
+            Danh sách nhãn từ Speaker 1 đến Speaker {settings.speakerCount}. {settings.speechProvider === 'google-flash' ? 'Flash dùng danh sách này để gán người nói thủ công sau buổi.' : settings.speechProvider === 'google' ? 'Live dùng danh sách này để gán người nói thủ công sau buổi.' : 'Google tự phát hiện giọng trong từng đoạn; nhãn giữa các đoạn có thể thay đổi. Nhận diện từ 3 người trở lên đang ở mức thử nghiệm.'}
           </p>
+          {settings.speechProvider === 'google-flash' ? <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Flash Preview: audio vào 1 USD / 1 triệu token (≈ 0,00192 USD/phút), chữ ra và suy luận 3 USD / 1 triệu token; prompt chữ vào 0,50 USD / 1 triệu token. Ví dụ 1 phút audio + 300 token đầu ra tính phí ≈ 0,00282 USD, chưa gồm prompt và dịch. Phí thực tế phụ thuộc lượng chữ và suy luận; xem <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3-flash-preview" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>bảng giá Gemini 3 Flash Preview</a>.
+          </p> : <>
             <details style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
               <summary style={{ cursor: 'pointer', color: 'var(--accent)' }}>
                 Theo đoạn · 5 giờ nhận giọng ≈ 1,50 USD — xem cước Google API
@@ -197,6 +203,7 @@ export function AiSettings() {
             </details>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Live: audio vào ≈ 0,005 USD/phút + chữ ra ≈ 0,004 USD/phút, tổng ≈ 0,009 USD/phút (5 giờ ≈ 2,70 USD). Phí thực tế tính theo token, chưa gồm dịch hoặc xử lý lại; xem <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-transcribe-live" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>bảng giá Google cho Live</a>. Ước tính theo đoạn bên trên chỉ áp dụng cho Transcribe.</p>
           <a href="https://ai.google.dev/gemini-api/docs/transcribe" target="_blank" rel="noreferrer" style={{ fontSize: '0.82rem', color: 'var(--accent)', textDecoration: 'underline' }}>Tài liệu phiên âm và người nói của Google</a>
+          </>}
         </div>
 
         {/* 2. Model Translation & Thinking Level */}

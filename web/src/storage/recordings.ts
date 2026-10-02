@@ -9,7 +9,7 @@ import type {
   ClassroomMode,
 } from '@/shared/recording';
 import { DEFAULT_SETTINGS } from '@/shared/recording';
-import { isAllowedSpeakerLabel, normalizeSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
+import { isAllowedSpeakerLabel, normalizeSpeechProvider, normalizeSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
 
 export interface CreateRecordingParams {
   id?: string;
@@ -271,8 +271,8 @@ export async function loadSettings(): Promise<AppSettings> {
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
-      // Preserve Live; migrate the removed browser provider to Transcribe.
-      speechProvider: map.get('speechProvider') === 'google' ? 'google' : 'google-transcribe',
+      // Preserve supported providers; migrate the removed browser provider to Transcribe.
+      speechProvider: normalizeSpeechProvider(map.get('speechProvider')),
       transcriptionMode: normalizeTranscriptionMode(map.get('transcriptionMode')),
       speakerCount: normalizeSpeakerCount(map.get('speakerCount')),
     };
@@ -286,7 +286,7 @@ export const settingsUpdatedEvent = 'may-dich:settings-updated';
 export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
   const db = getDb();
   const normalized: Partial<AppSettings> = { ...settings };
-  if (settings.speechProvider !== undefined) normalized.speechProvider = settings.speechProvider === 'google' ? 'google' : 'google-transcribe';
+  if (settings.speechProvider !== undefined) normalized.speechProvider = normalizeSpeechProvider(settings.speechProvider);
   if (settings.transcriptionMode !== undefined) normalized.transcriptionMode = normalizeTranscriptionMode(settings.transcriptionMode);
   if (settings.speakerCount !== undefined) normalized.speakerCount = normalizeSpeakerCount(settings.speakerCount);
   if (settings.pauseMs !== undefined) normalized.pauseMs = normalizePauseMs(settings.pauseMs, DEFAULT_SETTINGS.pauseMs);

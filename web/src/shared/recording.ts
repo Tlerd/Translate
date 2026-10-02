@@ -3,7 +3,7 @@
  * Strict type contracts matching DINH-HUONG-APP-WEB-VA-MODEL.md Section 8 & 9.
  */
 
-import type { SpeakerCount, TranscriptionMode } from './transcription';
+import type { SpeakerCount, SpeechProvider, TranscriptionMode } from './transcription';
 
 export type ClassroomMode = 'lecture' | 'readingPractice';
 
@@ -97,7 +97,7 @@ export interface ImageItem {
 }
 
 export interface AppSettings {
-  speechProvider: 'google' | 'google-transcribe';
+  speechProvider: SpeechProvider;
   transcriptionMode: TranscriptionMode;
   speakerCount: SpeakerCount;
   translationModel: string;

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mic, Square, Volume2, BookOpen, Layers, Settings } from 'lucide-react';
 import { useRecording } from './recording-context';
 import styles from './recording-ui.module.css';
+import { speechProviderName } from '@/shared/transcription';
 
 interface RecorderToolbarProps {
   onStart?: () => void;
@@ -167,7 +168,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
           <span>
             Nhận giọng:{' '}
-            Gemini 3.5 Transcribe{state.speechProvider === 'google' ? ' Live' : ''} · {state.transcriptionMode}
+            {speechProviderName(state.speechProvider)} · {state.transcriptionMode}
           </span>
           <span title={state.micDeviceLabel ? `Thiết bị micro: ${state.micDeviceLabel}` : undefined}>
             Mic:{' '}

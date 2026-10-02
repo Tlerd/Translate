@@ -11,6 +11,17 @@ function setup(mode: TranscriptionMode = 'verbatim', speakerCount: SpeakerCount 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('unary Gemini transcription', () => {
+  it('sends the selected Flash model with queued PCM segments and preserves final timing', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'Flash transcript', turns: [] }));
+    vi.stubGlobal('fetch', fetcher);
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new GeminiTranscribeRecognizer(callbacks, 'ja-JP', 900, 'verbatim', 2, 'gemini-3-flash-preview');
+    recognizer.start(7);
+    recognizer.pushPcm(new Float32Array(8000).fill(0.2), 16000);
+    await recognizer.stop();
+    expect((fetcher.mock.calls[0][1].body as FormData).get('model')).toBe('gemini-3-flash-preview');
+    expect(callbacks.onTranscript).toHaveBeenCalledWith('Flash transcript', true, 7, 'transcribe_7_1', 1, { startMs: 0, endMs: 500 });
+  });
   it('drains the final audio on stop, with a valid independent WAV and original timestamps', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'こんにちは' }));
     vi.stubGlobal('fetch', fetcher);

@@ -1,6 +1,6 @@
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { Pcm16kResampler, floatToPcm16 } from './pcm-resampler';
-import { isAllowedSpeakerLabel, type SpeakerCount, type TranscriptionMode, type TranscriptionTurn } from '@/shared/transcription';
+import { isAllowedSpeakerLabel, TRANSCRIPTION_MODEL, FLASH_TRANSCRIPTION_MODEL, type SpeakerCount, type TranscriptionMode, type TranscriptionTurn } from '@/shared/transcription';
 
 /** Unary transcription: ordered WAV segments, never a live WebSocket session. */
 export class GeminiTranscribeRecognizer {
@@ -19,6 +19,7 @@ export class GeminiTranscribeRecognizer {
   constructor(
     private callbacks: SpeechRecognitionCallbacks, private language: string, private pauseMs = 900,
     private transcriptionMode: TranscriptionMode = 'verbatim', private speakerCount: SpeakerCount = 1,
+    private model: typeof TRANSCRIPTION_MODEL | typeof FLASH_TRANSCRIPTION_MODEL = TRANSCRIPTION_MODEL,
   ) {}
 
   updateSettings(settings: { pauseMs?: number; transcriptionMode?: TranscriptionMode; speakerCount?: SpeakerCount }): void {
@@ -80,6 +81,7 @@ export class GeminiTranscribeRecognizer {
         form.set('language', this.language);
         form.set('transcriptionMode', transcriptionMode);
         form.set('speakerCount', String(speakerCount));
+        form.set('model', this.model);
         const response = await fetch('/api/speech/transcribe', { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
         const result = await response.json();
         if (!response.ok || typeof result.text !== 'string') throw new Error(result.error?.message ?? `HTTP ${response.status}`);
