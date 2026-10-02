@@ -47,7 +47,7 @@ export function SummaryPanel({
   const summaryModels = (modelData?.models ?? [])
     .filter((model) => model.allowedTasks.includes('summarize') && model.enabled)
     .sort((a, b) => {
-      const order = ['google:gemini-3.1-flash-lite', 'google:gemini-2.5-flash-lite', 'google:gemini-3.8-flash'];
+      const order = ['google:gemini-3.1-flash-lite', 'google:gemini-3.8-flash'];
       return (order.indexOf(a.key) < 0 ? 99 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 99 : order.indexOf(b.key));
     });
   const selectedSummaryModel: ModelInfo | undefined = summaryModels.find((model) => model.key === selectedSummaryModelKey);

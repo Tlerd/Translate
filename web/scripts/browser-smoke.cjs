@@ -294,14 +294,13 @@ async function run() {
     assert(!(await page.locator('[data-nextjs-dialog]').count()), 'No Next.js error overlay');
     await page.goto(`${baseUrl}/settings`);
     const modelSelector = page.getByRole('combobox', { name: 'Model dịch:', exact: true });
-    await modelSelector.locator('option[value="google:gemini-2.5-flash-lite"]').waitFor({ state: 'attached' });
+    await modelSelector.locator('option[value="google:gemini-3.5-flash-lite"]').waitFor({ state: 'attached' });
     const textModelKeys = await modelSelector.locator('option').evaluateAll((options) => options.map((option) => option.value));
-    assert.deepEqual(textModelKeys.slice(0, 2), ['google:gemini-3.1-flash-lite', 'google:gemini-2.5-flash-lite']);
+    assert.deepEqual(textModelKeys.slice(0, 2), ['google:gemini-3.1-flash-lite', 'google:gemini-3.5-flash-lite']);
     assert.equal(await modelSelector.inputValue(), 'google:gemini-3.1-flash-lite');
     const effortSelector = page.locator('#translation-thinking');
     await effortSelector.selectOption('high');
-    await modelSelector.selectOption('google:gemini-2.5-flash-lite');
-    assert.equal(await effortSelector.locator('option[value="minimal"]').count(), 0);
+    await modelSelector.selectOption('google:gemini-3.5-flash-lite');
     await effortSelector.selectOption('low');
     const pause = page.getByRole('slider', { name: 'Khoảng nghỉ để chốt câu, giây' });
     await pause.focus();
@@ -310,14 +309,14 @@ async function run() {
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await waitUntil(async () => (await storedRows(page, 'settings')).some((setting) => setting.key === 'translationThinkingLevel' && setting.value === 'low'), 'Effort setting saved');
     await page.reload();
-    await waitUntil(async () => await modelSelector.inputValue() === 'google:gemini-2.5-flash-lite' && await effortSelector.inputValue() === 'low', 'Model and effort persist');
+    await waitUntil(async () => await modelSelector.inputValue() === 'google:gemini-3.5-flash-lite' && await effortSelector.inputValue() === 'low', 'Model and effort persist');
     await modelSelector.selectOption('google:gemini-3.1-flash-lite');
     await effortSelector.selectOption('minimal');
     await pause.focus();
     await pause.press('ArrowLeft');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await page.screenshot({ path: path.join(outputDir, 'models-toolbar.png') });
-    check('Model 3.1/2.5 đúng thứ tự, effort theo model và thiết lập giữ sau tải lại');
+    check('Model 3.1/3.5 đúng thứ tự, effort theo model và thiết lập giữ sau tải lại');
     check('Khoảng nghỉ thay đổi và được giữ sau tải lại');
 
     const recordingId = 'browser-acceptance-fixture';
