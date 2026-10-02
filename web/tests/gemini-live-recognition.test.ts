@@ -79,6 +79,73 @@ describe('Gemini live recognizer', () => {
     } finally { await recognizer.stop(0); }
   });
 
+  it('keeps Flash input in one sentence when model turnComplete precedes the last input delta', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
+    const onTranscript = vi.fn();
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(21);
+    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+    const socket = FakeWebSocket.last!;
+    socket.open(); socket.message({ setupComplete: {} }); await starting;
+    try {
+      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+      socket.message({ serverContent: { inputTranscription: { text: '日本語を' } } });
+      socket.message({ serverContent: { turnComplete: true } });
+      socket.message({ serverContent: { inputTranscription: { text: '勉強します。', finished: true } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['日本語を勉強します。', true]);
+      expect(new Set(onTranscript.mock.calls.map(call => call[3])).size).toBe(1);
+    } finally { await recognizer.stop(0); }
+  });
+
+  it('drains delayed Flash input after model turnComplete while Stop is waiting', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
+    const onTranscript = vi.fn();
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(22);
+    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+    const socket = FakeWebSocket.last!;
+    socket.open(); socket.message({ setupComplete: {} }); await starting;
+    recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+    const stopping = recognizer.stop(100);
+    socket.message({ serverContent: { turnComplete: true } });
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+    socket.message({ serverContent: { inputTranscription: { text: '最後の言葉。', finished: true } } });
+    await stopping;
+    expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最後の言葉。', true]);
+  });
+
+  it('applies a delayed Flash suffix to the closed sentence until fresh speech starts the next one', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
+    const onTranscript = vi.fn();
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(23);
+    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+    const socket = FakeWebSocket.last!;
+    socket.open(); socket.message({ setupComplete: {} }); await starting;
+    try {
+      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+      socket.message({ serverContent: { inputTranscription: { text: '最初の文' } } });
+      recognizer.finalizeUtterance();
+      const firstId = onTranscript.mock.calls[0][3];
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最初の文', true]);
+      recognizer.pushPcm(new Float32Array(1600), 16000);
+      socket.message({ serverContent: { inputTranscription: { text: 'です。' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最初の文です。', true]);
+      expect(onTranscript.mock.calls.at(-1)?.[3]).toBe(firstId);
+      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+      socket.message({ serverContent: { inputTranscription: { text: '次の文です。', finished: true } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['次の文です。', true]);
+      expect(onTranscript.mock.calls.at(-1)?.[3]).not.toBe(firstId);
+      expect(recognizer.diagnostics.status).toBe('listening');
+    } finally { await recognizer.stop(0); }
+  });
+
   it('decodes Google binary setup and UTF-8 transcripts instead of timing out or losing text', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({

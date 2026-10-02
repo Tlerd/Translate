@@ -565,6 +565,26 @@ async function run() {
       socket.message({ serverContent: { inputTranscription: { text: '好きです。', finished: true } } });
     });
     await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
+    // Real Flash input ASR need not send finished or any model turnComplete.
+    // Repeat the read → pause → read flow that previously lost the next row.
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(1600).fill(0.2));
+      window.__liveSockets.at(-1).message({ serverContent: { inputTranscription: { text: '次の文です。' }, waitingForInput: true } });
+    });
+    await page.getByText('Đây là câu tiếp theo.', { exact: true }).waitFor();
+    assert.equal(await page.getByTestId('caption-source').count(), 2, 'A second spoken sentence creates its own source and translation row');
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(1600).fill(0.2));
+      const socket = window.__liveSockets.at(-1);
+      socket.message({ serverContent: { inputTranscription: { text: '最後まで' } } });
+      socket.message({ serverContent: { turnComplete: true, outputTranscription: { text: 'irrelevant model response' } } });
+      socket.message({ serverContent: { inputTranscription: { text: '保存します。' } } });
+    });
+    await page.getByText('Lưu đến hết câu.', { exact: true }).waitFor();
+    assert.deepEqual(await page.getByTestId('caption-source').allTextContents(), ['私は音楽が好きです。', '次の文です。', '最後まで保存します。']);
+    assert.equal(await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).count(), 1, 'Capture remains active across Flash sentence pauses');
+    await page.screenshot({ path: path.join(outputDir, 'flash-live-multiple-sentences.png') });
+
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => window.__liveTokenRequests.at(-1).model), 'gemini-3.1-flash-live-preview');
@@ -573,10 +593,11 @@ async function run() {
     assert.equal(flashCaptions[0].source, '私は音楽が好きです。');
     assert.equal(flashCaptions[0].translation, 'Tôi thích âm nhạc.');
     assert.equal(flashCaptions[0].speakerLabel, undefined);
+    assert.deepEqual(flashCaptions.map(caption => [caption.source, caption.translation]), [['私は音楽が好きです。', 'Tôi thích âm nhạc.'], ['次の文です。', 'Đây là câu tiếp theo.'], ['最後まで保存します。', 'Lưu đến hết câu.']]);
     assert(await page.evaluate(() => window.__liveSockets.at(-1).readyState === 3), 'Stop closes the Flash Live socket');
     await page.evaluate(() => window.__liveSockets.at(-1).message({ serverContent: { inputTranscription: { text: 'late phantom text', finished: true } } }));
-    assert.equal(await page.getByTestId('caption-source').count(), 1, 'Late replies after Stop cannot add captions');
-    check('Flash Live chọn/lưu/reload, đúng token và WebSocket, im lặng không sinh chữ, PCM → chữ từng phần → dịch → lưu, Dừng đóng socket, mobile không tràn');
+    assert.equal(await page.getByTestId('caption-source').count(), 3, 'Late replies after Stop cannot add captions');
+    check('Flash Live chọn/lưu/reload, đúng token và WebSocket, im lặng không sinh chữ, 3 câu liên tiếp qua khoảng nghỉ → dịch → lưu, lượt model kết thúc lệch không mất chữ, Dừng đóng socket, mobile không tràn');
     await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
     await page.locator('#speech-provider').selectOption('google');
