@@ -222,9 +222,22 @@ export function AiSettings() {
             gap: 12,
           }}
         >
-          <label htmlFor="translation-model" style={{ fontSize: '0.92rem', fontWeight: 600 }}>
-            Model dịch sát nút (Phần A - Ưu tiên chi phí thấp)
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <label htmlFor="translation-model" style={{ fontSize: '0.92rem', fontWeight: 600 }}>
+              Model dịch sát nút (Phần A - Ưu tiên chi phí thấp)
+            </label>
+            <a
+              href="#translation-test"
+              style={{
+                fontSize: '0.82rem',
+                color: 'var(--accent)',
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+            >
+              Chạy thử model dịch này ↓
+            </a>
+          </div>
           <select
             id="translation-model"
             aria-label="Model dịch:"

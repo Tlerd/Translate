@@ -30,13 +30,18 @@ export async function* streamGoogleText(params: ProviderCallParams): AsyncIterab
   }).catch((error: unknown) => { throw readableGoogleError(error, params.modelId); });
 
   let receivedText = false;
-  for await (const chunk of responseStream) {
-    if (params.signal?.aborted) break;
-    const text = chunk.text;
-    if (text) {
-      receivedText = true;
-      yield text;
+  try {
+    for await (const chunk of responseStream) {
+      if (params.signal?.aborted) break;
+      const text = chunk.text;
+      if (text) {
+        receivedText = true;
+        yield text;
+      }
     }
+  } catch (error: unknown) {
+    if (params.signal?.aborted) return;
+    throw readableGoogleError(error, params.modelId);
   }
   if (!params.signal?.aborted && !receivedText) {
     throw new Error('Google AI không trả về nội dung văn bản.');
@@ -101,8 +106,11 @@ export async function generateGoogleImage(
 
 function readableGoogleError(error: unknown, modelId: string): unknown {
   const message = error instanceof Error ? error.message : String(error);
-  if (modelId === 'gemini-2.5-flash-lite' && /no longer available to new users/i.test(message)) {
-    return new Error('Google không mở Gemini 2.5 Flash-Lite cho key/tài khoản này. Hãy chọn Gemini 3.1 Flash-Lite; model 2.5 chỉ dùng được với tài khoản còn được Google hỗ trợ.');
+  if (
+    modelId === 'gemini-2.5-flash-lite' &&
+    /(no longer available to new users|limit.*access.*to the 2\.5 models|actively used.*in the past|not found|does not exist|permission denied|unsupported)/i.test(message)
+  ) {
+    return new Error('Google không mở Gemini 2.5 Flash-Lite cho key/tài khoản này do giới hạn tài khoản cũ. Hãy chọn Gemini 3.1 Flash-Lite; model 2.5 chỉ dùng được với tài khoản còn được Google hỗ trợ.');
   }
   return error;
 }
