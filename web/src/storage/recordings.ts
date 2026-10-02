@@ -2,6 +2,7 @@ import { getDb } from './db';
 import type {
   RecordingItem,
   AudioChunk,
+  AudioSegmentItem,
   CaptionItem,
   SummaryItem,
   ImageItem,
@@ -41,7 +42,7 @@ export async function createRecording(params: CreateRecordingParams): Promise<Re
     targetLanguage: params.targetLanguage,
     state: 'recording',
     durationMs: 0,
-    audioState: 'present',
+    audioState: 'missing',
     config: {
       translationModelKey: params.translationModelKey,
       summaryModelKey: params.summaryModelKey,
@@ -93,8 +94,9 @@ export async function deleteAudioOnly(id: string): Promise<void> {
     throw new Error('Buổi đang thu không thể xóa audio.');
   }
 
-  await db.transaction('rw', [db.recordings, db.audioChunks], async () => {
+  await db.transaction('rw', [db.recordings, db.audioChunks, db.audioSegments], async () => {
     await db.audioChunks.where('recordingId').equals(id).delete();
+    await db.audioSegments.where('recordingId').equals(id).delete();
     await db.recordings.update(id, {
       audioState: 'deleted',
       audioDeletedAt: new Date().toISOString(),
@@ -112,10 +114,11 @@ export async function deleteRecording(id: string): Promise<void> {
 
   await db.transaction(
     'rw',
-    [db.recordings, db.audioChunks, db.captions, db.summaries, db.images],
+    [db.recordings, db.audioChunks, db.audioSegments, db.captions, db.summaries, db.images],
     async () => {
       await db.recordings.delete(id);
       await db.audioChunks.where('recordingId').equals(id).delete();
+      await db.audioSegments.where('recordingId').equals(id).delete();
       await db.captions.where('recordingId').equals(id).delete();
       await db.summaries.where('recordingId').equals(id).delete();
       await db.images.where('recordingId').equals(id).delete();
@@ -126,7 +129,16 @@ export async function deleteRecording(id: string): Promise<void> {
 // Audio Chunks
 export async function addAudioChunk(chunk: Omit<AudioChunk, 'id'>): Promise<void> {
   const db = getDb();
-  await db.audioChunks.add(chunk as AudioChunk);
+  await db.transaction('rw', [db.recordings, db.audioChunks], async () => {
+    await db.audioChunks.add(chunk as AudioChunk);
+    const rec = await db.recordings.get(chunk.recordingId);
+    if (rec && rec.audioState !== 'present') {
+      await db.recordings.update(chunk.recordingId, {
+        audioState: 'present',
+        audioMimeType: chunk.mimeType,
+      });
+    }
+  });
 }
 
 export async function getAudioChunks(recordingId: string): Promise<AudioChunk[]> {
@@ -149,6 +161,123 @@ export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Pr
   if (oversized) return null;
   chunks.sort((a, b) => a.sequence - b.sequence);
   if (chunks.length === 0) return null;
+  const mimeType = chunks[0]?.mimeType || 'audio/webm';
+  const blobs = chunks.map((c) => c.blob);
+  return {
+    blob: new Blob(blobs, { type: mimeType }),
+    mimeType,
+  };
+}
+
+// Audio Segments
+export function getExtensionFromMimeType(mimeType?: string): string {
+  if (!mimeType) return 'webm';
+  const lower = mimeType.toLowerCase();
+  if (lower.includes('mp4')) return 'mp4';
+  if (lower.includes('m4a')) return 'm4a';
+  if (lower.includes('aac')) return 'aac';
+  if (lower.includes('wav')) return 'wav';
+  if (lower.includes('ogg')) return 'ogg';
+  return 'webm';
+}
+
+export function formatSegmentFileName(recordingId: string, segmentIndex: number, mimeType?: string): string {
+  const ext = getExtensionFromMimeType(mimeType);
+  const cleanId = recordingId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 16);
+  const segNum = String(segmentIndex).padStart(2, '0');
+  return `buoi_${cleanId}_doan_${segNum}.${ext}`;
+}
+
+export async function createAudioSegment(
+  segment: Omit<AudioSegmentItem, 'id'>
+): Promise<AudioSegmentItem> {
+  const db = getDb();
+  const id = await db.audioSegments.add(segment as AudioSegmentItem);
+  return { ...segment, id: typeof id === 'number' ? id : undefined };
+}
+
+export async function updateAudioSegment(
+  recordingId: string,
+  segmentIndex: number,
+  changes: Partial<AudioSegmentItem>
+): Promise<void> {
+  const db = getDb();
+  const existing = await db.audioSegments
+    .where(['recordingId', 'segmentIndex'])
+    .equals([recordingId, segmentIndex])
+    .first();
+  if (existing && existing.id !== undefined) {
+    await db.audioSegments.update(existing.id, changes);
+  }
+}
+
+export async function getAudioSegments(recordingId: string): Promise<AudioSegmentItem[]> {
+  const db = getDb();
+  const segments = await db.audioSegments
+    .where('recordingId')
+    .equals(recordingId)
+    .sortBy('segmentIndex');
+
+  if (segments.length > 0) {
+    return segments;
+  }
+
+  // Legacy fallback: check if recording has audioChunks or audioState === 'present'
+  const rec = await db.recordings.get(recordingId);
+  const chunkCount = await db.audioChunks.where('recordingId').equals(recordingId).count();
+  if (chunkCount > 0 || rec?.audioState === 'present') {
+    const firstChunk = await db.audioChunks
+      .where('recordingId')
+      .equals(recordingId)
+      .first();
+    const mimeType = firstChunk?.mimeType || rec?.audioMimeType || 'audio/webm';
+    return [
+      {
+        recordingId,
+        segmentIndex: 1,
+        kind: 'translating',
+        label: 'Đang dịch',
+        startMs: 0,
+        endMs: rec?.durationMs ?? 0,
+        durationMs: rec?.durationMs ?? 0,
+        status: chunkCount > 0 ? 'completed' : 'recording',
+        mimeType,
+      },
+    ];
+  }
+
+  return [];
+}
+
+export async function getAudioSegmentBlob(
+  recordingId: string,
+  segmentIndex: number,
+  maxBytes = Infinity
+): Promise<{ blob: Blob; mimeType: string } | null> {
+  const db = getDb();
+  const chunks: AudioChunk[] = [];
+  let bytes = 0;
+  let oversized = false;
+
+  await db.audioChunks
+    .where('recordingId')
+    .equals(recordingId)
+    .each((chunk) => {
+      const matches =
+        chunk.segmentIndex === segmentIndex ||
+        (segmentIndex === 1 && chunk.segmentIndex === undefined);
+      if (matches) {
+        bytes += chunk.blob.size;
+        if (bytes > maxBytes) {
+          oversized = true;
+          chunks.length = 0;
+        }
+        if (!oversized) chunks.push(chunk);
+      }
+    });
+
+  if (oversized || chunks.length === 0) return null;
+  chunks.sort((a, b) => a.sequence - b.sequence);
   const mimeType = chunks[0]?.mimeType || 'audio/webm';
   const blobs = chunks.map((c) => c.blob);
   return {

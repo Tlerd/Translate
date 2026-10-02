@@ -323,4 +323,157 @@ describe('Storage Layer', () => {
     expect(updated.pauseMs).toBe(600);
     expect(updated.readingPauseMs).toBe(10000);
   });
+
+  it('manages audio segments and retrieves per-segment blobs independently', async () => {
+    const {
+      createAudioSegment,
+      updateAudioSegment,
+      getAudioSegments,
+      getAudioSegmentBlob,
+      formatSegmentFileName,
+      getExtensionFromMimeType,
+    } = await import('@/storage/recordings');
+
+    await createRecording({
+      id: 'rec_segments_test',
+      title: 'Buổi thử nghiệm chia đoạn',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.1-flash-lite',
+    });
+
+    // Create Segment 1: Translating
+    await createAudioSegment({
+      recordingId: 'rec_segments_test',
+      segmentIndex: 1,
+      kind: 'translating',
+      label: 'Đang dịch',
+      startMs: 0,
+      status: 'recording',
+      mimeType: 'audio/webm',
+    });
+
+    await addAudioChunk({
+      recordingId: 'rec_segments_test',
+      segmentIndex: 1,
+      sequence: 0,
+      mimeType: 'audio/webm',
+      timestamp: 0,
+      blob: new Blob(['segment-1-chunk-0'], { type: 'audio/webm' }),
+    });
+
+    await addAudioChunk({
+      recordingId: 'rec_segments_test',
+      segmentIndex: 1,
+      sequence: 1,
+      mimeType: 'audio/webm',
+      timestamp: 2000,
+      blob: new Blob(['segment-1-chunk-1'], { type: 'audio/webm' }),
+    });
+
+    // Close Segment 1
+    await updateAudioSegment('rec_segments_test', 1, {
+      endMs: 5000,
+      durationMs: 5000,
+      status: 'completed',
+    });
+
+    // Create Segment 2: API Paused
+    await createAudioSegment({
+      recordingId: 'rec_segments_test',
+      segmentIndex: 2,
+      kind: 'apiPaused',
+      label: 'Nghỉ API',
+      startMs: 5000,
+      status: 'recording',
+      mimeType: 'audio/webm',
+    });
+
+    await addAudioChunk({
+      recordingId: 'rec_segments_test',
+      segmentIndex: 2,
+      sequence: 0,
+      mimeType: 'audio/webm',
+      timestamp: 5000,
+      blob: new Blob(['segment-2-pause-chunk-0'], { type: 'audio/webm' }),
+    });
+
+    await updateAudioSegment('rec_segments_test', 2, {
+      endMs: 7000,
+      durationMs: 2000,
+      status: 'completed',
+    });
+
+    // Query segments
+    const segments = await getAudioSegments('rec_segments_test');
+    expect(segments.length).toBe(2);
+    expect(segments[0].segmentIndex).toBe(1);
+    expect(segments[0].kind).toBe('translating');
+    expect(segments[0].label).toBe('Đang dịch');
+    expect(segments[0].status).toBe('completed');
+    expect(segments[0].durationMs).toBe(5000);
+
+    expect(segments[1].segmentIndex).toBe(2);
+    expect(segments[1].kind).toBe('apiPaused');
+    expect(segments[1].label).toBe('Nghỉ API');
+    expect(segments[1].status).toBe('completed');
+    expect(segments[1].durationMs).toBe(2000);
+
+    // Retrieve audio blobs per segment
+    const blob1 = await getAudioSegmentBlob('rec_segments_test', 1);
+    expect(blob1).not.toBeNull();
+    expect(await blob1?.blob.text()).toBe('segment-1-chunk-0segment-1-chunk-1');
+
+    const blob2 = await getAudioSegmentBlob('rec_segments_test', 2);
+    expect(blob2).not.toBeNull();
+    expect(await blob2?.blob.text()).toBe('segment-2-pause-chunk-0');
+
+    // Filename formatting
+    expect(getExtensionFromMimeType('audio/webm')).toBe('webm');
+    expect(getExtensionFromMimeType('audio/mp4')).toBe('mp4');
+    expect(getExtensionFromMimeType('audio/aac')).toBe('aac');
+    expect(getExtensionFromMimeType('audio/wav')).toBe('wav');
+    expect(formatSegmentFileName('rec_segments_test', 1, 'audio/webm')).toBe('buoi_rec_segments_tes_doan_01.webm');
+    expect(formatSegmentFileName('rec_segments_test', 2, 'audio/mp4')).toBe('buoi_rec_segments_tes_doan_02.mp4');
+  });
+
+  it('provides legacy fallback segment for recordings without segment records', async () => {
+    const { getAudioSegments, getAudioSegmentBlob } = await import('@/storage/recordings');
+
+    await createRecording({
+      id: 'rec_legacy_no_segments',
+      title: 'Bản ghi cũ',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.1-flash-lite',
+    });
+    const { updateRecording } = await import('@/storage/recordings');
+    await updateRecording('rec_legacy_no_segments', {
+      state: 'stopped',
+      durationMs: 12000,
+      audioState: 'present',
+      audioMimeType: 'audio/webm',
+    });
+
+    await addAudioChunk({
+      recordingId: 'rec_legacy_no_segments',
+      sequence: 0,
+      mimeType: 'audio/webm',
+      timestamp: 0,
+      blob: new Blob(['legacy-whole-audio'], { type: 'audio/webm' }),
+    });
+
+    const segments = await getAudioSegments('rec_legacy_no_segments');
+    expect(segments.length).toBe(1);
+    expect(segments[0].segmentIndex).toBe(1);
+    expect(segments[0].label).toBe('Đang dịch');
+    expect(segments[0].durationMs).toBe(12000);
+    expect(segments[0].status).toBe('completed');
+
+    const blob = await getAudioSegmentBlob('rec_legacy_no_segments', 1);
+    expect(blob).not.toBeNull();
+    expect(await blob?.blob.text()).toBe('legacy-whole-audio');
+  });
 });

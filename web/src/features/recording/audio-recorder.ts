@@ -4,11 +4,12 @@
  */
 
 export interface AudioRecorderCallbacks {
-  onChunk: (blob: Blob, sequence: number, timestampMs: number, mimeType: string) => Promise<void> | void;
+  onChunk: (blob: Blob, sequence: number, timestampMs: number, mimeType: string, segmentIndex?: number) => Promise<void> | void;
   onVolume: (volume: number) => void; // 0.0 to 1.0
   onError: (error: string) => void;
   onMicState?: (state: 'live' | 'muted' | 'ended' | 'suspended') => void;
   onMicInfo?: (label: string) => void;
+  onSegmentComplete?: (segmentIndex: number) => Promise<void> | void;
 }
 
 export class WebAudioRecorder {
@@ -18,6 +19,8 @@ export class WebAudioRecorder {
   private analyser: AnalyserNode | null = null;
   private volumeIntervalId: ReturnType<typeof setInterval> | null = null;
 
+  private currentSegmentIndex = 1;
+  private timesliceMs = 2000;
   private sequence = 0;
   private startTime = 0;
   private mimeType = 'audio/webm';
@@ -25,11 +28,13 @@ export class WebAudioRecorder {
   private isRecording = false;
   private isStopping = false;
   private pendingChunkWrites = new Set<Promise<void>>();
+  private segmentPendingWrites = new Map<number, Set<Promise<void>>>();
 
   constructor(callbacks: AudioRecorderCallbacks) {
     this.callbacks = callbacks;
   }
   public get stream(): MediaStream | null { return this.mediaStream; }
+  public get segmentIndex(): number { return this.currentSegmentIndex; }
   public async resume(): Promise<void> {
     if (this.audioContext?.state === 'suspended') await this.audioContext.resume();
   }
@@ -115,31 +120,17 @@ export class WebAudioRecorder {
         // Volume metering is non-fatal
       }
 
+      this.timesliceMs = timesliceMs;
+      this.currentSegmentIndex = 1;
       this.sequence = 0;
       this.pendingChunkWrites.clear();
+      this.segmentPendingWrites.clear();
       this.startTime = Date.now();
       this.isRecording = true;
       this.isStopping = false;
 
       const recorder = new MediaRecorder(stream, { mimeType: this.mimeType });
-      recorder.ondataavailable = (event: BlobEvent) => {
-        // MediaRecorder emits one last dataavailable event as part of stop().
-        if ((!this.isRecording && !this.isStopping) || event.data.size === 0) return;
-        const currentSeq = this.sequence++;
-        const timestampMs = Date.now() - this.startTime;
-        const write = Promise.resolve()
-          .then(() => this.callbacks.onChunk(event.data, currentSeq, timestampMs, this.mimeType))
-          .catch((err) => {
-            this.callbacks.onError(`Lỗi ghi chunk âm thanh: ${err instanceof Error ? err.message : String(err)}`);
-          });
-        this.pendingChunkWrites.add(write);
-        void write.finally(() => this.pendingChunkWrites.delete(write));
-      };
-
-      recorder.onerror = (e) => {
-        this.callbacks.onError(`Lỗi MediaRecorder: ${e}`);
-      };
-
+      this.setupRecorderListeners(recorder, this.currentSegmentIndex);
       this.mediaRecorder = recorder;
       recorder.start(timesliceMs);
 
@@ -148,6 +139,81 @@ export class WebAudioRecorder {
       await this.stop();
       throw err;
     }
+  }
+
+  private setupRecorderListeners(recorder: MediaRecorder, segmentIndex: number): void {
+    recorder.ondataavailable = (event: BlobEvent) => {
+      // MediaRecorder emits one last dataavailable event as part of stop().
+      if ((!this.isRecording && !this.isStopping) || event.data.size === 0) return;
+      const currentSeq = this.sequence++;
+      const timestampMs = Date.now() - this.startTime;
+      const write = Promise.resolve()
+        .then(() => this.callbacks.onChunk(event.data, currentSeq, timestampMs, this.mimeType, segmentIndex))
+        .catch((err) => {
+          this.callbacks.onError(`Lỗi ghi chunk âm thanh: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      this.pendingChunkWrites.add(write);
+      let segPending = this.segmentPendingWrites.get(segmentIndex);
+      if (!segPending) {
+        segPending = new Set<Promise<void>>();
+        this.segmentPendingWrites.set(segmentIndex, segPending);
+      }
+      segPending.add(write);
+      void write.finally(() => {
+        this.pendingChunkWrites.delete(write);
+        segPending?.delete(write);
+      });
+    };
+
+    recorder.onerror = (e) => {
+      this.callbacks.onError(`Lỗi MediaRecorder: ${e}`);
+    };
+  }
+
+  public async switchSegment(nextSegmentIndex: number): Promise<void> {
+    if (!this.isRecording || !this.mediaStream) return;
+    const oldRecorder = this.mediaRecorder;
+    const oldIndex = this.currentSegmentIndex;
+    this.currentSegmentIndex = nextSegmentIndex;
+    this.sequence = 0;
+
+    // Start new recorder immediately on the same mediaStream so audio capture is continuous
+    const newRecorder = new MediaRecorder(this.mediaStream, { mimeType: this.mimeType });
+    this.setupRecorderListeners(newRecorder, nextSegmentIndex);
+    this.mediaRecorder = newRecorder;
+    newRecorder.start(this.timesliceMs);
+
+    // Stop old recorder and await its stop event & final data chunk
+    if (oldRecorder && oldRecorder.state !== 'inactive') {
+      try {
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(fallback);
+            resolve();
+          };
+          const fallback = setTimeout(finish, 2000);
+          oldRecorder.addEventListener('stop', finish, { once: true });
+          try {
+            oldRecorder.stop();
+          } catch {
+            finish();
+          }
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    // Await any pending chunk writes for the old segment
+    const oldPending = this.segmentPendingWrites.get(oldIndex);
+    if (oldPending) {
+      await Promise.all([...oldPending]);
+      this.segmentPendingWrites.delete(oldIndex);
+    }
+    await this.callbacks.onSegmentComplete?.(oldIndex);
   }
 
   public async stop(): Promise<void> {
@@ -170,6 +236,7 @@ export class WebAudioRecorder {
 
     const recorder = this.mediaRecorder;
     const stream = this.mediaStream;
+    const lastIndex = this.currentSegmentIndex;
     this.mediaRecorder = null;
     this.mediaStream = null;
     if (recorder && recorder.state !== 'inactive') {
@@ -201,6 +268,7 @@ export class WebAudioRecorder {
       }
     }
     await Promise.all([...this.pendingChunkWrites]);
+    await this.callbacks.onSegmentComplete?.(lastIndex);
     this.isStopping = false;
   }
 }

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Pencil, Sparkles, Volume2 } from 'lucide-react';
 import { TranscriptPane } from './transcript-pane';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
+import { AudioSegmentsDialog } from './audio-segments-dialog';
 import { SummaryPanel } from '@/features/summary/summary-panel';
 import { ImagePanel } from '@/features/images/image-panel';
-import { computeCaptionSourceHash, getAudioBlob, updateCaptionSources, updateCaptionSpeaker } from '@/storage/recordings';
+import { computeCaptionSourceHash, getAudioSegments, updateCaptionSources, updateCaptionSpeaker } from '@/storage/recordings';
 import { normalizeSpeakerCount } from '@/shared/transcription';
 import type { CaptionItem, SummaryItem, RecordingItem } from '@/shared/recording';
 import styles from './recording-ui.module.css';
@@ -18,6 +19,7 @@ interface RecordingWorkspaceProps {
   onSummaryUpdated?: (summary: SummaryItem) => void;
   onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
   speakerAssignmentBusy?: boolean;
+  activeSegmentIndex?: number;
 }
 
 export function RecordingWorkspace({
@@ -27,13 +29,15 @@ export function RecordingWorkspace({
   onSummaryUpdated,
   onSpeakerChange,
   speakerAssignmentBusy = false,
+  activeSegmentIndex,
 }: RecordingWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary'>('transcript');
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
   const [workspaceCaptions, setWorkspaceCaptions] = useState(captions);
   const [highlightCaptionId, setHighlightCaptionId] = useState<number | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [segmentsDialogOpen, setSegmentsDialogOpen] = useState(false);
+  const [segmentsCount, setSegmentsCount] = useState(0);
   const [currentSourceHash, setCurrentSourceHash] = useState<string | null>(null);
   const recordingInProgress = recording.state === 'recording';
   const summaryIsStale = Boolean(summary && currentSourceHash && summary.sourceHash !== currentSourceHash);
@@ -54,22 +58,20 @@ export function RecordingWorkspace({
     return () => { active = false; };
   }, [workspaceCaptions]);
 
-  // Load audio if present
+  // Query audio segments count
   useEffect(() => {
-    let currentUrl: string | null = null;
-    if (recording.audioState === 'present') {
-      getAudioBlob(recording.id).then((res) => {
-        if (res) {
-          const url = URL.createObjectURL(res.blob);
-          currentUrl = url;
-          setAudioUrl(url);
-        }
-      });
+    let active = true;
+    if (recording.id) {
+      getAudioSegments(recording.id)
+        .then((segs) => {
+          if (active) setSegmentsCount(segs.length);
+        })
+        .catch(() => undefined);
     }
     return () => {
-      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      active = false;
     };
-  }, [recording.id, recording.audioState]);
+  }, [recording.id, activeSegmentIndex, recordingInProgress]);
 
   const handleSelectCaption = (captionId: number) => {
     setActiveTab('transcript');
@@ -125,6 +127,19 @@ export function RecordingWorkspace({
             <Sparkles size={15} />
             <span>Tóm tắt {summary ? '✓' : ''}</span>
           </button>
+
+          {/* Audio Segments button */}
+          {(recording.audioState === 'present' || recordingInProgress || segmentsCount > 0) && (
+            <button
+              type="button"
+              onClick={() => setSegmentsDialogOpen(true)}
+              className={styles.tabPill}
+              title="Danh sách các đoạn ghi âm, nghe lại và tải về"
+            >
+              <Volume2 size={15} />
+              <span>Ghi âm {segmentsCount > 0 ? `(${segmentsCount})` : ''}</span>
+            </button>
+          )}
         </div>
 
         {activeTab === 'transcript' && workspaceCaptions.length > 0 && (
@@ -139,22 +154,6 @@ export function RecordingWorkspace({
             >
               <Pencil size={14} /> Chỉnh sửa kịch bản
             </button>
-          </div>
-        )}
-
-        {/* Audio playback player */}
-        {audioUrl && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Volume2 size={16} color="var(--accent)" />
-            <audio
-              src={audioUrl}
-              controls
-              style={{
-                height: 32,
-                outline: 'none',
-                maxWidth: 'min(42vw, 240px)',
-              }}
-            />
           </div>
         )}
       </div>
@@ -189,6 +188,20 @@ export function RecordingWorkspace({
           captions={workspaceCaptions}
           onClose={() => setEditorOpen(false)}
           onSave={handleSaveSources}
+        />
+      )}
+      {segmentsDialogOpen && (
+        <AudioSegmentsDialog
+          recordingId={recording.id}
+          isRecording={recordingInProgress}
+          onClose={() => {
+            setSegmentsDialogOpen(false);
+            if (recording.id) {
+              getAudioSegments(recording.id)
+                .then((segs) => setSegmentsCount(segs.length))
+                .catch(() => undefined);
+            }
+          }}
         />
       )}
     </div>

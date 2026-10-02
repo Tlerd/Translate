@@ -297,6 +297,112 @@
   transform: translateY(-1px);
 }
 
+.recordBtnPause {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.35);
+}
+
+.recordBtnPause:hover {
+  background: linear-gradient(135deg, #fbbf24, #b45309);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.recordBtnResume {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+}
+
+.recordBtnResume:hover {
+  background: linear-gradient(135deg, #34d399, #047857);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
+}
+
+/* End Session Confirmation Modal */
+.confirmOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.confirmDialog {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirmTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirmMessage {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.confirmActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.confirmCancelBtn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.confirmCancelBtn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.confirmSubmitBtn {
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background-color: var(--danger);
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.confirmSubmitBtn:hover {
+  filter: brightness(1.1);
+}
+
 .recordActionBtn:active {
   transform: scale(0.97);
 }
@@ -716,4 +822,32 @@
   background: var(--bg-primary);
   color: var(--text-secondary);
   font-size: 0.75rem;
+}
+
+.scrollToBottomBtn {
+  position: sticky;
+  bottom: 12px;
+  align-self: center;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s;
+}
+
+.scrollToBottomBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
 }

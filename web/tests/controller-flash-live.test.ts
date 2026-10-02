@@ -16,9 +16,11 @@ vi.mock('@/features/recording/gemini-pcm-capture', () => ({
 }));
 vi.mock('@/features/recording/audio-recorder', () => ({
   WebAudioRecorder: class {
+    static getBestSupportedMimeType() { return 'audio/webm'; }
     stream = { getTracks: () => [] };
     async start() { return 'audio/webm'; }
     async stop() {}
+    async switchSegment() {}
   },
 }));
 vi.mock('@/storage/recordings', () => ({
@@ -27,6 +29,10 @@ vi.mock('@/storage/recordings', () => ({
   addAudioChunk: vi.fn().mockResolvedValue(undefined),
   getAudioBlob: vi.fn().mockResolvedValue(null),
   saveCaption: fixtures.saveCaption,
+  createAudioSegment: vi.fn().mockResolvedValue(undefined),
+  updateAudioSegment: vi.fn().mockResolvedValue(undefined),
+  getAudioSegments: vi.fn().mockResolvedValue([]),
+  getAudioSegmentBlob: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/api-client', () => ({ streamTranslate: fixtures.translate }));
 

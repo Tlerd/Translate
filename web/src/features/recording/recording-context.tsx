@@ -11,6 +11,8 @@ interface RecordingContextValue {
   state: ControllerState;
   startRecording: (options?: StartOptions) => Promise<string>;
   stopRecording: () => Promise<void>;
+  pauseApi: () => Promise<void>;
+  resumeApi: () => Promise<void>;
   switchMode: (mode: ClassroomMode) => void;
   setTranslationModel: (modelKey: string) => void;
   setTranslationThinkingLevel: (level: string) => void;
@@ -101,6 +103,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     state,
     startRecording: (options) => controllerRef.current!.start(options),
     stopRecording: () => controllerRef.current!.stop(),
+    pauseApi: () => controllerRef.current!.pauseApi(),
+    resumeApi: () => controllerRef.current!.resumeApi(),
     switchMode: (mode) => controllerRef.current!.switchMode(mode),
     setTranslationModel: updateTranslationModel,
     setTranslationThinkingLevel: updateTranslationThinkingLevel,

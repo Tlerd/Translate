@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { ArrowDown } from 'lucide-react';
 import type { CaptionItem } from '@/shared/recording';
 import { displaySpeakerLabel, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
 import styles from './recording-ui.module.css';
@@ -13,6 +14,7 @@ interface TranscriptPaneProps {
 }
 
 export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, onSpeakerChange }: TranscriptPaneProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [pendingSpeakerId, setPendingSpeakerId] = useState<number | null>(null);
@@ -27,9 +29,31 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
     finally { setPendingSpeakerId(null); }
   };
 
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // User is considered at the bottom if within 48px
+    const isNearBottom = distanceToBottom <= 48;
+    setAutoScroll(isNearBottom);
+  }, []);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    setAutoScroll(true);
+    const el = containerRef.current;
+    if (el) {
+      if (smooth) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && containerRef.current) {
+      const el = containerRef.current;
+      el.scrollTop = el.scrollHeight;
     }
   }, [captions, autoScroll]);
 
@@ -53,9 +77,11 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
 
   return (
     <div
+      ref={containerRef}
       data-testid="transcript-pane"
       className={styles.transcriptPane}
-      onWheel={() => setAutoScroll(false)}
+      onScroll={handleScroll}
+      onTouchMove={handleScroll}
     >
       {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
       {captions.map((cap) => {
@@ -139,6 +165,18 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
         );
       })}
       <div ref={bottomRef} />
+      {!autoScroll && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom(true)}
+          className={styles.scrollToBottomBtn}
+          title="Cuộn xuống bản dịch mới nhất"
+          aria-label="Cuộn xuống bản dịch mới nhất"
+        >
+          <ArrowDown size={14} />
+          <span>Cuộn xuống cuối</span>
+        </button>
+      )}
     </div>
   );
 }

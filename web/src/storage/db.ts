@@ -2,6 +2,7 @@ import Dexie, { type EntityTable, type Table } from 'dexie';
 import type {
   RecordingItem,
   AudioChunk,
+  AudioSegmentItem,
   CaptionItem,
   SummaryItem,
   ImageItem,
@@ -15,6 +16,7 @@ export interface SettingRecord {
 export class AppDatabase extends Dexie {
   recordings!: EntityTable<RecordingItem, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'id'>;
+  audioSegments!: EntityTable<AudioSegmentItem, 'id'>;
   // Caption numbers restart in each recording, so both fields form its identity.
   get captions(): Table<CaptionItem, [string, number]> {
     return this.table('captionItems');
@@ -44,6 +46,11 @@ export class AppDatabase extends Dexie {
       await transaction.table<CaptionItem>('captionItems').bulkPut(previous);
     });
     this.version(3).stores({ captions: null });
+
+    this.version(4).stores({
+      audioSegments: '++id, [recordingId+segmentIndex], recordingId, segmentIndex, status',
+      audioChunks: '++id, [recordingId+sequence], recordingId, sequence, [recordingId+segmentIndex]',
+    });
   }
 }
 

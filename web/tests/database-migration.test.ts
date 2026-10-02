@@ -59,4 +59,79 @@ describe('Caption identity and legacy migration', () => {
     databases[databases.indexOf(upgraded)] = reopened;
     expect(await reopened.captions.count()).toBe(3);
   });
+
+  it('migrates from v3 database preserving audio chunks and enabling audioSegments table', async () => {
+    const name = `audio_segments_migration_${crypto.randomUUID()}`;
+    const legacy = new Dexie(name);
+    legacy.version(1).stores({
+      recordings: 'id, createdAt, state, mode, audioState',
+      audioChunks: '++id, [recordingId+sequence], recordingId, sequence',
+      captions: 'id, recordingId, blockId, [recordingId+id], startMs',
+      summaries: 'id, recordingId, sourceHash',
+      images: 'id, recordingId, summaryId',
+      settings: 'key',
+    });
+    legacy.version(2).stores({
+      captionItems: '[recordingId+id], id, recordingId, blockId, startMs',
+    }).upgrade(async (tx) => {
+      const prev = await tx.table('captions').toArray();
+      await tx.table('captionItems').bulkPut(prev);
+    });
+    legacy.version(3).stores({ captions: null });
+
+    await legacy.table('recordings').put({
+      id: 'legacy_rec_1',
+      title: 'Buổi cũ trước khi có segment',
+      createdAt: new Date().toISOString(),
+      mode: 'lecture',
+      sourceLanguage: 'ja-JP',
+      targetLanguage: 'vi',
+      state: 'stopped',
+      durationMs: 5000,
+      audioState: 'present',
+      audioMimeType: 'audio/webm',
+      config: { translationModelKey: 'google:gemini-3.1-flash-lite' },
+    });
+
+    await legacy.table('audioChunks').put({
+      recordingId: 'legacy_rec_1',
+      sequence: 0,
+      mimeType: 'audio/webm',
+      timestamp: 0,
+      blob: new Blob(['legacy-audio-data'], { type: 'audio/webm' }),
+    });
+
+    legacy.close();
+
+    // Now open with AppDatabase (v4)
+    const upgraded = new AppDatabase(name);
+    databases.push(upgraded);
+
+    // Verify existing recording and chunk exist
+    const rec = await upgraded.recordings.get('legacy_rec_1');
+    expect(rec).toBeDefined();
+    expect(rec?.title).toBe('Buổi cũ trước khi có segment');
+
+    const chunks = await upgraded.audioChunks.where('recordingId').equals('legacy_rec_1').toArray();
+    expect(chunks.length).toBe(1);
+    expect(chunks[0].sequence).toBe(0);
+
+    // Verify audioSegments table is created and works
+    await upgraded.audioSegments.put({
+      recordingId: 'new_rec_2',
+      segmentIndex: 1,
+      kind: 'translating',
+      label: 'Đang dịch',
+      startMs: 0,
+      endMs: 2000,
+      durationMs: 2000,
+      status: 'completed',
+      mimeType: 'audio/webm',
+    });
+
+    const segments = await upgraded.audioSegments.where('recordingId').equals('new_rec_2').toArray();
+    expect(segments.length).toBe(1);
+    expect(segments[0].segmentIndex).toBe(1);
+    expect(segments[0].label).toBe('Đang dịch');
+  });
 });

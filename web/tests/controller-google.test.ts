@@ -38,6 +38,10 @@ const shared = vi.hoisted(() => ({
   saveCaption: vi.fn(),
   getAudioBlob: vi.fn(),
   streamTranslate: vi.fn(),
+  createAudioSegment: vi.fn().mockResolvedValue(undefined),
+  updateAudioSegment: vi.fn().mockResolvedValue(undefined),
+  getAudioSegments: vi.fn().mockResolvedValue([]),
+  getAudioSegmentBlob: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/features/recording/gemini-transcribe-recognition', () => ({
@@ -104,6 +108,7 @@ vi.mock('@/features/recording/gemini-pcm-capture', () => ({
 
 vi.mock('@/features/recording/audio-recorder', () => ({
   WebAudioRecorder: class {
+    static getBestSupportedMimeType() { return 'audio/webm'; }
     callbacks: RecorderFixture['callbacks'];
     stream: MediaStream | null = null;
     stopImpl: () => Promise<void> = async () => undefined;
@@ -113,6 +118,7 @@ vi.mock('@/features/recording/audio-recorder', () => ({
       shared.events.push('recorder.start'); this.callbacks.onMicState?.('live'); return 'audio/webm';
     }
     async stop() { shared.events.push('recorder.stop'); await this.stopImpl(); }
+    async switchSegment() {}
     async resume() {}
   },
 }));
@@ -123,6 +129,10 @@ vi.mock('@/storage/recordings', () => ({
   addAudioChunk: shared.addAudioChunk,
   saveCaption: shared.saveCaption,
   getAudioBlob: shared.getAudioBlob,
+  createAudioSegment: shared.createAudioSegment,
+  updateAudioSegment: shared.updateAudioSegment,
+  getAudioSegments: shared.getAudioSegments,
+  getAudioSegmentBlob: shared.getAudioSegmentBlob,
 }));
 vi.mock('@/lib/api-client', () => ({ streamTranslate: shared.streamTranslate }));
 

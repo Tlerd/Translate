@@ -45,4 +45,72 @@ describe('WebAudioRecorder', () => {
     await stopped;
     expect(track.stop).toHaveBeenCalledOnce();
   });
+
+  it('switches segments without stopping microphone tracks and passes segmentIndex with chunks', async () => {
+    let instanceCount = 0;
+    class NumberedFakeMediaRecorder {
+      static isTypeSupported() { return true; }
+      id: number;
+      state: RecordingState = 'inactive';
+      ondataavailable: ((event: BlobEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      private listeners = new Map<string, Array<() => void>>();
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        void stream; void options;
+        this.id = ++instanceCount;
+      }
+      start() { this.state = 'recording'; }
+      stop() {
+        this.state = 'inactive';
+        this.ondataavailable?.({ data: new Blob([`segment-chunk-from-rec-${this.id}`]) } as BlobEvent);
+        this.listeners.get('stop')?.forEach((listener) => listener());
+      }
+      addEventListener(name: string, listener: () => void) {
+        this.listeners.set(name, [...(this.listeners.get(name) || []), listener]);
+      }
+    }
+
+    const track = { stop: vi.fn() };
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('MediaRecorder', NumberedFakeMediaRecorder);
+
+    const receivedChunks: Array<{ text: string; segmentIndex?: number; sequence: number }> = [];
+    const completedSegments: number[] = [];
+
+    const recorder = new WebAudioRecorder({
+      onChunk: async (blob, seq, _timestamp, _mime, segmentIndex) => {
+        receivedChunks.push({ text: await blob.text(), segmentIndex, sequence: seq });
+      },
+      onVolume: () => {},
+      onError: (err) => { throw new Error(err); },
+      onSegmentComplete: (segIndex) => {
+        completedSegments.push(segIndex);
+      },
+    });
+
+    await recorder.start();
+    expect(recorder.segmentIndex).toBe(1);
+    expect(track.stop).not.toHaveBeenCalled();
+
+    // Switch to segment 2 (e.g. user clicked Pause API)
+    await recorder.switchSegment(2);
+    expect(recorder.segmentIndex).toBe(2);
+    // Microphone track MUST NOT be stopped when switching segments!
+    expect(track.stop).not.toHaveBeenCalled();
+    expect(completedSegments).toEqual([1]);
+    expect(receivedChunks.some((c) => c.segmentIndex === 1 && c.text === 'segment-chunk-from-rec-1')).toBe(true);
+
+    // Switch to segment 3 (e.g. user clicked Resume API)
+    await recorder.switchSegment(3);
+    expect(recorder.segmentIndex).toBe(3);
+    expect(track.stop).not.toHaveBeenCalled();
+    expect(completedSegments).toEqual([1, 2]);
+
+    // Finally stop the entire session
+    await recorder.stop();
+    expect(completedSegments).toEqual([1, 2, 3]);
+    // Only now should track.stop be called!
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
 });

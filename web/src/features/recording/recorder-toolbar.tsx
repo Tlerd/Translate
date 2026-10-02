@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Mic, Square, Volume2, BookOpen, Layers, Settings } from 'lucide-react';
+import { Mic, Square, Volume2, BookOpen, Layers, Settings, Pause, Play, AlertTriangle } from 'lucide-react';
 import { useRecording } from './recording-context';
 import styles from './recording-ui.module.css';
 import { speechProviderName } from '@/shared/transcription';
@@ -18,36 +18,75 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
     state,
     startRecording,
     stopRecording,
+    pauseApi,
+    resumeApi,
     switchMode,
   } = useRecording();
 
-  const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | 'pausing' | 'resuming' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const isRecording = state.state === 'recording';
 
-  const handleToggle = async () => {
+  const handleStart = async () => {
     if (pendingAction) return;
-    setPendingAction(isRecording ? 'stopping' : 'starting');
+    setPendingAction('starting');
     setActionError(null);
     try {
-      if (isRecording) {
-        await stopRecording();
-        onStop?.();
-      } else {
-        await startRecording({
-          speechProvider: state.speechProvider,
-          transcriptionMode: state.transcriptionMode,
-          speakerCount: state.speakerCount,
-          mode: state.mode,
-          sourceLanguage: state.sourceLanguage,
-          targetLanguage: state.targetLanguage,
-          translationModelKey: state.translationModelKey,
-          pauseMs: state.pauseMs,
-          readingPauseMs: state.readingPauseMs,
-        });
-        onStart?.();
-      }
+      await startRecording({
+        speechProvider: state.speechProvider,
+        transcriptionMode: state.transcriptionMode,
+        speakerCount: state.speakerCount,
+        mode: state.mode,
+        sourceLanguage: state.sourceLanguage,
+        targetLanguage: state.targetLanguage,
+        translationModelKey: state.translationModelKey,
+        pauseMs: state.pauseMs,
+        readingPauseMs: state.readingPauseMs,
+      });
+      onStart?.();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handlePauseApi = async () => {
+    if (pendingAction) return;
+    setPendingAction('pausing');
+    setActionError(null);
+    try {
+      await pauseApi();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleResumeApi = async () => {
+    if (pendingAction) return;
+    setPendingAction('resuming');
+    setActionError(null);
+    try {
+      await resumeApi();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleConfirmStop = async () => {
+    setShowEndConfirm(false);
+    if (pendingAction) return;
+    setPendingAction('stopping');
+    setActionError(null);
+    try {
+      await stopRecording();
+      onStop?.();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -56,6 +95,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
   };
 
   const getStatusPillClass = () => {
+    if (state.apiState === 'paused') return styles.statusPillReconnecting;
     if (state.speechState === 'listening') return styles.statusPillListening;
     if (state.speechState === 'reconnecting') return styles.statusPillReconnecting;
     if (isRecording) return styles.statusPillRecording;
@@ -67,25 +107,57 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
       {/* Primary Clean Action Row */}
       <div className={styles.primaryActionRow}>
         <div className={styles.primaryActionsLeft}>
-          {/* Main Action Button (Uiverse Galaxy style) */}
-          <button
-            onClick={handleToggle}
-            disabled={pendingAction !== null}
-            aria-busy={pendingAction !== null}
-            className={`${styles.recordActionBtn} ${isRecording ? styles.recordBtnStop : styles.recordBtnStart}`}
-          >
-            {isRecording ? (
-              <>
-                <Square size={16} fill="#fff" />
+          {/* Main Action Buttons */}
+          {!isRecording ? (
+            <button
+              onClick={handleStart}
+              disabled={pendingAction !== null}
+              aria-busy={pendingAction !== null}
+              className={`${styles.recordActionBtn} ${styles.recordBtnStart}`}
+            >
+              <Mic size={17} />
+              <span>{pendingAction === 'starting' ? 'Đang bắt đầu…' : 'Bắt đầu thu'}</span>
+            </button>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              {/* Pause / Resume API Button */}
+              {state.apiState === 'paused' || state.apiState === 'resuming' ? (
+                <button
+                  type="button"
+                  onClick={handleResumeApi}
+                  disabled={pendingAction !== null || state.apiState === 'resuming'}
+                  className={`${styles.recordActionBtn} ${styles.recordBtnResume}`}
+                  title="Tiếp tục nhận giọng và dịch (mở đoạn Đang dịch mới)"
+                >
+                  <Play size={16} fill="#fff" />
+                  <span>{pendingAction === 'resuming' || state.apiState === 'resuming' ? 'Đang tiếp tục…' : 'Tiếp tục'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePauseApi}
+                  disabled={pendingAction !== null || state.apiState === 'pausing'}
+                  className={`${styles.recordActionBtn} ${styles.recordBtnPause}`}
+                  title="Dừng API nhận giọng/dịch (mở đoạn Nghỉ API; ghi âm cục bộ vẫn tiếp tục)"
+                >
+                  <Pause size={16} fill="#fff" />
+                  <span>{pendingAction === 'pausing' || state.apiState === 'pausing' ? 'Đang dừng…' : 'Dừng API'}</span>
+                </button>
+              )}
+
+              {/* Confirm Stop Button */}
+              <button
+                type="button"
+                onClick={() => setShowEndConfirm(true)}
+                disabled={pendingAction !== null}
+                className={`${styles.recordActionBtn} ${styles.recordBtnStop}`}
+                title="Kết thúc buổi học và chốt audio"
+              >
+                <Square size={15} fill="#fff" />
                 <span>{pendingAction === 'stopping' ? 'Đang kết thúc…' : 'Kết thúc buổi'}</span>
-              </>
-            ) : (
-              <>
-                <Mic size={17} />
-                <span>{pendingAction === 'starting' ? 'Đang bắt đầu…' : 'Bắt đầu thu'}</span>
-              </>
-            )}
-          </button>
+              </button>
+            </div>
+          )}
 
           {/* Mode Switcher */}
           <div className={styles.modeSwitch}>
@@ -135,7 +207,13 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
           {/* Status Badge */}
           <div className={`${styles.statusPill} ${getStatusPillClass()}`}>
-            {state.speechState === 'listening'
+            {state.apiState === 'paused'
+              ? 'Đã dừng API · vẫn ghi âm'
+              : state.apiState === 'pausing'
+              ? 'Đang dừng API…'
+              : state.apiState === 'resuming'
+              ? 'Đang tiếp tục…'
+              : state.speechState === 'listening'
               ? 'Đang nhận giọng'
               : state.speechState === 'reconnecting'
               ? 'Đang kết nối lại mic...'
@@ -156,6 +234,46 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
           </Link>
         </div>
       </div>
+
+      {/* Confirmation Modal for Ending Session */}
+      {showEndConfirm && (
+        <div
+          className={styles.confirmOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-end-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowEndConfirm(false); }}
+        >
+          <div className={styles.confirmDialog}>
+            <div id="confirm-end-title" className={styles.confirmTitle}>
+              <AlertTriangle size={20} color="var(--warning)" />
+              <span>Xác nhận kết thúc buổi học?</span>
+            </div>
+            <div className={styles.confirmMessage}>
+              Buổi học đã đóng sẽ không thể thu tiếp. Toàn bộ các đoạn audio và bản dịch đã ghi sẽ được chốt và lưu lại trên máy.
+            </div>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.confirmCancelBtn}
+                onClick={() => setShowEndConfirm(false)}
+                disabled={pendingAction === 'stopping'}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className={styles.confirmSubmitBtn}
+                onClick={handleConfirmStop}
+                disabled={pendingAction === 'stopping'}
+                autoFocus
+              >
+                {pendingAction === 'stopping' ? 'Đang lưu…' : 'Kết thúc và lưu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {actionError && (
         <span role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>

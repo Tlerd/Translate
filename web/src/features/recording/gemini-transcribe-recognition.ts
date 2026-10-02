@@ -23,6 +23,7 @@ export class GeminiTranscribeRecognizer {
   constructor(
     private callbacks: SpeechRecognitionCallbacks, private language: string, private pauseMs = 900,
     private transcriptionMode: TranscriptionMode = 'verbatim', private speakerCount: SpeakerCount = 1,
+    private offsetMs = 0,
   ) {}
 
   updateSettings(settings: { pauseMs?: number; transcriptionMode?: TranscriptionMode; speakerCount?: SpeakerCount }): void {
@@ -61,7 +62,10 @@ export class GeminiTranscribeRecognizer {
   finalizeUtterance(): void {
     if (!this.sampleCount) return;
     const count = this.sampleCount;
-    const timing = { startMs: this.processedSamples / 16, endMs: (this.processedSamples + count) / 16 };
+    const timing = {
+      startMs: Math.round(this.offsetMs + this.processedSamples / 16),
+      endMs: Math.round(this.offsetMs + (this.processedSamples + count) / 16),
+    };
     this.processedSamples += count;
     const hasSpeech = this.speechSamples >= 320;
     this.speechSamples = 0;

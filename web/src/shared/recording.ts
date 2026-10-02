@@ -37,9 +37,29 @@ export interface RecordingItem {
   };
 }
 
+export type AudioSegmentKind = 'translating' | 'apiPaused';
+
+export type AudioSegmentStatus = 'recording' | 'completed' | 'failed';
+
+export interface AudioSegmentItem {
+  id?: number;
+  recordingId: string;
+  segmentIndex: number;
+  kind: AudioSegmentKind;
+  label: string;
+  startMs: number;
+  endMs?: number;
+  durationMs?: number;
+  status: AudioSegmentStatus;
+  mimeType?: string;
+  sizeBytes?: number;
+  error?: string;
+}
+
 export interface AudioChunk {
   id?: number;
   recordingId: string;
+  segmentIndex?: number;
   sequence: number;
   mimeType: string;
   timestamp: number; // recording-relative millisecond

@@ -35,6 +35,7 @@ export default function WorkspaceHomePage() {
           captions={state.captions}
           onSpeakerChange={(captionId, label) => controller.setCaptionSpeaker(captionId, label)}
           speakerAssignmentBusy={state.speakerStatus === 'working'}
+          activeSegmentIndex={state.activeSegmentIndex}
         />
       </div>
     </div>

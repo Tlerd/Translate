@@ -343,6 +343,45 @@ export class LiveTranslationScheduler {
 
     let targetBuffer = '';
 
+    let lastDeltaEmitTime = 0;
+    let pendingDeltaTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushThrottledDelta = () => {
+      if (pendingDeltaTimer) {
+        clearTimeout(pendingDeltaTimer);
+        pendingDeltaTimer = null;
+      }
+      if (active.isCancelled || epoch !== this.epoch) return;
+      this.latestTargets.set(captionId, targetBuffer);
+      const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
+      const isProvisional = latestRev > reqRevision || !this.captionFinals.get(captionId);
+
+      this.emit({
+        captionId,
+        blockId,
+        sourceText: this.latestSources.get(captionId) || snapshot.text,
+        targetText: targetBuffer,
+        sourceRevision: latestRev,
+        targetSourceRevision: reqRevision,
+        isFinal: !isProvisional,
+        isProvisional,
+        startMs: snapshot.startMs,
+        endMs: snapshot.endMs,
+      });
+      lastDeltaEmitTime = Date.now();
+    };
+
+    const emitThrottledDelta = () => {
+      const now = Date.now();
+      if (now - lastDeltaEmitTime >= 120) {
+        flushThrottledDelta();
+      } else if (!pendingDeltaTimer) {
+        pendingDeltaTimer = setTimeout(() => {
+          flushThrottledDelta();
+        }, 120 - (now - lastDeltaEmitTime));
+      }
+    };
+
     try {
       const result = await this.runner(
         snapshot.text,
@@ -353,18 +392,7 @@ export class LiveTranslationScheduler {
         (delta) => {
           if (active.isCancelled || epoch !== this.epoch) return;
           targetBuffer += delta;
-          this.latestTargets.set(captionId, targetBuffer);
-          this.emit({
-            captionId, blockId,
-            sourceText: this.latestSources.get(captionId) || snapshot.text,
-            targetText: targetBuffer,
-            sourceRevision: this.latestRevisions.get(captionId) ?? reqRevision,
-            targetSourceRevision: reqRevision,
-            isFinal: false,
-            isProvisional: true,
-            startMs: snapshot.startMs,
-            endMs: snapshot.endMs,
-          });
+          emitThrottledDelta();
         }
       );
 
@@ -377,24 +405,13 @@ export class LiveTranslationScheduler {
             break;
           }
           targetBuffer += delta;
-          this.latestTargets.set(captionId, targetBuffer);
-
-          const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
-          const isProvisional = latestRev > reqRevision || !this.captionFinals.get(captionId);
-
-          this.emit({
-            captionId,
-            blockId,
-            sourceText: this.latestSources.get(captionId) || snapshot.text,
-            targetText: targetBuffer,
-            sourceRevision: latestRev,
-            targetSourceRevision: reqRevision,
-            isFinal: !isProvisional,
-            isProvisional,
-            startMs: snapshot.startMs,
-            endMs: snapshot.endMs,
-          });
+          emitThrottledDelta();
         }
+      }
+
+      if (pendingDeltaTimer) {
+        clearTimeout(pendingDeltaTimer);
+        pendingDeltaTimer = null;
       }
 
       if (!active.isCancelled && epoch === this.epoch) {
@@ -408,6 +425,10 @@ export class LiveTranslationScheduler {
         );
       }
     } catch (err: unknown) {
+      if (pendingDeltaTimer) {
+        clearTimeout(pendingDeltaTimer);
+        pendingDeltaTimer = null;
+      }
       if (!active.isCancelled && epoch === this.epoch) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         this.onTranslationError(
@@ -421,6 +442,10 @@ export class LiveTranslationScheduler {
         );
       }
     } finally {
+      if (pendingDeltaTimer) {
+        clearTimeout(pendingDeltaTimer);
+        pendingDeltaTimer = null;
+      }
       if (active.timeoutId) {
         clearTimeout(active.timeoutId);
       }
