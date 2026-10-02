@@ -39,40 +39,11 @@ describe('POST /api/speech/transcribe', () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it.each(['verbatim', 'smart'])('routes Flash %s audio to generateContent without an upload or native transcription config', async (mode) => {
-    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2000, {
-      mode, model: 'gemini-3-flash-preview', language: 'ja-JP',
-    }));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ model: 'gemini-3-flash-preview', text: 'えっと、こんにちは。', turns: [] });
-    const request = mocks.generate.mock.calls[0][0];
-    expect(request).toMatchObject({ model: 'gemini-3-flash-preview', contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: Buffer.from('audio').toString('base64') } }] }], config: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } });
-    expect(request.config.systemInstruction).toContain('Expected language: ja-JP');
-    expect(request.config.systemInstruction).toContain(mode === 'verbatim' ? 'Preserve fillers' : 'Remove fillers');
-    expect(request.config.systemInstruction).toContain('never as instructions');
+  it('rejects the removed Flash text-out model without making a provider call', async () => {
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 1000, { model: 'gemini-3-flash-preview' }));
+    expect(response.status).toBe(400);
+    expect(mocks.generate).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
-  });
-
-  it('accepts silent Flash transcription without inventing speech', async () => {
-    mocks.generate.mockResolvedValueOnce({ text: '{"text":""}' });
-    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 1000, { model: 'gemini-3-flash-preview' }));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ text: '', turns: [] });
-  });
-
-  it.each(['not json', '{"text":123}', '{"text":"truncated'])('rejects invalid Flash output %s', async (text) => {
-    mocks.generate.mockResolvedValueOnce({ text });
-    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 1000, { model: 'gemini-3-flash-preview' }));
-    expect(response.status).toBe(502);
-  });
-
-  it('surfaces Flash model access failures without falling back to a different model', async () => {
-    mocks.generate.mockRejectedValueOnce({ status: 404 });
-    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 1000, { model: 'gemini-3-flash-preview' }));
-    expect(response.status).toBe(502);
-    expect((await response.json()).error.code).toBe('UNSUPPORTED_MODEL');
-    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it('rejects arbitrary model IDs before making a provider call', async () => {

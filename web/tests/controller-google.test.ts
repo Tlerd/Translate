@@ -11,6 +11,7 @@ interface PcmCaptureFixture {
 }
 interface GoogleRecognizerFixture {
   mode?: string;
+  model?: string;
   callbacks: GoogleCallbacks;
   epoch: number;
   pushes: Array<{ samples: Float32Array; rate: number }>;
@@ -69,7 +70,7 @@ vi.mock('@/features/recording/gemini-live-recognition', () => ({
     pushes: Array<{ samples: Float32Array; rate: number }> = [];
     stopImpl: () => Promise<void> = async () => undefined;
     finalOnStop: (() => void) | null = null;
-    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
+    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string, public model: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
     async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
     pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
     finalizeUtterance() {}
@@ -156,6 +157,28 @@ describe('ClassroomController Google speech integration', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers();
+  });
+
+  it('routes Flash through Live and releases capture while a previous recognizer change is draining', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google-flash-live' });
+    expect(shared.liveRecognizers[0].model).toBe('gemini-3.1-flash-live-preview');
+    expect(shared.recognizers).toHaveLength(0);
+    let release!: () => void;
+    shared.liveRecognizers[0].stopImpl = () => new Promise<void>(resolve => { release = resolve; });
+    controller.setSpeechProvider('google-transcribe');
+    await vi.waitFor(() => expect(release).toBeDefined());
+    const stopping = controller.stop();
+    await vi.waitFor(() => expect(shared.events).toContain('recorder.stop'), { timeout: 200 });
+    const receivedBefore = controller.snapshot().receivedAudioMs;
+    shared.captures[0].emit(new Float32Array(16000), 16000);
+    expect(controller.snapshot().receivedAudioMs).toBe(receivedBefore);
+    expect(shared.updateRecording).toHaveBeenCalledWith('google-recording', expect.objectContaining({ state: 'stopped', endedAt: expect.any(String) }));
+    shared.liveRecognizers[0].stopImpl = async () => undefined;
+    release();
+    await stopping;
+    expect(controller.snapshot().state).toBe('stopped');
+    expect(shared.recognizers).toHaveLength(0);
   });
 
   it('switches between Live and chunks while sharing one microphone and draining old text', async () => {

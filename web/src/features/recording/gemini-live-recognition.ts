@@ -1,6 +1,6 @@
-import type { TranscriptionMode } from '@/shared/transcription';
+import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL, type LiveSpeechModel, type TranscriptionMode } from '@/shared/transcription';
+import { liveSpeechConfig } from '@/shared/live-speech-config';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
-import type { AudioTranscriptionConfigMode, Modality } from '@google/genai';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
 
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
@@ -40,6 +40,8 @@ export class GeminiLiveRecognizer {
   private utteranceCounter = 0;
   private activeUtteranceId: string | null = null;
   private revision = 0;
+  private inputText = '';
+  private heardSpeech = false;
   private stopPromise: Promise<void> | null = null;
   private drainResolver: (() => void) | null = null;
   private sessionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,7 +50,7 @@ export class GeminiLiveRecognizer {
     transcriptEvents: 0, maxBufferedBytes: 0, lastError: null,
   };
 
-  constructor(callbacks: SpeechRecognitionCallbacks, languageCode = 'ja-JP', private transcriptionMode: TranscriptionMode = 'verbatim') {
+  constructor(callbacks: SpeechRecognitionCallbacks, languageCode = 'ja-JP', private transcriptionMode: TranscriptionMode = 'verbatim', private model: LiveSpeechModel = LIVE_TRANSCRIPTION_MODEL) {
     this.callbacks = callbacks;
     this.languageCode = languageCode;
   }
@@ -70,6 +72,8 @@ export class GeminiLiveRecognizer {
     this.utteranceCounter = 0;
     this.activeUtteranceId = null;
     this.revision = 0;
+    this.inputText = '';
+    this.heardSpeech = false;
     this.resampler = null;
     this.diagnosticsValue = {
       status: 'connecting', connectedAt: null, sessionDeadline: null, audioBytesSent: 0,
@@ -80,8 +84,9 @@ export class GeminiLiveRecognizer {
     const response = await fetch('/api/speech/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ languageCode, transcriptionMode: this.transcriptionMode }),
+      body: JSON.stringify({ languageCode, transcriptionMode: this.transcriptionMode, model: this.model }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(12_000),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -111,14 +116,12 @@ export class GeminiLiveRecognizer {
       };
       socket.onopen = () => {
         if (generation !== this.connectionGeneration) return finish(new Error('Gemini session was superseded.'));
+        const { responseModalities, ...config } = liveSpeechConfig(this.model, this.transcriptionMode, languageCode);
         socket.send(JSON.stringify({
           setup: {
-            model: 'models/gemini-3.5-transcribe-live',
-            generationConfig: { responseModalities: ['TEXT' as Modality] },
-            inputAudioTranscription: {
-              languageCodes: languageCode ? [languageCode] : [],
-              mode: (this.transcriptionMode === 'smart' ? 'SMART' : 'VERBATIM') as AudioTranscriptionConfigMode,
-            },
+            model: `models/${this.model}`,
+            generationConfig: { responseModalities },
+            ...config,
           },
         }));
       };
@@ -161,6 +164,11 @@ export class GeminiLiveRecognizer {
   /** Push raw Web Audio Float32 PCM at its native AudioContext sample rate. */
   public pushPcm(samples: Float32Array, inputRate: number): void {
     if (!this.socket || this.diagnosticsValue.status !== 'listening') return;
+    if (this.model === FLASH_LIVE_MODEL && samples.length) {
+      let power = 0;
+      for (const sample of samples) power += sample * sample;
+      if (Math.sqrt(power / samples.length) >= 0.015) this.heardSpeech = true;
+    }
     if (!this.resampler || this.resamplerInputRate !== inputRate) {
       this.resampler = new Pcm16kResampler(inputRate);
       this.resamplerInputRate = inputRate;
@@ -229,6 +237,23 @@ export class GeminiLiveRecognizer {
     const final = content?.inputTranscription;
     const interimText = interim && typeof interim === 'object' && 'text' in interim ? interim.text : undefined;
     const finalText = final && typeof final === 'object' && 'text' in final ? final.text : undefined;
+    // Flash Live streams input transcription deltas. Generated model turns and
+    // outputTranscription are never classroom speech, even during Stop.
+    if (this.model === FLASH_LIVE_MODEL) {
+      if (this.heardSpeech || this.inputText) {
+        if (typeof finalText === 'string' && finalText.length) {
+          this.inputText += finalText;
+          this.emitTranscript(this.inputText, false);
+        }
+        if (final && typeof final === 'object' && 'finished' in final && final.finished === true) {
+          this.finishFlashInput();
+        } else if (content?.turnComplete && this.inputText) {
+          this.finishFlashInput();
+        }
+      }
+      if (content?.turnComplete && this.diagnosticsValue.status === 'draining' && !this.inputText) this.finishDrain();
+      return;
+    }
     if (typeof interimText === 'string' && interimText.length) {
       this.emitTranscript(interimText, false);
     }
@@ -241,6 +266,17 @@ export class GeminiLiveRecognizer {
     if (content && 'turnComplete' in content && content.turnComplete && this.diagnosticsValue.status === 'draining') {
       this.finishDrain();
     }
+  }
+
+  private finishFlashInput(): void {
+    if (this.inputText.trim()) this.emitTranscript(this.inputText, true);
+    this.inputText = '';
+    // Keep speech evidence for this connection: a later turn's audio can have
+    // arrived before an earlier turn's final transcript. Clearing it here
+    // would discard valid delayed input from the server.
+    this.activeUtteranceId = null;
+    this.revision = 0;
+    if (this.diagnosticsValue.status === 'draining') this.finishDrain();
   }
 
   private emitTranscript(text: string, isFinal: boolean): void {

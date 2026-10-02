@@ -1,17 +1,24 @@
 export const TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe';
-export const FLASH_TRANSCRIPTION_MODEL = 'gemini-3-flash-preview';
-export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash';
+export const LIVE_TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe-live';
+export const FLASH_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+export type LiveSpeechModel = typeof LIVE_TRANSCRIPTION_MODEL | typeof FLASH_LIVE_MODEL;
+export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash-live';
 
 export function normalizeSpeechProvider(value: unknown): SpeechProvider {
-  return value === 'google' || value === 'google-flash' ? value : 'google-transcribe';
+  if (value === 'google-flash' || value === 'google-flash-live') return 'google-flash-live';
+  return value === 'google' ? value : 'google-transcribe';
 }
 
-export function segmentedTranscriptionModel(provider: SpeechProvider): typeof TRANSCRIPTION_MODEL | typeof FLASH_TRANSCRIPTION_MODEL {
-  return provider === 'google-flash' ? FLASH_TRANSCRIPTION_MODEL : TRANSCRIPTION_MODEL;
+export function isLiveSpeechProvider(provider: SpeechProvider): boolean {
+  return provider === 'google' || provider === 'google-flash-live';
+}
+
+export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechModel {
+  return provider === 'google-flash-live' ? FLASH_LIVE_MODEL : LIVE_TRANSCRIPTION_MODEL;
 }
 
 export function speechProviderName(provider: SpeechProvider): string {
-  if (provider === 'google-flash') return 'Gemini 3 Flash Preview';
+  if (provider === 'google-flash-live') return 'Gemini 3 Flash Live';
   return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
 }
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;

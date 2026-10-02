@@ -19,7 +19,7 @@ import type {
   CaptionItem,
   RecordingItem,
 } from '@/shared/recording';
-import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, segmentedTranscriptionModel, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
+import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, liveTranscriptionModel, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
 
 export interface ControllerState {
   recordingId: string | null;
@@ -446,7 +446,7 @@ export class ClassroomController {
         onError: (err, epoch) => {
           if (epoch !== this.sessionEpoch) return;
           this.state.error = err;
-          if (this.state.speechProvider === 'google') { this.pcmReady = false; this.scheduleGoogleRetry(epoch, sourceLanguage); }
+          if (isLiveSpeechProvider(this.state.speechProvider)) { this.pcmReady = false; this.scheduleGoogleRetry(epoch, sourceLanguage); }
           this.notify();
         },
         onStateChange: (speechState) => {
@@ -460,7 +460,7 @@ export class ClassroomController {
       this.pcmCapture ??= new GeminiPcmCapture();
       this.pcmReady = false; this.pcmQueue = []; this.pcmQueueMs = 0;
       this.pcmInputCallback = (samples, rate) => {
-        if (this.sessionEpoch !== currentEpoch || this.state.state !== 'recording') return;
+        if (this.sessionEpoch !== currentEpoch || this.state.state !== 'recording' || this.stopping) return;
         this.state.receivedAudioMs += samples.length / rate * 1000;
         if (this.pcmReady && this.speechRecognizer) this.speechRecognizer.pushPcm(samples, rate);
         else if (this.pcmQueueMs < 10_000) { this.pcmQueue.push({ samples, rate }); this.pcmQueueMs += samples.length / rate * 1000; }
@@ -478,7 +478,7 @@ export class ClassroomController {
       catch (err) {
         this.state.error = `Nhận giọng Gemini chưa hoạt động: ${err instanceof Error ? err.message : String(err)}. Audio đang được lưu trên máy.`;
         this.state.speechState = 'stopped'; this.notify();
-        if (this.pcmAttached && this.state.speechProvider === 'google') this.scheduleGoogleRetry(currentEpoch, this.state.sourceLanguage);
+        if (this.pcmAttached && isLiveSpeechProvider(this.state.speechProvider)) this.scheduleGoogleRetry(currentEpoch, this.state.sourceLanguage);
         else { this.state.micState = 'suspended'; this.notify(); }
       }
     }
@@ -489,11 +489,11 @@ export class ClassroomController {
   private captionRevisions = new Map<number, number>();
   private async startTranscriber(epoch: number): Promise<void> {
     if (epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping) return;
-    if (this.state.speechProvider === 'google') { await this.connectGoogleSpeech(epoch, this.state.sourceLanguage); return; }
+    if (isLiveSpeechProvider(this.state.speechProvider)) { await this.connectGoogleSpeech(epoch, this.state.sourceLanguage); return; }
     const recognizer = new GeminiTranscribeRecognizer(
       this.speechCallbacks, this.state.sourceLanguage,
       this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs,
-      this.state.transcriptionMode, this.state.speakerCount, segmentedTranscriptionModel(this.state.speechProvider),
+      this.state.transcriptionMode, this.state.speakerCount,
     );
     this.speechRecognizer = recognizer;
     recognizer.start(epoch);
@@ -511,11 +511,11 @@ export class ClassroomController {
   }
 
   private async openGoogleSpeech(epoch: number, language: string): Promise<void> {
-    if (this.state.speechProvider !== 'google' || epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping || this.googleConnecting) return;
+    if (!isLiveSpeechProvider(this.state.speechProvider) || epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping || this.googleConnecting) return;
     this.googleConnecting = true;
     try {
     this.state.speechState = 'reconnecting'; this.notify();
-    const recognizer = new GeminiLiveRecognizer(this.speechCallbacks, language, this.state.transcriptionMode);
+    const recognizer = new GeminiLiveRecognizer(this.speechCallbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
     this.speechRecognizer = recognizer;
     await recognizer.start(epoch, language);
     if (epoch !== this.sessionEpoch || this.stopping) { await recognizer.stop(0); return; }
@@ -589,7 +589,7 @@ export class ClassroomController {
     if (this.speechRecognizer instanceof GeminiTranscribeRecognizer) this.speechRecognizer.updateSettings({ transcriptionMode, speakerCount });
     this.state.transcriptionMode = transcriptionMode;
     this.state.speakerCount = speakerCount;
-    if (modeChanged && this.state.speechProvider === 'google') this.restartRecognizer();
+    if (modeChanged && isLiveSpeechProvider(this.state.speechProvider)) this.restartRecognizer();
     if (this.state.state === 'recording' && this.recordingConfig) {
       this.recordingConfig = { ...this.recordingConfig, transcriptionMode, speakerCount };
     }
@@ -700,8 +700,6 @@ export class ClassroomController {
     this.clearSilenceTimer();
     this.pcmReady = false;
     this.clearSpeechTimers();
-    await this.recognizerChange;
-    this.clearSpeechTimers();
     const stopErrors: string[] = [];
     if (this.pcmCapture) {
       try { await this.pcmCapture.stop(); } catch (error) { stopErrors.push(String(error)); }
@@ -720,6 +718,19 @@ export class ClassroomController {
       try { await this.audioRecorder.stop(); } catch (error) { stopErrors.push(String(error)); }
       this.audioRecorder = null;
     }
+
+    // Capture has ended even if the network still owes a final transcript.
+    // Persist that fact now so reloading cannot restore a phantom recording.
+    this.state.durationMs = durationMs;
+    this.state.audioVolume = 0;
+    this.state.micState = 'idle';
+    this.notify();
+    if (recordingId) {
+      try { await updateRecording(recordingId, { state: 'stopped', endedAt: new Date(captureEndedAt).toISOString(), durationMs }); }
+      catch (error) { stopErrors.push(`Lưu thời điểm dừng: ${String(error)}`); }
+    }
+    await this.recognizerChange;
+    this.clearSpeechTimers();
 
     if (this.speechRecognizer) {
       try { await this.speechRecognizer.stop(); } catch (error) { stopErrors.push(String(error)); }

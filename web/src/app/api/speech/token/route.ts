@@ -1,11 +1,12 @@
-import { AudioTranscriptionConfigMode, GoogleGenAI, Modality } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
 import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
+import { liveSpeechConfig } from '@/shared/live-speech-config';
 
 export const dynamic = 'force-dynamic';
 
-const MODEL = 'gemini-3.5-transcribe-live';
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
 
 export async function POST(req: Request): Promise<Response> {
@@ -53,6 +54,9 @@ export async function POST(req: Request): Promise<Response> {
   const transcriptionMode = typeof body === 'object' && body !== null && 'transcriptionMode' in body ? body.transcriptionMode : 'verbatim';
   if (transcriptionMode !== 'verbatim' && transcriptionMode !== 'smart') return makeErrorResponse(400, 'INTERNAL_ERROR', 'Chế độ phiên âm không hợp lệ.');
 
+  const model = typeof body === 'object' && body !== null && 'model' in body ? body.model : LIVE_TRANSCRIPTION_MODEL;
+  if (model !== LIVE_TRANSCRIPTION_MODEL && model !== FLASH_LIVE_MODEL) return makeErrorResponse(400, 'UNSUPPORTED_MODEL', 'Model nhận giọng Live không hợp lệ.');
+
   const apiKey = getServerEnv().GOOGLE_API_KEY;
   if (!apiKey) {
     return makeErrorResponse(503, 'MISSING_CONFIG', 'Chưa cấu hình GOOGLE_API_KEY cho nhận giọng Gemini.');
@@ -67,14 +71,8 @@ export async function POST(req: Request): Promise<Response> {
         newSessionExpireTime: new Date(now + 2 * 60 * 1000).toISOString(),
         expireTime: new Date(now + SESSION_LIMIT_MS).toISOString(),
         liveConnectConstraints: {
-          model: MODEL,
-          config: {
-            responseModalities: [Modality.TEXT],
-            inputAudioTranscription: {
-              languageCodes: languageCode ? [languageCode] : [],
-              mode: transcriptionMode === 'smart' ? AudioTranscriptionConfigMode.SMART : AudioTranscriptionConfigMode.VERBATIM,
-            },
-          },
+          model,
+          config: liveSpeechConfig(model, transcriptionMode, languageCode as string | undefined),
         },
       },
     });
@@ -83,7 +81,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json(
       {
         token: token.name,
-        model: MODEL,
+        model,
         websocketUrl: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained',
         expiresAt: new Date(now + SESSION_LIMIT_MS).toISOString(),
         sessionLimitMs: SESSION_LIMIT_MS,

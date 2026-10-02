@@ -71,6 +71,7 @@ function installRecordingFixtures() {
   window.__transcriptionQueue = [];
   window.__transcriptionRequests = [];
   window.__liveSockets = [];
+  window.__liveTokenRequests = [];
   const NativeWebSocket = window.WebSocket;
   class FixtureLiveSocket {
     constructor(url, protocols) {
@@ -83,12 +84,16 @@ function installRecordingFixtures() {
       const message = JSON.parse(raw);
       if (message.setup) {
         this.mode = message.setup.inputAudioTranscription.mode;
+        this.setup = message.setup;
         setTimeout(() => this.message({ setupComplete: {} }), 0);
       }
       if (message.realtimeInput?.audioStreamEnd) this.message({ serverContent: { turnComplete: true } });
     }
     message(value) { this.onmessage?.({ data: new TextEncoder().encode(JSON.stringify(value)).buffer }); }
-    say(text) { this.message({ serverContent: { inputTranscription: { text } } }); }
+    say(text) {
+      if (this.setup.model === 'models/gemini-3.1-flash-live-preview') window.__feedPcm?.(new Float32Array(1600).fill(0.2));
+      this.message({ serverContent: { inputTranscription: { text, finished: true } } });
+    }
     close(code = 1000, reason = '') { this.readyState = 3; this.onclose?.({ code, reason }); }
   }
   window.WebSocket = FixtureLiveSocket;
@@ -123,6 +128,7 @@ function installRecordingFixtures() {
     destination = {};
     createScriptProcessor() {
       const processor = { onaudioprocess: null, connect() {}, disconnect() {} };
+      window.__feedPcm = (input) => processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input }, outputBuffer: { getChannelData: () => new Float32Array(input.length) } });
       window.__speech = { say(text, isFinal) {
         window.__transcriptionQueue.push(text);
         const feed = (input) => processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input }, outputBuffer: { getChannelData: () => new Float32Array(input.length) } });
@@ -163,7 +169,10 @@ function installRecordingFixtures() {
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (url, options) => {
-    if (String(url).endsWith('/api/speech/token')) return Response.json({ token: 'fixture-live-token', websocketUrl: 'wss://fixture.test/live', sessionLimitMs: 600000 });
+    if (String(url).endsWith('/api/speech/token')) {
+      const request = JSON.parse(options.body); window.__liveTokenRequests.push(request);
+      return Response.json({ token: 'fixture-live-token', model: request.model, websocketUrl: 'wss://fixture.test/live', sessionLimitMs: 600000 });
+    }
     if (String(url).endsWith('/api/speech/transcribe')) {
       const form = options.body;
       const mode = form.get('transcriptionMode');
@@ -171,7 +180,7 @@ function installRecordingFixtures() {
       const model = form.get('model') || 'gemini-3.5-transcribe';
       window.__transcriptionRequests.push({ mode, count, model, durationMs: form.get('durationMs'), audioType: form.get('audio').type });
       const text = window.__transcriptionQueue.shift() || '';
-      const turns = model !== 'gemini-3-flash-preview' && mode === 'verbatim' && text ? (window.__nextTurns || [{ text, speakerLabel: 'spk_1', startMs: 0, endMs: Math.min(500, Number(form.get('durationMs'))) }]) : [];
+      const turns = mode === 'verbatim' && text ? (window.__nextTurns || [{ text, speakerLabel: 'spk_1', startMs: 0, endMs: Math.min(500, Number(form.get('durationMs'))) }]) : [];
       window.__nextTurns = null;
       return Response.json({ text, turns, model });
     }
@@ -522,16 +531,16 @@ async function run() {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
-    await page.locator('#speech-provider').selectOption('google-flash');
+    await page.locator('#speech-provider').selectOption('google-flash-live');
     assert.match(await page.locator('#transcription-mode-help').innerText(), /gán Speaker thủ công/);
-    assert.match(await page.locator('body').innerText(), /0,00192 USD/);
+    assert.match(await page.locator('body').innerText(), /0,005 USD/);
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await page.reload();
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('#speech-provider').inputValue(), 'google-flash');
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'google-flash-live');
     await page.getByRole('button', { name: 'Kiểm tra API nhận giọng', exact: true }).click();
-    await page.getByText(/Gemini 3 Flash Preview kết nối thành công/).waitFor();
-    assert.equal(await page.evaluate(() => window.__transcriptionRequests.at(-1).model), 'gemini-3-flash-preview');
+    await page.getByText(/Gemini 3 Flash Live kết nối thành công/).waitFor();
+    assert.equal(await page.evaluate(() => window.__liveTokenRequests.at(-1).model), 'gemini-3.1-flash-live-preview');
     await page.screenshot({ path: path.join(outputDir, 'flash-settings-desktop.png') });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.waitForTimeout(300);
@@ -541,19 +550,33 @@ async function run() {
     await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
     await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
-    await page.getByText('Nhận giọng: Gemini 3 Flash Preview · verbatim', { exact: true }).waitFor();
-    await waitUntil(() => page.evaluate(() => Boolean(window.__speech)), 'Flash PCM fixture starts');
-    await page.evaluate(() => window.__speech.say('私は音楽が好きです。', true));
+    await page.getByText('Nhận giọng: Gemini 3 Flash Live', { exact: true }).waitFor();
+    await waitUntil(() => page.evaluate(() => window.__liveSockets.at(-1)?.setup?.model === 'models/gemini-3.1-flash-live-preview'), 'Flash Live socket setup');
+    assert(await page.evaluate(() => window.__transcriptionRequests.length === 0), 'Flash Live never calls segmented transcription');
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(16000));
+      window.__liveSockets.at(-1).message({ serverContent: { inputTranscription: { text: 'ええ。', finished: true }, outputTranscription: { text: 'invented reply' }, modelTurn: { parts: [{ text: 'invented reply' }] } } });
+    });
+    assert.equal(await page.getByTestId('caption-source').count(), 0, 'Silence and model-generated replies produce no classroom captions');
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(1600).fill(0.2));
+      const socket = window.__liveSockets.at(-1);
+      socket.message({ serverContent: { inputTranscription: { text: '私は音楽が' } } });
+      socket.message({ serverContent: { inputTranscription: { text: '好きです。', finished: true } } });
+    });
     await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
-    assert.equal(await page.evaluate(() => window.__transcriptionRequests.at(-1).model), 'gemini-3-flash-preview');
+    assert.equal(await page.evaluate(() => window.__liveTokenRequests.at(-1).model), 'gemini-3.1-flash-live-preview');
     const flashRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
     const flashCaptions = await storedRows(page, 'captionItems', flashRecordingId);
     assert.equal(flashCaptions[0].source, '私は音楽が好きです。');
     assert.equal(flashCaptions[0].translation, 'Tôi thích âm nhạc.');
     assert.equal(flashCaptions[0].speakerLabel, undefined);
-    check('Flash chọn/lưu/reload, kiểm tra kết nối đúng model, thu PCM → phiên âm → dịch → lưu, giao diện mobile không tràn');
+    assert(await page.evaluate(() => window.__liveSockets.at(-1).readyState === 3), 'Stop closes the Flash Live socket');
+    await page.evaluate(() => window.__liveSockets.at(-1).message({ serverContent: { inputTranscription: { text: 'late phantom text', finished: true } } }));
+    assert.equal(await page.getByTestId('caption-source').count(), 1, 'Late replies after Stop cannot add captions');
+    check('Flash Live chọn/lưu/reload, đúng token và WebSocket, im lặng không sinh chữ, PCM → chữ từng phần → dịch → lưu, Dừng đóng socket, mobile không tràn');
     await page.getByRole('link', { name: 'Cấu hình AI', exact: true }).last().click();
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
     await page.locator('#speech-provider').selectOption('google');

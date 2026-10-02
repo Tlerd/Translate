@@ -195,13 +195,12 @@ export class WebAudioRecorder {
       }
     }
 
-    await Promise.all([...this.pendingChunkWrites]);
-    this.isStopping = false;
-
     if (stream) {
       for (const track of stream.getTracks()) {
         track.stop();
       }
     }
+    await Promise.all([...this.pendingChunkWrites]);
+    this.isStopping = false;
   }
 }

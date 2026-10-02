@@ -168,7 +168,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
         <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
           <span>
             Nhận giọng:{' '}
-            {speechProviderName(state.speechProvider)} · {state.transcriptionMode}
+            {speechProviderName(state.speechProvider)}{state.speechProvider === 'google-flash-live' ? '' : ` · ${state.transcriptionMode}`}
           </span>
           <span title={state.micDeviceLabel ? `Thiết bị micro: ${state.micDeviceLabel}` : undefined}>
             Mic:{' '}

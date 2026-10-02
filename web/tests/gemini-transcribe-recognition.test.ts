@@ -8,19 +8,62 @@ function setup(mode: TranscriptionMode = 'verbatim', speakerCount: SpeakerCount 
   recognizer.start(7);
   return { recognizer, callbacks };
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('unary Gemini transcription', () => {
-  it('sends the selected Flash model with queued PCM segments and preserves final timing', async () => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'Flash transcript', turns: [] }));
+  it('does not create phantom captions from a silent microphone, including while Stop drains', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'ええ。', turns: [] }));
     vi.stubGlobal('fetch', fetcher);
     const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
-    const recognizer = new GeminiTranscribeRecognizer(callbacks, 'ja-JP', 900, 'verbatim', 2, 'gemini-3-flash-preview');
+    const recognizer = new GeminiTranscribeRecognizer(callbacks, 'ja-JP', 900, 'verbatim', 1);
+    recognizer.start(7);
+    for (let second = 0; second < 5; second++) recognizer.pushPcm(new Float32Array(16000), 16000);
+    await recognizer.stop();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(callbacks.onTranscript).not.toHaveBeenCalled();
+  });
+  it('bounds Stop when a speech request stalls and ignores responses arriving after cancellation', async () => {
+    vi.useFakeTimers();
+    let release!: (response: Response) => void;
+    const fetcher = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { release = resolve; }));
+    vi.stubGlobal('fetch', fetcher);
+    const { recognizer, callbacks } = setup();
+    recognizer.pushPcm(new Float32Array(16000).fill(0.2), 16000); recognizer.finalizeUtterance();
+    recognizer.pushPcm(new Float32Array(16000).fill(0.2), 16000);
+    let stopped = false;
+    const stopping = recognizer.stop().then(() => { stopped = true; });
+    await vi.advanceTimersByTimeAsync(20_001);
+    expect(stopped).toBe(true);
+    expect(callbacks.onError).toHaveBeenCalledWith(expect.stringContaining('Audio'), 7);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    release(Response.json({ text: 'late phantom words' }));
+    await stopping;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(callbacks.onTranscript).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
+  });
+  it('preserves recording timestamps when silent segments are skipped', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'speech after silence' }));
+    vi.stubGlobal('fetch', fetcher);
+    const { recognizer, callbacks } = setup();
+    for (let second = 0; second < 5; second++) recognizer.pushPcm(new Float32Array(16000), 16000);
+    recognizer.finalizeUtterance();
+    recognizer.pushPcm(new Float32Array(8000).fill(0.2), 16000);
+    await recognizer.stop();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(callbacks.onTranscript.mock.calls[0][5].startMs).toBeCloseTo(5000, 0);
+    expect(callbacks.onTranscript.mock.calls[0][5].endMs).toBe(5500);
+  });
+  it('sends the Transcribe model with queued PCM segments and preserves final timing', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'Transcribe transcript', turns: [] }));
+    vi.stubGlobal('fetch', fetcher);
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new GeminiTranscribeRecognizer(callbacks, 'ja-JP', 900, 'verbatim', 2);
     recognizer.start(7);
     recognizer.pushPcm(new Float32Array(8000).fill(0.2), 16000);
     await recognizer.stop();
-    expect((fetcher.mock.calls[0][1].body as FormData).get('model')).toBe('gemini-3-flash-preview');
-    expect(callbacks.onTranscript).toHaveBeenCalledWith('Flash transcript', true, 7, 'transcribe_7_1', 1, { startMs: 0, endMs: 500 });
+    expect((fetcher.mock.calls[0][1].body as FormData).get('model')).toBe('gemini-3.5-transcribe');
+    expect(callbacks.onTranscript).toHaveBeenCalledWith('Transcribe transcript', true, 7, 'transcribe_7_1', 1, { startMs: 0, endMs: 500 });
   });
   it('drains the final audio on stop, with a valid independent WAV and original timestamps', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'こんにちは' }));

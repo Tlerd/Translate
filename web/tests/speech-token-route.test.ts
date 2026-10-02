@@ -55,6 +55,24 @@ describe('POST /api/speech/token', () => {
       .toEqual({ languageCodes: ['vi-VN'], mode: 'SMART' });
   });
 
+  it('mints Flash Live credentials for input transcription without Transcribe-only options', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ model: 'gemini-3.1-flash-live-preview', languageCode: 'ja-JP', transcriptionMode: 'smart' }),
+    }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).model).toBe('gemini-3.1-flash-live-preview');
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints).toMatchObject({
+      model: 'gemini-3.1-flash-live-preview', config: { responseModalities: ['AUDIO'], inputAudioTranscription: {} },
+    });
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config.inputAudioTranscription).not.toHaveProperty('mode');
+  });
+
+  it.each(['gemini-3-flash-preview', 'arbitrary-model'])('rejects non-Live model %s before minting credentials', async (model) => {
+    const response = await POST(new Request('http://localhost/api/speech/token', { method: 'POST', body: JSON.stringify({ model }) }));
+    expect(response.status).toBe(400);
+    expect(createToken).not.toHaveBeenCalled();
+  });
+
   it('rejects unsupported modes without minting credentials', async () => {
     const response = await POST(new Request('http://localhost/api/speech/token', {
       method: 'POST', body: JSON.stringify({ transcriptionMode: 'unknown' }),

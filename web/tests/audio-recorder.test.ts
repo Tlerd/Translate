@@ -40,6 +40,7 @@ describe('WebAudioRecorder', () => {
     await recorder.start();
     const stopped = recorder.stop();
     await vi.waitFor(() => expect(chunks).toEqual(['last chunk']));
+    expect(track.stop).toHaveBeenCalledOnce(); // Release the mic while disk writes are still pending.
     finishWrite();
     await stopped;
     expect(track.stop).toHaveBeenCalledOnce();
