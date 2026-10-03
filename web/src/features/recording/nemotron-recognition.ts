@@ -1,3 +1,4 @@
+import { signalWithTimeout } from '@/shared/abort-signal';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
 
@@ -43,7 +44,7 @@ export class NemotronRecognizer {
       const response = await fetch('/api/speech/nemotron/session', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ languageCode, pauseMs: this.pauseMs }), cache: 'no-store',
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(12_000)]),
+        signal: signalWithTimeout(request.signal, 12_000),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message ?? 'Không kết nối được máy chủ Nemotron.');

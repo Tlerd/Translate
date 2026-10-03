@@ -1,3 +1,4 @@
+import { signalWithTimeout } from '@/shared/abort-signal';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { Pcm16kResampler, floatToPcm16 } from './pcm-resampler';
 import { isAllowedSpeakerLabel, TRANSCRIPTION_MODEL, type SpeakerCount, type TranscriptionMode, type TranscriptionTurn } from '@/shared/transcription';
@@ -101,7 +102,7 @@ export class GeminiTranscribeRecognizer {
         form.set('transcriptionMode', transcriptionMode);
         form.set('speakerCount', String(speakerCount));
         form.set('model', TRANSCRIPTION_MODEL);
-        const response = await fetch('/api/speech/transcribe', { method: 'POST', body: form, signal: AbortSignal.any([this.stopAbort.signal, AbortSignal.timeout(60000)]) });
+        const response = await fetch('/api/speech/transcribe', { method: 'POST', body: form, signal: signalWithTimeout(this.stopAbort.signal, 60000) });
         const result = await response.json();
         if (this.cancelled) return;
         if (!response.ok || typeof result.text !== 'string') throw new Error(result.error?.message ?? `HTTP ${response.status}`);

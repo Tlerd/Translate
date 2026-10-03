@@ -1,3 +1,4 @@
+import { signalWithTimeout } from '@/shared/abort-signal';
 import { SONIOX_MODEL, SONIOX_WEBSOCKET_URL, SonioxSpeechError, sonioxErrorRetryable, sonioxLanguage } from '@/shared/soniox';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
@@ -41,7 +42,7 @@ export class SonioxRecognizer {
       const response = await fetch('/api/speech/soniox/session', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
         body: JSON.stringify({ languageCode, recordingId: this.recordingId }),
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(12_000)]),
+        signal: signalWithTimeout(request.signal, 12_000),
       });
       const session = await response.json();
       if (!response.ok) throw new SonioxSpeechError(session?.error?.message ?? 'Không cấp được phiên Soniox.', session?.error?.retryable === true, session?.error?.providerErrorType);
