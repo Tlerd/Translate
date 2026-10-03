@@ -1,9 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalLanguage, inputLanguage, inputLanguages, LIVE_LANGUAGES, searchLanguages, TRANSCRIBE_LANGUAGES } from '@/shared/languages';
+import { canonicalLanguage, inputLanguage, inputLanguages, LIVE_LANGUAGES, NEMOTRON_LANGUAGES, searchLanguages, TRANSCRIBE_LANGUAGES } from '@/shared/languages';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
 describe('model language catalogues', () => {
+  it('restricts the first Soniox integration to Japanese and Vietnamese, including locale aliases', () => {
+    expect(inputLanguages('soniox').map(item => item.code).sort()).toEqual(['ja-JP', 'vi-VN']);
+    for (const code of ['ja', 'ja-JP']) expect(inputLanguage(code, 'soniox')).toBe('ja-JP');
+    for (const code of ['vi', 'vi-VN']) expect(inputLanguage(code, 'soniox')).toBe('vi-VN');
+    expect(inputLanguage('en-US', 'soniox')).toBeNull();
+    expect(inputLanguage('ja_JP', 'soniox')).toBeNull();
+  });
+  it('offers the 32 ready Nemotron locales, including Japanese and Vietnamese, without adaptation-only languages', () => {
+    expect(inputLanguages('nemotron')).toEqual(NEMOTRON_LANGUAGES);
+    expect(NEMOTRON_LANGUAGES).toHaveLength(32);
+    expect(inputLanguage('ja', 'nemotron')).toBe('ja-JP');
+    expect(inputLanguage('vi', 'nemotron')).toBe('vi-VN');
+    expect(inputLanguage('cmn-Hans-CN', 'nemotron')).toBe('zh-CN');
+    expect(inputLanguage('th-TH', 'nemotron')).toBeNull();
+    expect(inputLanguage('el-GR', 'nemotron')).toBeNull();
+  });
   it('deduplicates the documented Transcribe locales, preserving Google codes', () => {
     expect(TRANSCRIBE_LANGUAGES).toHaveLength(83);
     expect(new Set(TRANSCRIBE_LANGUAGES.map(item => item.code)).size).toBe(83);

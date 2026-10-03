@@ -2,6 +2,9 @@ import { queueAudio } from '@/storage/audio-assets';
 import { canonicalLanguage, inputLanguage } from '@/shared/languages';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
+import { NemotronRecognizer } from './nemotron-recognition';
+import { SonioxRecognizer } from './soniox-recognition';
+import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
 import { GeminiTranscribeRecognizer } from './gemini-transcribe-recognition';
 import { GeminiPcmCapture } from './gemini-pcm-capture';
 import { WebAudioRecorder } from './audio-recorder';
@@ -103,7 +106,7 @@ export class ClassroomController {
 
   private listeners: Set<(state: ControllerState) => void> = new Set();
 
-  private speechRecognizer: GeminiTranscribeRecognizer | GeminiLiveRecognizer | null = null;
+  private speechRecognizer: GeminiTranscribeRecognizer | GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer | null = null;
   private pcmCapture: GeminiPcmCapture | null = null;
   private pcmPreparation: Promise<void> | null = null;
   private pcmAttached = false;
@@ -226,7 +229,7 @@ export class ClassroomController {
     const currentEpoch = this.sessionEpoch;
 
     const mode = options.mode || this.state.mode;
-    const transcriptionMode = options.transcriptionMode ?? this.state.transcriptionMode;
+    const transcriptionMode = ['nemotron', 'soniox'].includes(options.speechProvider ?? this.state.speechProvider) ? 'verbatim' : options.transcriptionMode ?? this.state.transcriptionMode;
     const speakerCount = options.speakerCount ?? this.state.speakerCount;
     const speechProvider = options.speechProvider ?? this.state.speechProvider;
     const sourceLanguage = inputLanguage(options.sourceLanguage || this.state.sourceLanguage, speechProvider);
@@ -504,10 +507,14 @@ export class ClassroomController {
             endMs: currentMs,
           });
         },
-        onError: (err, epoch) => {
+        onError: (err, epoch, details) => {
           if (epoch !== this.sessionEpoch) return;
           this.state.error = err;
-          if (isLiveSpeechProvider(this.state.speechProvider)) { this.pcmReady = false; this.scheduleGoogleRetry(epoch, sourceLanguage); }
+          if (isLiveSpeechProvider(this.state.speechProvider)) {
+            this.pcmReady = false;
+            if (details?.retryable === false) this.clearSpeechTimers();
+            else this.scheduleGoogleRetry(epoch, sourceLanguage);
+          }
           this.notify();
         },
         onStateChange: (speechState) => {
@@ -553,6 +560,16 @@ export class ClassroomController {
           }
         };
 
+        if (this.state.speechProvider === 'soniox') {
+          forwardPcm({ samples, rate, startMs });
+          if (isVoice) { this.pcmLastVoiceTime = now; this.pcmVoiceActive = true; }
+          else if (this.pcmVoiceActive && now - this.pcmLastVoiceTime > (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)) {
+            this.pcmVoiceActive = false;
+            this.speechRecognizer?.finalizeUtterance();
+          }
+          return;
+        }
+
         if (isVoice) {
           this.pcmLastVoiceTime = now;
           if (!this.pcmVoiceActive) {
@@ -567,7 +584,10 @@ export class ClassroomController {
         } else {
           // Below threshold
           if (this.pcmVoiceActive) {
-            if (now - this.pcmLastVoiceTime <= 900) {
+            const silenceMs = this.state.speechProvider === 'nemotron'
+              ? (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
+              : 900;
+            if (now - this.pcmLastVoiceTime <= silenceMs) {
               forwardPcm({ samples, rate, startMs });
             } else {
               this.pcmVoiceActive = false;
@@ -593,10 +613,10 @@ export class ClassroomController {
         await this.startTranscriber(currentEpoch);
       }
       catch (err) {
-        this.state.error = `Nhận giọng Gemini chưa hoạt động: ${err instanceof Error ? err.message : String(err)}. Audio đang được lưu trên máy.`;
+        this.state.error = `Nhận giọng chưa hoạt động: ${err instanceof Error ? err.message : String(err)}. Audio đang được lưu trên máy.`;
         this.state.speechState = 'stopped'; this.notify();
-        if (this.pcmAttached && isLiveSpeechProvider(this.state.speechProvider)) this.scheduleGoogleRetry(currentEpoch, this.state.sourceLanguage);
-        else { this.state.micState = 'suspended'; this.notify(); }
+        if (this.pcmAttached && isLiveSpeechProvider(this.state.speechProvider) && canRetrySpeech(err)) this.scheduleGoogleRetry(currentEpoch, this.state.sourceLanguage);
+        else if (!this.pcmAttached) { this.state.micState = 'suspended'; this.notify(); }
       }
     }
 
@@ -605,15 +625,15 @@ export class ClassroomController {
 
   private captionRevisions = new Map<number, number>();
   private pushRecognitionAudio(item: CapturedPcm) {
-    if (this.speechRecognizer instanceof GeminiTranscribeRecognizer) this.speechRecognizer.pushPcm(item.samples, item.rate, item.startMs);
+    if (this.speechRecognizer instanceof GeminiTranscribeRecognizer || this.speechRecognizer instanceof SonioxRecognizer) this.speechRecognizer.pushPcm(item.samples, item.rate, item.startMs);
     else this.speechRecognizer?.pushPcm(item.samples, item.rate);
   }
   private callbacksForRecognizer(isCurrent: () => boolean): SpeechRecognitionCallbacks {
     const callbacks = this.speechCallbacks!;
     return {
       ...callbacks,
-      onError: (message, epoch) => {
-        if (isCurrent()) callbacks.onError(message, epoch);
+      onError: (message, epoch, details) => {
+        if (isCurrent()) callbacks.onError(message, epoch, details);
       },
       onStateChange: (speechState) => {
         if (isCurrent()) callbacks.onStateChange(speechState);
@@ -654,9 +674,14 @@ export class ClassroomController {
     try {
     this.state.speechState = 'reconnecting'; this.notify();
     // The callback closes over the instance so only that instance can update UI state.
-    let recognizer!: GeminiLiveRecognizer;
     // eslint-disable-next-line prefer-const
-    recognizer = new GeminiLiveRecognizer(this.callbacksForRecognizer(() => this.speechRecognizer === recognizer), language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
+    let recognizer!: GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer;
+    const callbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
+    recognizer = this.state.speechProvider === 'soniox'
+      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined)
+      : this.state.speechProvider === 'nemotron'
+      ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
+      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
     this.speechRecognizer = recognizer;
     await recognizer.start(epoch, language);
     if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
@@ -670,9 +695,9 @@ export class ClassroomController {
       void recognizer.stop().then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
         this.state.error = `Không nối lại được nhận giọng: ${error instanceof Error ? error.message : String(error)}. Audio vẫn được lưu.`;
         this.notify();
-        this.scheduleGoogleRetry(epoch, language);
+        if (canRetrySpeech(error)) this.scheduleGoogleRetry(epoch, language);
       });
-    }, 8.5 * 60_000);
+    }, this.state.speechProvider === 'soniox' ? SONIOX_RENEW_AFTER_MS : 8.5 * 60_000);
     } finally { this.googleConnecting = false; }
   }
   private scheduleGoogleRetry(epoch: number, language: string): void {
@@ -687,7 +712,7 @@ export class ClassroomController {
       const old = this.speechRecognizer;
       void Promise.resolve(old?.stop(0)).then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
         this.state.error = `Chưa nối lại được nhận giọng (${this.speechRetries}/3): ${error instanceof Error ? error.message : String(error)}. Audio vẫn lưu trên máy.`;
-        this.notify(); this.scheduleGoogleRetry(epoch, language);
+        this.notify(); if (canRetrySpeech(error)) this.scheduleGoogleRetry(epoch, language);
       });
     }, Math.min(1000 * 2 ** this.speechRetries, 4000));
   }
@@ -706,6 +731,7 @@ export class ClassroomController {
       return;
     }
     this.state.speechProvider = provider;
+    if (provider === 'nemotron' || provider === 'soniox') this.state.transcriptionMode = 'verbatim';
     if (this.state.state !== 'recording') this.state.sourceLanguage = sourceLanguage ?? inputLanguage('ja-JP', provider)!;
     if (this.apiState !== 'paused' && this.apiState !== 'pausing') {
       this.restartRecognizer();
@@ -732,7 +758,7 @@ export class ClassroomController {
   }
 
   public setTranscriptionSettings(settings: { transcriptionMode?: TranscriptionMode; speakerCount?: SpeakerCount }): void {
-    const transcriptionMode = normalizeTranscriptionMode(settings.transcriptionMode ?? this.state.transcriptionMode);
+    const transcriptionMode = ['nemotron', 'soniox'].includes(this.state.speechProvider) ? 'verbatim' : normalizeTranscriptionMode(settings.transcriptionMode ?? this.state.transcriptionMode);
     const speakerCount = settings.speakerCount ?? this.state.speakerCount;
     if (!isSpeakerCount(speakerCount)) throw new Error('Bắt buộc chọn số người nói từ 1 đến 8.');
     const modeChanged = transcriptionMode !== this.state.transcriptionMode;
@@ -763,7 +789,7 @@ export class ClassroomController {
       if (epoch !== this.sessionEpoch || this.state.state !== 'recording') return;
       if (!this.hasPendingTranscript) return;
       const closedBlock = this.activeBlockId;
-      if (this.speechRecognizer instanceof GeminiLiveRecognizer) this.speechRecognizer.finalizeUtterance();
+      if (this.speechRecognizer instanceof GeminiLiveRecognizer || this.speechRecognizer instanceof NemotronRecognizer || this.speechRecognizer instanceof SonioxRecognizer) this.speechRecognizer.finalizeUtterance();
       this.assembler?.handleBlockClosed(closedBlock);
       this.scheduler?.onBlockClosed(closedBlock);
       this.hasPendingTranscript = false;
@@ -831,8 +857,9 @@ export class ClassroomController {
   }
 
   public async pauseApi(): Promise<void> {
-    const task = this.apiActionChain.then(() => this.pauseApiInternal());
-    this.apiActionChain = task.catch(() => undefined);
+    // Cut input now, including while a resume is awaiting its socket handshake.
+    const task = this.pauseApiInternal();
+    this.apiActionChain = Promise.all([this.apiActionChain, task]).then(() => undefined).catch(() => undefined);
     return task;
   }
 
@@ -853,11 +880,17 @@ export class ClassroomController {
     this.clearSilenceTimer();
     this.clearSpeechTimers();
 
+    if (this.state.speechProvider === 'soniox' && this.state.mode === 'readingPractice' && this.hasPendingTranscript) {
+      this.assembler?.handleBlockClosed(this.activeBlockId);
+      this.scheduler?.onBlockClosed(this.activeBlockId++);
+      this.hasPendingTranscript = false;
+    }
+
     // 2. Finalize utterance for speech spoken prior to pause
     const oldRecognizer = this.speechRecognizer;
     if (oldRecognizer) {
       try {
-        if (this.speechRecognizer instanceof GeminiTranscribeRecognizer || this.speechRecognizer instanceof GeminiLiveRecognizer) {
+        if (this.speechRecognizer instanceof GeminiTranscribeRecognizer || this.speechRecognizer instanceof GeminiLiveRecognizer || this.speechRecognizer instanceof NemotronRecognizer || this.speechRecognizer instanceof SonioxRecognizer) {
           this.speechRecognizer.finalizeUtterance();
         }
       } catch (err) {
@@ -909,9 +942,11 @@ export class ClassroomController {
     try {
       await this.startTranscriber(this.sessionEpoch, resumeTimeMs);
     } catch (err) {
+      if ((this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing' || this.stopping) return;
       this.state.error = `Không nối lại được nhận giọng: ${err instanceof Error ? err.message : String(err)}`;
       this.state.speechState = 'stopped';
       this.notify();
+      if (canRetrySpeech(err) && isLiveSpeechProvider(this.state.speechProvider)) this.scheduleGoogleRetry(this.sessionEpoch, this.state.sourceLanguage);
     }
   }
 
@@ -1149,6 +1184,7 @@ export class ClassroomController {
     if (this.state.pauseMs === pauseMs) return;
     this.state.pauseMs = pauseMs;
     if (this.state.mode === 'lecture') (this.speechRecognizer instanceof GeminiTranscribeRecognizer ? this.speechRecognizer : null)?.updateSettings({ pauseMs });
+    if (this.state.mode === 'lecture' && this.state.speechProvider === 'nemotron') this.restartRecognizer();
     if (this.state.mode === 'lecture' && this.state.state === 'recording' && this.hasPendingTranscript && this.silenceTimer) {
       this.clearSilenceTimer();
       this.scheduleSilenceClose(this.sessionEpoch);
@@ -1161,6 +1197,7 @@ export class ClassroomController {
     if (this.state.readingPauseMs === readingPauseMs) return;
     this.state.readingPauseMs = readingPauseMs;
     if (this.state.mode === 'readingPractice') (this.speechRecognizer instanceof GeminiTranscribeRecognizer ? this.speechRecognizer : null)?.updateSettings({ pauseMs: readingPauseMs });
+    if (this.state.mode === 'readingPractice' && this.state.speechProvider === 'nemotron') this.restartRecognizer();
     if (this.state.mode === 'readingPractice' && this.state.state === 'recording' && this.hasPendingTranscript && this.silenceTimer) {
       this.clearSilenceTimer();
       this.scheduleSilenceClose(this.sessionEpoch);
@@ -1172,6 +1209,7 @@ export class ClassroomController {
     if (this.state.mode === mode) return;
     this.state.mode = mode;
     (this.speechRecognizer instanceof GeminiTranscribeRecognizer ? this.speechRecognizer : null)?.updateSettings({ pauseMs: mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs });
+    if (this.state.speechProvider === 'nemotron') this.restartRecognizer();
     this.assembler?.switchMode(mode);
     this.notify();
   }

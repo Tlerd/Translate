@@ -183,7 +183,15 @@ export class LiveTranslationScheduler {
       endMs: snapshot.endMs,
     });
 
-    if (!snapshot.text.trim()) return;
+    if (!snapshot.text.trim()) {
+      if (this.pendingSnapshot?.captionId === captionId) {
+        this.pendingSnapshot = null;
+        this.pendingSnapshotTime = null;
+      }
+      this.maybeSchedule();
+      this.resolveIdleIfReady();
+      return;
+    }
 
     // If final transcript meaning matches already translated text, reuse result
     const translatedSource = this.translatedSourceByCaption.get(captionId);

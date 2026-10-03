@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "speech:nemotron:setup": "pwsh -NoProfile -File scripts/setup-nemotron.ps1",
+    "speech:nemotron": "node scripts/start-nemotron.mjs",
+    "speech:nemotron:gateway": "node scripts/nemotron-gateway.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -10,6 +13,7 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "test:browser": "node scripts/browser-smoke.cjs",
+    "test:nemotron:browser": "node scripts/nemotron-browser-smoke.cjs",
     "test:auth": "node scripts/auth-smoke.cjs",
     "test:audio": "node scripts/audio-smoke.cjs"
   },
@@ -28,6 +32,7 @@
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "sharp": "^0.33.5",
+    "ws": "^8.22.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

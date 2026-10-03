@@ -12,6 +12,7 @@ interface PcmCaptureFixture {
 interface GoogleRecognizerFixture {
   mode?: string;
   model?: string;
+  pauseMs?: number;
   callbacks: GoogleCallbacks;
   epoch: number;
   pushes: Array<{ samples: Float32Array; rate: number; startMs?: number }>;
@@ -30,6 +31,7 @@ const shared = vi.hoisted(() => ({
   events: [] as string[],
   recognizers: [] as GoogleRecognizerFixture[],
   liveRecognizers: [] as GoogleRecognizerFixture[],
+  nemotronRecognizers: [] as GoogleRecognizerFixture[],
   captures: [] as PcmCaptureFixture[],
   recorders: [] as RecorderFixture[],
   createRecording: vi.fn(),
@@ -86,6 +88,24 @@ vi.mock('@/features/recording/gemini-live-recognition', () => ({
       await this.stopImpl();
     }
     emit(text: string, isFinal: boolean, itemId = 'gemini-item-1', revision = 1) {
+      this.callbacks.onTranscript(text, isFinal, this.epoch, itemId, revision);
+    }
+  },
+}));
+
+vi.mock('@/features/recording/nemotron-recognition', () => ({
+  NemotronRecognizer: class {
+    epoch = 0;
+    pushes: Array<{ samples: Float32Array; rate: number }> = [];
+    stopImpl: () => Promise<void> = async () => undefined;
+    finalOnStop: (() => void) | null = null;
+    updateSettings = vi.fn();
+    constructor(public callbacks: GoogleCallbacks, _language: string, public pauseMs: number) { shared.nemotronRecognizers.push(this); }
+    async start(epoch: number) { this.epoch = epoch; shared.events.push('nemotron.start'); }
+    pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
+    finalizeUtterance() {}
+    async stop() { shared.events.push('nemotron.stop'); this.finalOnStop?.(); await this.stopImpl(); }
+    emit(text: string, isFinal: boolean, itemId = 'nemotron-item-1', revision = 1) {
       this.callbacks.onTranscript(text, isFinal, this.epoch, itemId, revision);
     }
   },
@@ -152,6 +172,7 @@ describe('ClassroomController Google speech integration', () => {
 
   beforeEach(() => {
     shared.liveRecognizers.length = 0;
+    shared.nemotronRecognizers.length = 0;
     shared.events.length = 0; shared.recognizers.length = 0; shared.captures.length = 0; shared.recorders.length = 0;
     shared.createRecording.mockReset().mockResolvedValue(recording);
     shared.updateRecording.mockReset().mockResolvedValue(undefined);
@@ -170,6 +191,60 @@ describe('ClassroomController Google speech integration', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers();
+  });
+
+  it('streams Nemotron through the shared microphone and persists its final tail on Stop', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'nemotron', transcriptionMode: 'smart' });
+    expect(controller.snapshot().transcriptionMode).toBe('verbatim');
+    const recognizer = shared.nemotronRecognizers[0];
+    shared.captures[0].emit();
+    expect(recognizer.pushes).toHaveLength(1);
+    recognizer.emit('Xin chào', false);
+    recognizer.finalOnStop = () => recognizer.emit('Xin chào Việt Nam.', true, 'nemotron-item-1', 2);
+    await controller.stop();
+    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'Xin chào Việt Nam.', isFinal: true });
+    expect(shared.saveCaption).toHaveBeenCalledWith(expect.objectContaining({ source: 'Xin chào Việt Nam.', isFinal: true }));
+    expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+
+  it('switches into and out of Nemotron, draining each old provider with one microphone', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google' });
+    const google = shared.liveRecognizers[0];
+    google.finalOnStop = () => google.emit('Google final.', true, 'old-google');
+    controller.setSpeechProvider('nemotron');
+    await vi.waitFor(() => expect(shared.nemotronRecognizers).toHaveLength(1));
+    shared.captures[0].emit();
+    const nemotron = shared.nemotronRecognizers[0];
+    expect(nemotron.pushes).toHaveLength(1);
+    nemotron.finalOnStop = () => nemotron.emit('Nemotron final.', true, 'old-nemotron');
+    controller.setSpeechProvider('google-transcribe');
+    await vi.waitFor(() => expect(shared.recognizers).toHaveLength(1));
+    await controller.stop();
+    expect(controller.snapshot().captions.map(caption => caption.source)).toEqual(['Google final.', 'Nemotron final.']);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+
+  it('reissues Nemotron configuration for pause changes and resumes after an API pause without reopening the microphone', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'nemotron' });
+    controller.setPauseMs(2400);
+    await vi.waitFor(() => expect(shared.nemotronRecognizers).toHaveLength(2));
+    expect(shared.nemotronRecognizers[1].pauseMs).toBe(2400);
+    controller.setReadingPauseMs(3600);
+    controller.switchMode('readingPractice');
+    await vi.waitFor(() => expect(shared.nemotronRecognizers).toHaveLength(3));
+    expect(shared.nemotronRecognizers[2].pauseMs).toBe(3600);
+    await controller.pauseApi();
+    shared.captures[0].emit();
+    expect(shared.nemotronRecognizers[2].pushes).toHaveLength(0);
+    await controller.resumeApi();
+    expect(shared.nemotronRecognizers).toHaveLength(4);
+    shared.captures[0].emit();
+    expect(shared.nemotronRecognizers[3].pushes).toHaveLength(1);
+    await controller.stop();
+    expect(getUserMedia).toHaveBeenCalledOnce();
   });
 
   it('routes Flash through Live and releases capture while a previous recognizer change is draining', async () => {

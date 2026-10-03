@@ -52,6 +52,7 @@ async function run() {
       await page.waitForURL('**/login');
       await page.getByRole('button', { name: 'Tiếp tục với Google' }).waitFor();
     }
+    assert.equal((await ctx.request.post(base + '/api/speech/nemotron/session', { data: { languageCode: 'vi-VN' } })).status(), 401);
     console.log('PASS public landing and anonymous protected routes');
     const cookie = 'authjs.session-token';
     for (const [label, value] of [
@@ -63,6 +64,7 @@ async function run() {
       await ctx.addCookies([{ name: cookie, value, url: base, httpOnly: true, sameSite: 'Lax' }]);
       await page.goto(base + '/app');
       await page.waitForURL('**/login');
+      assert.equal((await ctx.request.post(base + '/api/speech/nemotron/session', { data: { languageCode: 'vi-VN' } })).status(), 401);
       console.log(`PASS rejects ${label} session`);
     }
     await ctx.clearCookies();

@@ -1,4 +1,6 @@
 import type { SpeechProvider } from './transcription';
+import { NEMOTRON_LOCALES } from './nemotron';
+import { SONIOX_LOCALES } from './soniox';
 
 // Snapshot of Google's model-specific tables, checked 2026-10-03.
 // https://ai.google.dev/gemini-api/docs/transcribe#supported-languages
@@ -33,8 +35,12 @@ function catalogue(codes: string[]): LanguageOption[] {
 }
 export const TRANSCRIBE_LANGUAGES = catalogue(transcribeCodes);
 export const LIVE_LANGUAGES = catalogue(liveCodes);
+export const NEMOTRON_LANGUAGES = catalogue(NEMOTRON_LOCALES);
+export const SONIOX_LANGUAGES = catalogue(SONIOX_LOCALES);
 export const OUTPUT_LANGUAGES = catalogue([...transcribeCodes, ...liveCodes]);
 export function inputLanguages(provider: SpeechProvider): LanguageOption[] {
+  if (provider === 'soniox') return SONIOX_LANGUAGES;
+  if (provider === 'nemotron') return NEMOTRON_LANGUAGES;
   return provider === 'google-flash-live' ? LIVE_LANGUAGES : TRANSCRIBE_LANGUAGES;
 }
 export function inputLanguage(code: string, provider: SpeechProvider): string | null {
@@ -43,6 +49,7 @@ export function inputLanguage(code: string, provider: SpeechProvider): string | 
   const list = inputLanguages(provider);
   const exact = list.find(item => item.code === canonical);
   if (exact) return exact.code;
+  if (provider === 'nemotron' && ['cmn-Hans-CN', 'zh-Hans', 'zh'].includes(canonical)) return 'zh-CN';
   const aliases: Record<string, string> = { 'zh-Hans': 'cmn-Hans-CN', 'cmn-Hans-CN': 'zh-Hans' };
   const alias = list.find(item => item.code === aliases[canonical]);
   return alias?.code ?? list.find(item => item.code.split('-')[0] === canonical.split('-')[0])?.code ?? null;

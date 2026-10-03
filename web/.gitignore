@@ -31,3 +31,6 @@ Thumbs.db
 
 # Browser regression artifacts
 test-results/
+
+# Downloaded Nemotron runtime and model weights
+.cache/nemotron/

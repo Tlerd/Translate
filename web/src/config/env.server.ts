@@ -1,6 +1,11 @@
 import 'server-only';
 
 export interface ServerEnv {
+  SONIOX_API_KEY?: string;
+  NEMOTRON_BASE_URL?: string;
+  NEMOTRON_WEBSOCKET_URL?: string;
+  NEMOTRON_GATEWAY_SECRET?: string;
+  NEMOTRON_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   OPENAI_API_KEY?: string;
   SUMMARY_GOOGLE_API_KEY?: string;
@@ -21,6 +26,11 @@ export interface ServerEnv {
 
 export function getServerEnv(): ServerEnv {
   return {
+    SONIOX_API_KEY: process.env.SONIOX_API_KEY?.trim() || undefined,
+    NEMOTRON_BASE_URL: process.env.NEMOTRON_BASE_URL?.trim() || undefined,
+    NEMOTRON_WEBSOCKET_URL: process.env.NEMOTRON_WEBSOCKET_URL?.trim() || undefined,
+    NEMOTRON_GATEWAY_SECRET: process.env.NEMOTRON_GATEWAY_SECRET?.trim() || undefined,
+    NEMOTRON_API_KEY: process.env.NEMOTRON_API_KEY?.trim() || undefined,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY?.trim() || undefined,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || undefined,
     SUMMARY_GOOGLE_API_KEY: process.env.SUMMARY_GOOGLE_API_KEY?.trim() || undefined,

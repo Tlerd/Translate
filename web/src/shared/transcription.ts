@@ -2,15 +2,17 @@ export const TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe';
 export const LIVE_TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe-live';
 export const FLASH_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 export type LiveSpeechModel = typeof LIVE_TRANSCRIPTION_MODEL | typeof FLASH_LIVE_MODEL;
-export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash-live';
+export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash-live' | 'nemotron' | 'soniox';
 
 export function normalizeSpeechProvider(value: unknown): SpeechProvider {
+  if (value === 'soniox') return 'soniox';
+  if (value === 'nemotron') return 'nemotron';
   if (value === 'google-flash' || value === 'google-flash-live') return 'google-flash-live';
   return value === 'google' ? value : 'google-transcribe';
 }
 
 export function isLiveSpeechProvider(provider: SpeechProvider): boolean {
-  return provider === 'google' || provider === 'google-flash-live';
+  return provider === 'google' || provider === 'google-flash-live' || provider === 'nemotron' || provider === 'soniox';
 }
 
 export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechModel {
@@ -18,6 +20,8 @@ export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechMode
 }
 
 export function speechProviderName(provider: SpeechProvider): string {
+  if (provider === 'soniox') return 'Soniox · stt-rt-v5';
+  if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
   if (provider === 'google-flash-live') return 'Gemini 3 Flash Live';
   return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
 }

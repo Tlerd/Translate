@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Activity, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { GeminiLiveRecognizer } from '@/features/recording/gemini-live-recognition';
+import { NemotronRecognizer } from '@/features/recording/nemotron-recognition';
+import { SonioxRecognizer } from '@/features/recording/soniox-recognition';
 import { pcmWav } from '@/features/recording/gemini-transcribe-recognition';
 import { useRecording } from '@/features/recording/recording-context';
 import {
@@ -19,42 +21,49 @@ export function SpeechConnectionTest() {
     message: string;
   }>({
     state: 'idle',
-    message: 'Kiểm tra quyền dùng model nhận giọng và kết nối đến Google AI.',
+    message: 'Kiểm tra kết nối tới bộ nhận giọng đã chọn.',
   });
   const request = useRef<AbortController | null>(null);
   const active = useRef(true);
-  const live = useRef<GeminiLiveRecognizer | null>(null);
+  const live = useRef<GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer | null>(null);
+  const generation = useRef(0);
 
   useEffect(() => {
+    const testGeneration = generation;
     active.current = true;
+    setResult({ state: 'idle', message: 'Kiểm tra kết nối tới bộ nhận giọng đã chọn.' });
     return () => {
+      testGeneration.current++;
       active.current = false;
       request.current?.abort();
       void live.current?.stop(0);
     };
-  }, []);
+  }, [state.speechProvider]);
 
   const check = async () => {
-    setResult({ state: 'checking', message: 'Đang kiểm tra Gemini nhận giọng…' });
+    const checkingGeneration = ++generation.current;
+    const isCurrent = () => active.current && generation.current === checkingGeneration;
+    setResult({ state: 'checking', message: `Đang kiểm tra ${speechProviderName(state.speechProvider)}…` });
     const startedAt = Date.now();
     const abort = new AbortController();
     request.current = abort;
     try {
       if (isLiveSpeechProvider(state.speechProvider)) {
-        const recognizer = new GeminiLiveRecognizer(
-          {
+        const callbacks = {
             onTranscript: () => undefined,
             onError: () => undefined,
             onStateChange: () => undefined,
-          },
-          state.sourceLanguage,
-          state.transcriptionMode,
-          liveTranscriptionModel(state.speechProvider)
-        );
+          };
+        const recognizer = state.speechProvider === 'soniox'
+          ? new SonioxRecognizer(callbacks, state.sourceLanguage)
+          : state.speechProvider === 'nemotron'
+          ? new NemotronRecognizer(callbacks, state.sourceLanguage, state.mode === 'readingPractice' ? state.readingPauseMs : state.pauseMs)
+          : new GeminiLiveRecognizer(callbacks, state.sourceLanguage, state.transcriptionMode, liveTranscriptionModel(state.speechProvider));
         live.current = recognizer;
         try {
-          await recognizer.start(0);
-          if (active.current) {
+          if (recognizer instanceof SonioxRecognizer) await recognizer.testConnection();
+          else await recognizer.start(0);
+          if (isCurrent()) {
             setResult({
               state: 'done',
               message: `${speechProviderName(state.speechProvider)} kết nối thành công (${
@@ -83,7 +92,7 @@ export function SpeechConnectionTest() {
       if (!response.ok || typeof payload.text !== 'string') {
         throw new Error(payload.error?.message ?? `HTTP ${response.status}`);
       }
-      if (active.current) {
+      if (isCurrent()) {
         setResult({
           state: 'done',
           message: `${speechProviderName(state.speechProvider)} kết nối thành công (${
@@ -92,11 +101,11 @@ export function SpeechConnectionTest() {
         });
       }
     } catch (error) {
-      if (active.current) {
+      if (isCurrent()) {
         setResult({
           state: 'error',
           message:
-            error instanceof Error ? error.message : 'Chưa kết nối được Gemini nhận giọng.',
+            error instanceof Error ? error.message : 'Chưa kết nối được bộ nhận giọng.',
         });
       }
     } finally {
@@ -140,13 +149,21 @@ export function SpeechConnectionTest() {
             Kiểm Tra Kết Nối Nhận Diện Giọng Nói
           </h2>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Xác thực khóa Google API và quyền gọi WebSocket / Transcribe API
+            {state.speechProvider === 'soniox'
+              ? 'Xác thực khóa tạm và xử lý audio Soniox'
+              : state.speechProvider === 'nemotron'
+              ? 'Kiểm tra máy chủ Nemotron đã cấu hình'
+              : 'Xác thực khóa Google API và quyền gọi WebSocket / Transcribe API'}
           </span>
         </div>
       </div>
 
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
-        {isLiveSpeechProvider(state.speechProvider)
+        {state.speechProvider === 'soniox'
+          ? 'Gửi 1 giây PCM im lặng tổng hợp, không bật micro; chỉ thành công khi Soniox xác nhận finished. Lượt kiểm tra có thể tính phí Soniox.'
+          : state.speechProvider === 'nemotron'
+          ? 'Mở kết nối nhận giọng với máy chủ Nemotron để kiểm tra model sẵn sàng, không bật micro.'
+          : isLiveSpeechProvider(state.speechProvider)
           ? 'Mở phiên Gemini Live bằng token tạm để kiểm tra quyền dùng model, không bật micro.'
           : `Gửi 1 giây audio im lặng tới ${speechProviderName(
               state.speechProvider

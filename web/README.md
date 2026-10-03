@@ -24,6 +24,8 @@
 
 ### Nhận giọng và người nói
 
+**Nemotron 3.5 ASR + NeMo-Speech.cpp** đã có trong ô chọn **Nhận giọng**, dùng WebSocket với máy chủ riêng. Hỗ trợ 32 locale dùng ngay, gồm Việt và Nhật, không cần huấn luyện lại; phần dịch chữ vẫn dùng model dịch đã chọn. Xem [hướng dẫn cài, chạy GPU/CPU và kết nối web đã deploy](docs/NEMOTRON-STT.md).
+
 Web hỗ trợ `gemini-3.5-transcribe-live` và **Gemini 3 Flash Live** (`gemini-3.1-flash-live-preview`) qua Live API WebSocket; `gemini-3.5-transcribe` qua Interactions API theo đoạn. Flash Live dùng token tạm bị ràng buộc đúng model, bật inputAudioTranscription và chỉ hiển thị lời nói đầu vào; bỏ qua câu trả lời và audio do model sinh. Flash Live không dùng chế độ verbatim/smart chuyên biệt của Transcribe và gán Speaker thủ công. Cấu hình cũ `google-flash` được tự chuyển sang `google-flash-live`, không còn dùng Generate Content cho nhận giọng Flash. Audio vào Flash Live ≈0,005 USD/phút; chữ ra 4,50 USD/triệu token và audio sinh thêm 0,018 USD/phút nếu có, chưa gồm dịch. Dừng ngắt thu PCM ngay; Live chờ kết quả cuối tối đa 5 giây, Transcribe theo đoạn tối đa 20 giây rồi hủy phần nhận giọng còn chờ (audio vẫn lưu). Đoạn im lặng không được gửi đi phiên âm. Với Flash Live, chốt câu theo khoảng nghỉ của lớp học và mở mã câu mới khi micro nhận lời nói tiếp; đuôi ASR đến muộn trước khi nói lại sửa câu vừa chốt. Không dùng turnComplete của câu trả lời model làm dấu kết thúc phiên âm đầu vào vì hai luồng không đảm bảo thứ tự.
 
 
@@ -177,3 +179,8 @@ Các adapter không tự tạo kết quả giả khi thiếu API key. Test offli
 - **Vercel Production URL:** [translate-ruby-phi.vercel.app/app](https://translate-ruby-phi.vercel.app/app)
 - **Quy trình:**
   Mọi commit đẩy lên nhánh `main` của repository GitHub sẽ tự động kích hoạt tiến trình build và deploy trên Vercel theo thiết lập Git integration.
+# Soniox STT trực tiếp
+
+Ô nhận giọng có **Soniox · stt-rt-v5** cho Nhật/Việt. Key `SONIOX_API_KEY` chỉ đặt phía server; dùng `node scripts/soniox-key-setup.cjs` để mở form localhost và lưu vào `.env.local`, rồi khởi động lại server. Chọn Soniox và Lưu trước khi kiểm tra. Test kết nối gửi 1 giây audio im lặng, có thể tính phí và không bật mic.
+
+STT dự toán ~0,12 USD/giờ phiên, thực tế theo token/thời gian stream mở; phí dịch chữ tính riêng theo model đang chọn. Dừng API đóng stream nhưng audio vẫn ghi; Tiếp tục mở phiên mới. Xem [hướng dẫn Soniox](docs/SONIOX-STT.md) về cấu hình, thao tác, fixture và phần chưa thử với provider/Safari thật.

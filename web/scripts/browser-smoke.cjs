@@ -71,16 +71,35 @@ function installRecordingFixtures() {
   window.__transcriptionQueue = [];
   window.__transcriptionRequests = [];
   window.__liveSockets = [];
+  window.__sonioxSockets = [];
+  window.__sonioxSessions = [];
+  window.__micCalls = 0;
   window.__liveTokenRequests = [];
+  window.__NativeAudioContext = window.AudioContext;
+  window.__NativeMediaRecorder = window.MediaRecorder;
   const NativeWebSocket = window.WebSocket;
   class FixtureLiveSocket {
     constructor(url, protocols) {
+      if (String(url) === 'wss://stt-rt.soniox.com/transcribe-websocket') {
+        this.readyState = 0; this.bufferedAmount = 0; this.soniox = true; this.frames = 0;
+        window.__sonioxSockets.push(this);
+        setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0);
+        return;
+      }
       if (!String(url).startsWith('wss://fixture.test/')) return new NativeWebSocket(url, protocols);
       this.readyState = 0; this.bufferedAmount = 0;
       window.__liveSockets.push(this);
       setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0);
     }
     send(raw) {
+      if (this.soniox) {
+        if (typeof raw !== 'string') { this.frames++; return; }
+        if (raw === '') { setTimeout(() => this.message({ finished: true }), 10); return; }
+        const message = JSON.parse(raw);
+        if (message.api_key) this.config = message;
+        if (message.type === 'finalize') this.message({ tokens: [{ text: '<fin>', is_final: true }] });
+        return;
+      }
       const message = JSON.parse(raw);
       if (message.setup) {
         this.mode = message.setup.inputAudioTranscription.mode;
@@ -105,7 +124,7 @@ function installRecordingFixtures() {
       this.state = 'inactive';
       queueMicrotask(() => {
         const event = new Event('dataavailable');
-        Object.defineProperty(event, 'data', { value: new Blob(['final-audio-fixture'], { type: 'audio/webm' }) });
+        Object.defineProperty(event, 'data', { value: window.__validAudioBlob || new Blob(['final-audio-fixture'], { type: 'audio/webm' }) });
         this.dispatchEvent(event);
         this.ondataavailable?.(event);
         const stop = new Event('stop');
@@ -119,7 +138,7 @@ function installRecordingFixtures() {
   fixtureTrack.stop = () => {};
   const fixtureStream = { getTracks: () => [fixtureTrack], getAudioTracks: () => [fixtureTrack] };
   Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-    configurable: true, value: async () => fixtureStream,
+    configurable: true, value: async () => { window.__micCalls++; return fixtureStream; },
   });
   class FixtureAudioContext {
     state = 'suspended';
@@ -169,6 +188,10 @@ function installRecordingFixtures() {
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (url, options) => {
+    if (String(url).endsWith('/api/speech/soniox/session')) {
+      window.__sonioxSessions.push(JSON.parse(options.body));
+      return Response.json({ token: 'fixture-soniox', expiresAt: new Date(Date.now() + 120000).toISOString(), model: 'stt-rt-v5', websocketUrl: 'wss://stt-rt.soniox.com/transcribe-websocket', sessionLimitMs: 3600000, renewAfterMs: 3300000 });
+    }
     if (String(url).endsWith('/api/speech/token')) {
       const request = JSON.parse(options.body); window.__liveTokenRequests.push(request);
       return Response.json({ token: 'fixture-live-token', model: request.model, websocketUrl: 'wss://fixture.test/live', sessionLimitMs: 600000 });
@@ -419,7 +442,8 @@ async function run() {
 
     await page.goto(`${baseUrl}/settings`);
     await page.locator('#transcription-mode').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('#speech-provider option').count(), 3);
+    assert.equal(await page.locator('#speech-provider option').count(), 5);
+    assert.equal(await page.locator('#speech-provider option[value="nemotron"]').count(), 1);
     await page.locator('#speech-provider').selectOption('google-transcribe');
     assert.equal(await page.locator('#transcription-mode option').count(), 2);
     assert.equal(await page.locator('#speaker-count option').count(), 8);
@@ -635,6 +659,74 @@ async function run() {
     await page.locator('#speech-provider').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#speech-provider').inputValue(), 'google');
     check('Live smart nhận chữ qua WebSocket, dịch, lưu Speaker 8 và giữ lựa chọn sau reload');
+    await page.locator('#speech-provider').selectOption('soniox');
+    assert(await page.locator('#transcription-mode').isDisabled());
+    assert(await page.locator('#speaker-count').isEnabled());
+    await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
+    await page.reload();
+    await page.locator('#speech-provider').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#speech-provider').inputValue(), 'soniox');
+    assert.match(await page.locator('body').innerText(), /0,12 USD/);
+    await page.getByRole('button', { name: 'Kiểm tra API nhận giọng', exact: true }).click();
+    await page.getByText(/Soniox · stt-rt-v5 kết nối thành công/).waitFor();
+    await page.evaluate(async () => {
+      // A real playable synthetic tone exercises audio persistence without a mic.
+      const context = new window.__NativeAudioContext();
+      const destination = context.createMediaStreamDestination();
+      const oscillator = context.createOscillator(); oscillator.frequency.value = 440;
+      oscillator.connect(destination); await context.resume(); oscillator.start();
+      const recorder = new window.__NativeMediaRecorder(destination.stream, { mimeType: 'audio/webm;codecs=opus' });
+      const chunks = [];
+      recorder.ondataavailable = event => chunks.push(event.data);
+      const stopped = new Promise(resolve => { recorder.onstop = resolve; });
+      recorder.start(); await new Promise(resolve => setTimeout(resolve, 1000)); recorder.stop();
+      await stopped; oscillator.stop(); destination.stream.getTracks().forEach(track => track.stop()); await context.close();
+      window.__validAudioBlob = new Blob(chunks, { type: 'audio/webm' });
+    });
+    assert.equal(await page.evaluate(() => window.__micCalls), 0, 'Connection test never opens mic');
+    assert(await page.evaluate(() => window.__sonioxSockets[0].frames > 0 && window.__sonioxSockets[0].readyState === 3));
+    await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
+    await waitUntil(() => page.evaluate(() => window.__sonioxSockets.at(-1)?.config?.model === 'stt-rt-v5'), 'Soniox configured');
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(1600));
+      window.__sonioxSockets.at(-1).message({ tokens: [{ text: '私は音楽が' }] });
+    });
+    await page.getByText('私は音楽が', { exact: true }).waitFor();
+    await page.evaluate(() => window.__sonioxSockets.at(-1).message({ tokens: [{ text: '私は音楽が好きです。', is_final: true }, { text: '<fin>', is_final: true }] }));
+    await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Dừng API', exact: true }).click();
+    await waitUntil(() => page.evaluate(() => window.__sonioxSockets.at(-1).readyState === 3), 'Pause closes Soniox');
+    const beforePause = await page.evaluate(() => window.__sonioxSessions.length);
+    await page.evaluate(() => window.__feedPcm(new Float32Array(1600).fill(0.3)));
+    assert.equal(await page.evaluate(() => window.__sonioxSessions.length), beforePause);
+    await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click();
+    await waitUntil(() => page.evaluate(count => window.__sonioxSessions.length === count + 1, beforePause), 'Resume new Soniox session');
+    await waitUntil(() => page.evaluate(() => window.__sonioxSockets.at(-1)?.config), 'Resume socket configured');
+    await page.evaluate(() => {
+      window.__feedPcm(new Float32Array(1600));
+      window.__sonioxSockets.at(-1).message({ tokens: [{ text: '次の文です。', is_final: true }, { text: '<fin>', is_final: true }] });
+    });
+    await page.getByText('Đây là câu tiếp theo.', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => window.__micCalls), 1, 'Pause/resume shares one microphone');
+    await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
+    await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    const sonioxRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
+    assert.equal((await storedRows(page, 'captionItems', sonioxRecordingId)).length, 2);
+    assert((await storedRows(page, 'audioChunks', sonioxRecordingId)).some(chunk => chunk.blob.size > 0));
+    await page.goto(`${baseUrl}/recordings/${sonioxRecordingId}`);
+    await page.reload();
+    await page.getByText('私は音楽が好きです。', { exact: true }).waitFor();
+    assert.equal((await storedRows(page, 'captionItems', sonioxRecordingId)).length, 2);
+    await page.getByRole('button', { name: 'Ghi âm', exact: true }).click();
+    const sonioxAudio = page.locator('audio[aria-label="Nghe toàn bộ buổi học"]');
+    await sonioxAudio.waitFor();
+    await sonioxAudio.evaluate(audio => audio.play());
+    await waitUntil(() => sonioxAudio.evaluate(audio => audio.currentTime > 0 && !audio.error), 'Persisted synthetic audio plays after reload');
+    await sonioxAudio.evaluate(audio => audio.pause());
+    await page.screenshot({ path: path.join(outputDir, 'soniox-after-reload.png'), fullPage: true });
+    check('Soniox chọn/lưu/reload, test không mic chờ finished, PCM im lặng, chữ tạm/final, pause đóng stream, resume token mới với một mic, kết thúc lưu chữ và audio qua reload (fixture)');
     assert.deepEqual(errors, [], 'No uncaught browser errors');
     check('Không có lỗi JavaScript chưa xử lý');
     fs.writeFileSync(path.join(outputDir, 'results.json'), JSON.stringify({

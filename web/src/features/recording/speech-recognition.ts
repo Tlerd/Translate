@@ -39,7 +39,7 @@ declare global {
 
 export interface SpeechRecognitionCallbacks {
   onTranscript: (text: string, isFinal: boolean, epoch: number, providerItemId: string, revision: number, timing?: { startMs: number; endMs: number; speakerLabel?: string }) => void;
-  onError: (error: string, epoch: number) => void;
+  onError: (error: string, epoch: number, details?: { retryable?: boolean }) => void;
   onStateChange: (state: 'idle' | 'listening' | 'reconnecting' | 'stopped') => void;
 }
 

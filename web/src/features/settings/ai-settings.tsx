@@ -272,6 +272,7 @@ export function AiSettings() {
                 setSettings({
                   ...settings,
                   speechProvider: e.target.value as AppSettings['speechProvider'],
+                  ...(['nemotron', 'soniox'].includes(e.target.value) ? { transcriptionMode: 'verbatim' as const } : {}),
                 })
               }
               style={{
@@ -286,6 +287,8 @@ export function AiSettings() {
               <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
               <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
               <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
+              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp</option>
+              <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
             </select>
           </div>
 
@@ -297,6 +300,16 @@ export function AiSettings() {
           {settings.speechProvider === 'google' && (
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
               Live hiện chữ trực tiếp, hỗ trợ verbatim/smart. Kết nối được tự động gia hạn trước giới hạn 10 phút của Google.
+            </p>
+          )}
+          {settings.speechProvider === 'soniox' && (
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+              Nhận giọng Việt/Nhật trực tiếp; STT khoảng 0,12 USD/giờ phiên, phí thực tế theo token. Phí dịch chữ tính riêng theo model đang chọn. Key chỉ cấu hình phía server trong SONIOX_API_KEY. <a href="https://console.soniox.com" target="_blank" rel="noreferrer">Soniox Console</a>. Lưu rồi kiểm tra bên dưới.
+            </p>
+          )}
+          {settings.speechProvider === 'nemotron' && (
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+              Nhận giọng trực tiếp trên máy chủ riêng, có tiếng Việt và tiếng Nhật. Chi phí phụ thuộc máy chủ; không có phí API theo giờ âm thanh. Lưu cài đặt rồi kiểm tra kết nối bên dưới.
             </p>
           )}
           {!isLiveSpeechProvider(settings.speechProvider) && (
@@ -312,11 +325,11 @@ export function AiSettings() {
               </label>
               <select
                 id="transcription-mode"
-                disabled={settings.speechProvider === 'google-flash-live'}
+                disabled={settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider)}
                 required
                 aria-describedby="transcription-mode-help"
                 value={
-                  settings.speechProvider === 'google-flash-live'
+                  settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider)
                     ? 'verbatim'
                     : settings.transcriptionMode
                 }
@@ -333,7 +346,7 @@ export function AiSettings() {
                   borderRadius: 'var(--radius-sm)',
                   color: 'var(--text-primary)',
                   fontSize: '0.88rem',
-                  opacity: settings.speechProvider === 'google-flash-live' ? 0.6 : 1,
+                  opacity: settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider) ? 0.6 : 1,
                 }}
               >
                 <option value="smart">smart - bỏ ừ/à, chuẩn văn viết</option>
@@ -347,7 +360,7 @@ export function AiSettings() {
               </label>
               <select
                 id="speaker-count"
-                disabled={settings.speechProvider === 'google-flash-live'}
+                disabled={settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron'}
                 value={settings.speakerCount}
                 onChange={(e) =>
                   setSettings({
@@ -362,7 +375,7 @@ export function AiSettings() {
                   borderRadius: 'var(--radius-sm)',
                   color: 'var(--text-primary)',
                   fontSize: '0.88rem',
-                  opacity: settings.speechProvider === 'google-flash-live' ? 0.6 : 1,
+                  opacity: settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron' ? 0.6 : 1,
                 }}
               >
                 {SPEAKER_COUNTS.map((count) => (
@@ -374,7 +387,11 @@ export function AiSettings() {
             </div>
           </div>
           <span id="transcription-mode-help" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Lưu ý: Chế độ Flash Live chỉ hỗ trợ verbatim và gán Speaker thủ công khi cần. Chi phí khoảng 0,005 USD/phút.
+            {settings.speechProvider === 'soniox'
+              ? 'Soniox nhận giọng thường; chưa bật smart Google, dịch Soniox hoặc phân biệt giọng tự động. Gán người nói thủ công khi cần.'
+              : settings.speechProvider === 'nemotron'
+              ? 'Nemotron nhận dạng nguyên văn. Gán người nói thủ công khi cần; chưa bật phân biệt giọng tự động.'
+              : 'Lưu ý: Chế độ Flash Live chỉ hỗ trợ verbatim và gán Speaker thủ công khi cần. Chi phí khoảng 0,005 USD/phút.'}
           </span>
         </div>
 
