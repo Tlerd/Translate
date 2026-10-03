@@ -48,6 +48,7 @@ describe('WebAudioRecorder', () => {
 
   it('switches segments without stopping microphone tracks and passes segmentIndex with chunks', async () => {
     let instanceCount = 0;
+    const instances: NumberedFakeMediaRecorder[] = [];
     class NumberedFakeMediaRecorder {
       static isTypeSupported() { return true; }
       id: number;
@@ -58,6 +59,7 @@ describe('WebAudioRecorder', () => {
       constructor(stream: MediaStream, options?: MediaRecorderOptions) {
         void stream; void options;
         this.id = ++instanceCount;
+        instances.push(this);
       }
       start() { this.state = 'recording'; }
       stop() {
@@ -100,6 +102,10 @@ describe('WebAudioRecorder', () => {
     expect(track.stop).not.toHaveBeenCalled();
     expect(completedSegments).toEqual([1]);
     expect(receivedChunks.some((c) => c.segmentIndex === 1 && c.text === 'segment-chunk-from-rec-1')).toBe(true);
+    instances[1].ondataavailable?.({ data: new Blob(['new-segment-first']) } as BlobEvent);
+    await vi.waitFor(() => expect(receivedChunks.some((c) => c.segmentIndex === 2 && c.text === 'new-segment-first')).toBe(true));
+    expect(receivedChunks.find((c) => c.segmentIndex === 1)?.sequence).toBe(0);
+    expect(receivedChunks.find((c) => c.segmentIndex === 2)?.sequence).toBe(0);
 
     // Switch to segment 3 (e.g. user clicked Resume API)
     await recorder.switchSegment(3);

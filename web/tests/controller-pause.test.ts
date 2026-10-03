@@ -28,15 +28,18 @@ const recognizerPushes: Float32Array[] = [];
 let recognizerStartCount = 0;
 let recognizerStopCount = 0;
 let lastOffsetMs: number | undefined;
+let recognizerStopGate: Promise<void> | null = null;
+const recognizerCallbacks: Array<{ onStateChange: (state: string) => void }> = [];
 
 vi.mock('@/features/recording/gemini-transcribe-recognition', () => ({
   GeminiTranscribeRecognizer: class {
     constructor(
-      _callbacks: unknown,
+      callbacks: unknown,
       _language: string,
       public offsetMs?: number
     ) {
       lastOffsetMs = offsetMs;
+      recognizerCallbacks.push(callbacks as { onStateChange: (state: string) => void });
     }
     async start() {
       recognizerStartCount++;
@@ -48,6 +51,7 @@ vi.mock('@/features/recording/gemini-transcribe-recognition', () => ({
     updateSettings() {}
     async stop() {
       recognizerStopCount++;
+      await recognizerStopGate;
     }
   },
 }));
@@ -77,6 +81,8 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     recognizerPushes.length = 0;
     recognizerStartCount = 0;
     recognizerStopCount = 0;
+    recognizerStopGate = null;
+    recognizerCallbacks.length = 0;
     lastOffsetMs = undefined;
     pcmInstances.length = 0;
 
@@ -192,6 +198,23 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     expect(segments[0]).toMatchObject({ segmentIndex: 1, kind: 'translating', status: 'completed' });
     expect(segments[1]).toMatchObject({ segmentIndex: 2, kind: 'apiPaused', status: 'completed' });
     expect(segments[2]).toMatchObject({ segmentIndex: 3, kind: 'translating', status: 'recording' });
+  });
+
+  it('pauses and resumes while the previous recognizer is still draining', async () => {
+    await controller.start({ mode: 'lecture', sourceLanguage: 'ja-JP', targetLanguage: 'vi', translationModelKey: 'test-model' });
+    let finishDrain!: () => void;
+    recognizerStopGate = new Promise<void>((resolve) => { finishDrain = resolve; });
+
+    await controller.pauseApi();
+    expect(controller.snapshot().apiState).toBe('paused');
+    expect(recognizerStopCount).toBe(1);
+
+    await controller.resumeApi();
+    expect(controller.snapshot().apiState).toBe('active');
+    recognizerCallbacks[0]?.onStateChange('stopped');
+    expect(controller.snapshot().speechState).toBe('listening');
+
+    finishDrain();
   });
 
   it('stops while paused: completes the paused segment and marks session stopped', async () => {

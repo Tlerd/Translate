@@ -107,6 +107,16 @@ describe('Storage Layer', () => {
     expect(stitched?.blob.size).toBe(chunk1Blob.size + chunk2Blob.size);
   });
 
+  it('stitches legacy chunks by capture time when recorder sequence values are out of order', async () => {
+    await addAudioChunk({ recordingId: 'rec_legacy_order', sequence: 1, mimeType: 'audio/webm', timestamp: 10, blob: new Blob(['header']) });
+    await addAudioChunk({ recordingId: 'rec_legacy_order', sequence: 0, mimeType: 'audio/webm', timestamp: 20, blob: new Blob(['tail']) });
+
+    const chunks = await getAudioChunks('rec_legacy_order');
+    expect(chunks.map((chunk) => chunk.sequence)).toEqual([1, 0]);
+    const stitched = await getAudioBlob('rec_legacy_order');
+    expect(await stitched?.blob.text()).toBe('headertail');
+  });
+
   it('deletes audio only while preserving captions and summaries', async () => {
     await createRecording({
       id: 'rec_del_audio',

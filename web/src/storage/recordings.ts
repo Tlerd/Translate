@@ -143,10 +143,15 @@ export async function addAudioChunk(chunk: Omit<AudioChunk, 'id'>): Promise<void
 
 export async function getAudioChunks(recordingId: string): Promise<AudioChunk[]> {
   const db = getDb();
-  return db.audioChunks
+  const chunks = await db.audioChunks
     .where('recordingId')
     .equals(recordingId)
-    .sortBy('sequence');
+    .toArray();
+  return chunks.sort(compareAudioChunkOrder);
+}
+
+function compareAudioChunkOrder(a: AudioChunk, b: AudioChunk): number {
+  return a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0) || a.sequence - b.sequence;
 }
 
 export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Promise<{ blob: Blob; mimeType: string } | null> {
@@ -159,7 +164,7 @@ export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Pr
     if (!oversized) chunks.push(chunk);
   });
   if (oversized) return null;
-  chunks.sort((a, b) => a.sequence - b.sequence);
+  chunks.sort(compareAudioChunkOrder);
   if (chunks.length === 0) return null;
   const mimeType = chunks[0]?.mimeType || 'audio/webm';
   const blobs = chunks.map((c) => c.blob);
@@ -277,7 +282,7 @@ export async function getAudioSegmentBlob(
     });
 
   if (oversized || chunks.length === 0) return null;
-  chunks.sort((a, b) => a.sequence - b.sequence);
+  chunks.sort(compareAudioChunkOrder);
   const mimeType = chunks[0]?.mimeType || 'audio/webm';
   const blobs = chunks.map((c) => c.blob);
   return {

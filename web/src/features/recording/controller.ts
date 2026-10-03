@@ -123,6 +123,8 @@ export class ClassroomController {
   private apiState: 'active' | 'pausing' | 'paused' | 'resuming' = 'active';
   private segmentStartTimes = new Map<number, number>();
   private apiActionChain: Promise<void> = Promise.resolve();
+  private pendingRecognizerDrains = new Set<Promise<void>>();
+  private pendingRecorderSwitches = new Set<Promise<void>>();
 
   private startTime = 0;
   private durationIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -389,13 +391,13 @@ export class ClassroomController {
             blob,
           });
         },
-        onSegmentComplete: async (segIndex) => {
+        onSegmentComplete: async (segIndex, endMs) => {
           if (this.sessionEpoch !== currentEpoch) return;
-          const endMs = Date.now() - this.startTime;
+          const segmentEndMs = endMs ?? Date.now() - this.startTime;
           const startMs = this.segmentStartTimes.get(segIndex) ?? 0;
           await updateAudioSegment(recordingId, segIndex, {
-            endMs,
-            durationMs: Math.max(0, endMs - startMs),
+            endMs: segmentEndMs,
+            durationMs: Math.max(0, segmentEndMs - startMs),
             status: 'completed',
           }).catch(() => undefined);
         },
@@ -595,11 +597,27 @@ export class ClassroomController {
   }
 
   private captionRevisions = new Map<number, number>();
+  private callbacksForRecognizer(isCurrent: () => boolean): SpeechRecognitionCallbacks {
+    const callbacks = this.speechCallbacks!;
+    return {
+      ...callbacks,
+      onError: (message, epoch) => {
+        if (isCurrent()) callbacks.onError(message, epoch);
+      },
+      onStateChange: (speechState) => {
+        if (isCurrent()) callbacks.onStateChange(speechState);
+      },
+    };
+  }
+
   private async startTranscriber(epoch: number, offsetMs = 0): Promise<void> {
     if (epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping || this.apiState === 'paused' || this.apiState === 'pausing') return;
     if (isLiveSpeechProvider(this.state.speechProvider)) { await this.connectGoogleSpeech(epoch, this.state.sourceLanguage); return; }
-    const recognizer = new GeminiTranscribeRecognizer(
-      this.speechCallbacks, this.state.sourceLanguage,
+    // The callback closes over the instance so only that instance can update UI state.
+    let recognizer!: GeminiTranscribeRecognizer;
+    // eslint-disable-next-line prefer-const
+    recognizer = new GeminiTranscribeRecognizer(
+      this.callbacksForRecognizer(() => this.speechRecognizer === recognizer), this.state.sourceLanguage,
       this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs,
       this.state.transcriptionMode, this.state.speakerCount,
       offsetMs,
@@ -624,7 +642,10 @@ export class ClassroomController {
     this.googleConnecting = true;
     try {
     this.state.speechState = 'reconnecting'; this.notify();
-    const recognizer = new GeminiLiveRecognizer(this.speechCallbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
+    // The callback closes over the instance so only that instance can update UI state.
+    let recognizer!: GeminiLiveRecognizer;
+    // eslint-disable-next-line prefer-const
+    recognizer = new GeminiLiveRecognizer(this.callbacksForRecognizer(() => this.speechRecognizer === recognizer), language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
     this.speechRecognizer = recognizer;
     await recognizer.start(epoch, language);
     if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
@@ -818,19 +839,19 @@ export class ClassroomController {
     this.clearSpeechTimers();
 
     // 2. Finalize utterance for speech spoken prior to pause
-    if (this.speechRecognizer) {
+    const oldRecognizer = this.speechRecognizer;
+    if (oldRecognizer) {
       try {
-        if (this.speechRecognizer instanceof GeminiTranscribeRecognizer) {
+        if (this.speechRecognizer instanceof GeminiTranscribeRecognizer || this.speechRecognizer instanceof GeminiLiveRecognizer) {
           this.speechRecognizer.finalizeUtterance();
-          await this.speechRecognizer.stop();
-        } else if (this.speechRecognizer instanceof GeminiLiveRecognizer) {
-          this.speechRecognizer.finalizeUtterance();
-          await this.speechRecognizer.stop();
         }
       } catch (err) {
         console.warn('Lỗi dừng speech recognizer khi pause:', err);
       }
       this.speechRecognizer = null;
+      const drain = Promise.resolve().then(() => oldRecognizer.stop()).catch((err) => { console.warn('Recognizer drain failed after pause:', err); });
+      this.pendingRecognizerDrains.add(drain);
+      void drain.finally(() => this.pendingRecognizerDrains.delete(drain));
     }
 
     // 3. Switch audio segment to "Nghỉ API"
@@ -839,6 +860,12 @@ export class ClassroomController {
     this.currentSegmentIndex = nextSegIndex;
     this.activeSegmentKind = 'apiPaused';
     this.segmentStartTimes.set(nextSegIndex, pauseTimeMs);
+    const recorderSwitch = this.audioRecorder?.switchSegment(nextSegIndex, pauseTimeMs);
+    if (recorderSwitch) {
+      this.pendingRecorderSwitches.add(recorderSwitch);
+      void recorderSwitch.catch((err) => console.warn('Recorder segment switch failed after pause:', err))
+        .finally(() => this.pendingRecorderSwitches.delete(recorderSwitch));
+    }
 
     const prevStartMs = this.segmentStartTimes.get(prevSegIndex) ?? 0;
     await updateAudioSegment(recordingId, prevSegIndex, {
@@ -858,7 +885,7 @@ export class ClassroomController {
     }).catch(() => undefined);
 
     try {
-      await this.audioRecorder?.switchSegment(nextSegIndex);
+      await recorderSwitch;
     } catch (err) {
       console.warn('Lỗi chuyển segment recorder khi pause:', err);
     }
@@ -912,7 +939,7 @@ export class ClassroomController {
     }).catch(() => undefined);
 
     try {
-      await this.audioRecorder?.switchSegment(nextSegIndex);
+      await this.audioRecorder?.switchSegment(nextSegIndex, resumeTimeMs);
     } catch (err) {
       console.warn('Lỗi chuyển segment recorder khi resume:', err);
     }
@@ -985,6 +1012,7 @@ export class ClassroomController {
       try { await this.audioRecorder.stop(); } catch (error) { stopErrors.push(String(error)); }
       this.audioRecorder = null;
     }
+    await Promise.all([...this.pendingRecorderSwitches]);
 
     // Capture has ended even if the network still owes a final transcript.
     // Persist that fact now so reloading cannot restore a phantom recording.
@@ -1014,6 +1042,7 @@ export class ClassroomController {
       try { await this.speechRecognizer.stop(); } catch (error) { stopErrors.push(String(error)); }
       this.speechRecognizer = null;
     }
+    await Promise.all([...this.pendingRecognizerDrains]);
 
     if (this.assembler) {
       this.assembler.finalizeCurrentUtterance(true);
