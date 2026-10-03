@@ -10,14 +10,17 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "test:browser": "node scripts/browser-smoke.cjs",
-    "test:auth": "node scripts/auth-smoke.cjs"
+    "test:auth": "node scripts/auth-smoke.cjs",
+    "test:audio": "node scripts/audio-smoke.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
     "@neondatabase/serverless": "^1.1.0",
     "@upstash/redis": "^1.39.0",
+    "@vercel/blob": "^2.8.0",
     "dexie": "^4.0.10",
     "lucide-react": "^0.469.0",
+    "mediabunny": "^1.61.0",
     "next": "^15.1.2",
     "next-auth": "^5.0.0-beta.25",
     "openai": "^4.77.0",

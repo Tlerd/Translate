@@ -46,77 +46,30 @@ describe('WebAudioRecorder', () => {
     expect(track.stop).toHaveBeenCalledOnce();
   });
 
-  it('switches segments without stopping microphone tracks and passes segmentIndex with chunks', async () => {
-    let instanceCount = 0;
-    const instances: NumberedFakeMediaRecorder[] = [];
-    class NumberedFakeMediaRecorder {
-      static isTypeSupported() { return true; }
-      id: number;
-      state: RecordingState = 'inactive';
-      ondataavailable: ((event: BlobEvent) => void) | null = null;
-      onerror: ((event: Event) => void) | null = null;
-      private listeners = new Map<string, Array<() => void>>();
-      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
-        void stream; void options;
-        this.id = ++instanceCount;
-        instances.push(this);
-      }
-      start() { this.state = 'recording'; }
-      stop() {
-        this.state = 'inactive';
-        this.ondataavailable?.({ data: new Blob([`segment-chunk-from-rec-${this.id}`]) } as BlobEvent);
-        this.listeners.get('stop')?.forEach((listener) => listener());
-      }
-      addEventListener(name: string, listener: () => void) {
-        this.listeners.set(name, [...(this.listeners.get(name) || []), listener]);
-      }
+  it('keeps a single recorder and monotonically ordered chunks until the final stop', async () => {
+    const instances: FakeMediaRecorder[] = [];
+    class ContinuousRecorder extends FakeMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); instances.push(this); }
     }
-
     const track = { stop: vi.fn() };
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
-    vi.stubGlobal('window', {});
-    vi.stubGlobal('MediaRecorder', NumberedFakeMediaRecorder);
-
-    const receivedChunks: Array<{ text: string; segmentIndex?: number; sequence: number }> = [];
-    const completedSegments: number[] = [];
-
+    vi.stubGlobal('window', {}); vi.stubGlobal('MediaRecorder', ContinuousRecorder);
+    const chunks: Array<{ text: string; sequence: number; segmentIndex?: number }> = [];
+    const completed: number[] = [];
     const recorder = new WebAudioRecorder({
-      onChunk: async (blob, seq, _timestamp, _mime, segmentIndex) => {
-        receivedChunks.push({ text: await blob.text(), segmentIndex, sequence: seq });
-      },
-      onVolume: () => {},
-      onError: (err) => { throw new Error(err); },
-      onSegmentComplete: (segIndex) => {
-        completedSegments.push(segIndex);
-      },
+      onChunk: async (blob, sequence, _time, _mime, segmentIndex) => { chunks.push({ text: await blob.text(), sequence, segmentIndex }); },
+      onVolume: () => {}, onError: error => { throw new Error(error); }, onSegmentComplete: index => { completed.push(index); },
     });
-
     await recorder.start();
-    expect(recorder.segmentIndex).toBe(1);
-    expect(track.stop).not.toHaveBeenCalled();
-
-    // Switch to segment 2 (e.g. user clicked Pause API)
-    await recorder.switchSegment(2);
-    expect(recorder.segmentIndex).toBe(2);
-    // Microphone track MUST NOT be stopped when switching segments!
-    expect(track.stop).not.toHaveBeenCalled();
-    expect(completedSegments).toEqual([1]);
-    expect(receivedChunks.some((c) => c.segmentIndex === 1 && c.text === 'segment-chunk-from-rec-1')).toBe(true);
-    instances[1].ondataavailable?.({ data: new Blob(['new-segment-first']) } as BlobEvent);
-    await vi.waitFor(() => expect(receivedChunks.some((c) => c.segmentIndex === 2 && c.text === 'new-segment-first')).toBe(true));
-    expect(receivedChunks.find((c) => c.segmentIndex === 1)?.sequence).toBe(0);
-    expect(receivedChunks.find((c) => c.segmentIndex === 2)?.sequence).toBe(0);
-
-    // Switch to segment 3 (e.g. user clicked Resume API)
-    await recorder.switchSegment(3);
-    expect(recorder.segmentIndex).toBe(3);
-    expect(track.stop).not.toHaveBeenCalled();
-    expect(completedSegments).toEqual([1, 2]);
-
-    // Finally stop the entire session
+    for (const text of ['before API pause', 'while API paused', 'after API resume']) {
+      instances[0].ondataavailable?.({ data: new Blob([text]) } as BlobEvent);
+    }
+    expect(track.stop).not.toHaveBeenCalled(); expect(completed).toEqual([]);
     await recorder.stop();
-    expect(completedSegments).toEqual([1, 2, 3]);
-    // Only now should track.stop be called!
-    expect(track.stop).toHaveBeenCalledOnce();
+    expect(instances).toHaveLength(1);
+    expect(chunks.map(chunk => chunk.sequence)).toEqual([0, 1, 2, 3]);
+    expect(chunks.map(chunk => chunk.text)).toEqual(['before API pause', 'while API paused', 'after API resume', 'last chunk']);
+    expect(chunks.every(chunk => chunk.segmentIndex === 1)).toBe(true);
+    expect(completed).toEqual([1]); expect(track.stop).toHaveBeenCalledOnce();
   });
 });

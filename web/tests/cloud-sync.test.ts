@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+vi.mock('@/storage/audio-sync', () => ({ synchronizeAudio: vi.fn().mockResolvedValue({ pending: 0, errors: 0 }) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDatabase, resetDbInstance, getDb } from '@/storage/db';
 import { cloudPayloadSchema, type CloudPayload, type CloudRow } from '@/shared/cloud-recording';

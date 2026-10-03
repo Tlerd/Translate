@@ -4,6 +4,9 @@ import styles from './welcome.module.css';
 
 export default function LandingPage() {
   const cloudEnabled = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
+  const storageNote = cloudEnabled && process.env.BLOB_READ_WRITE_TOKEN
+    ? 'Chữ và audio đồng bộ theo tài khoản · Giữ bản gốc trên thiết bị.'
+    : cloudEnabled ? 'Chữ đồng bộ theo tài khoản · Audio lưu trên thiết bị.' : 'Bản ghi lưu trên trình duyệt bạn sử dụng.';
   return <main className={styles.page}>
     <nav className={styles.nav} aria-label="Điều hướng chính">
       <Link className={styles.brand} href="/"><AudioLines size={24} /> Máy Dịch</Link>
@@ -29,6 +32,6 @@ export default function LandingPage() {
       <article><AudioLines /><h2>Giữ mạch lời nói</h2><p>Ghi âm, chốt câu theo khoảng nghỉ và xem lại lời nói cùng bản dịch.</p></article>
       <article><NotebookPen /><h2>Biến lời nói thành ghi chú</h2><p>Sửa transcript trong cửa sổ riêng, tạo tóm tắt có dẫn nguồn và ảnh minh họa.</p></article>
     </section>
-    <footer className={styles.footer}><span>Máy Dịch · Lớp học & luyện đọc</span><span>{cloudEnabled ? 'Chữ đồng bộ theo tài khoản · Audio lưu trên thiết bị.' : 'Bản ghi lưu trên trình duyệt bạn sử dụng.'}</span></footer>
+    <footer className={styles.footer}><span>Máy Dịch · Lớp học & luyện đọc</span><span>{storageNote}</span></footer>
   </main>;
 }

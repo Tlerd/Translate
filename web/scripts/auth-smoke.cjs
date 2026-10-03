@@ -70,6 +70,28 @@ async function run() {
     await page.goto(base + '/login');
     await page.waitForURL('**/app');
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    // Real Auth.js endpoint must rotate the cookie, not just return a session.
+    await page.evaluate(async () => { const response = await fetch('/api/auth/session'); if (!response.ok) throw new Error('Session refresh failed'); });
+    const renewed = (await ctx.cookies()).find(item => item.name === cookie);
+    assert(renewed && renewed.expires > Date.now() / 1000 + 29 * 86400, 'Session endpoint must write a cookie with the default 30-day lifetime');
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await page.goto(base + '/app'); await page.reload();
+        await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+        await page.locator('a[href="/settings"]').last().click(); await page.waitForURL('**/settings');
+        await page.goBack(); await page.waitForURL('**/app');
+        await page.goForward(); await page.waitForURL('**/settings');
+        await page.getByRole('link', { name: 'Máy Dịch Lớp Học', exact: true }).click(); await page.waitForURL('**/app');
+      }
+      console.log(`PASS valid-session reload, client navigation, Back/Forward at ${viewport.width}px`);
+    }
+    const secondTab = await ctx.newPage();
+    await secondTab.goto(base + '/settings'); assert(!secondTab.url().includes('/login'));
+    await secondTab.close(); await page.bringToFront();
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.reload(); await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
+    console.log('PASS multiple tabs and return to app after focus with renewed cookie');
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await page.waitForURL(base + '/');
     await page.goto(base + '/app');

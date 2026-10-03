@@ -1,3 +1,4 @@
+import { canonicalLanguage } from '@/shared/languages';
 import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
@@ -46,7 +47,7 @@ export async function POST(req: Request): Promise<Response> {
       : undefined;
   if (
     languageCode !== undefined &&
-    (typeof languageCode !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(languageCode))
+    (typeof languageCode !== 'string' || !canonicalLanguage(languageCode))
   ) {
     return makeErrorResponse(400, 'INTERNAL_ERROR', 'Mã ngôn ngữ không hợp lệ.');
   }

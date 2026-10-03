@@ -2,6 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getServerEnv } from '@/config/env.server';
+import { secureAuthCookies } from '@/server/auth-policy';
 import type { ApiErrorResponse } from '@/shared/ai-contracts';
 
 export function makeErrorResponse(
@@ -56,7 +57,7 @@ export async function verifyAuthGuard(
     const token = await getToken({
       req,
       secret: env.AUTH_SECRET,
-      secureCookie: production,
+      secureCookie: secureAuthCookies(req.url, req.headers),
     });
     const email = typeof token?.email === 'string' ? token.email.trim().toLowerCase() : '';
     if (email && email === env.OWNER_EMAIL.trim().toLowerCase()) return null;

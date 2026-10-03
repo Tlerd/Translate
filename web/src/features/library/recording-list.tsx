@@ -117,7 +117,7 @@ export function RecordingList({
         await deleteRecording(id);
         onRefresh();
         if (selectedId === id) {
-          router.push('/');
+          router.push('/app');
         }
       } catch (err) {
         alert(err instanceof Error ? err.message : String(err));

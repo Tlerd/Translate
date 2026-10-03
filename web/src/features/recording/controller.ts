@@ -1,3 +1,5 @@
+import { queueAudio } from '@/storage/audio-assets';
+import { canonicalLanguage, inputLanguage } from '@/shared/languages';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { GeminiTranscribeRecognizer } from './gemini-transcribe-recognition';
@@ -70,6 +72,8 @@ export interface StartOptions {
   readingPauseMs?: number;
 }
 
+interface CapturedPcm { samples: Float32Array; rate: number; startMs: number }
+
 export class ClassroomController {
   private state: ControllerState = {
     recordingId: null,
@@ -105,7 +109,7 @@ export class ClassroomController {
   private pcmAttached = false;
   private pcmInputCallback: ((samples: Float32Array, rate: number) => void) | null = null;
   private pcmReady = false;
-  private pcmQueue: Array<{samples: Float32Array; rate: number}> = [];
+  private pcmQueue: CapturedPcm[] = [];
   private pcmQueueMs = 0;
   private renewalTimer: ReturnType<typeof setTimeout> | null = null;
   private speechRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -124,7 +128,6 @@ export class ClassroomController {
   private segmentStartTimes = new Map<number, number>();
   private apiActionChain: Promise<void> = Promise.resolve();
   private pendingRecognizerDrains = new Set<Promise<void>>();
-  private pendingRecorderSwitches = new Set<Promise<void>>();
 
   private startTime = 0;
   private durationIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -134,7 +137,7 @@ export class ClassroomController {
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private pcmVoiceActive = false;
   private pcmLastVoiceTime = 0;
-  private pcmPreRollBuffer: Array<{ samples: Float32Array; rate: number }> = [];
+  private pcmPreRollBuffer: CapturedPcm[] = [];
   private pcmPreRollMs = 0;
   private hasPendingTranscript = false;
   private providerSpeechEnded = false;
@@ -225,8 +228,10 @@ export class ClassroomController {
     const mode = options.mode || this.state.mode;
     const transcriptionMode = options.transcriptionMode ?? this.state.transcriptionMode;
     const speakerCount = options.speakerCount ?? this.state.speakerCount;
-    const sourceLanguage = options.sourceLanguage || this.state.sourceLanguage;
-    const targetLanguage = options.targetLanguage || this.state.targetLanguage;
+    const speechProvider = options.speechProvider ?? this.state.speechProvider;
+    const sourceLanguage = inputLanguage(options.sourceLanguage || this.state.sourceLanguage, speechProvider);
+    const targetLanguage = canonicalLanguage(options.targetLanguage || this.state.targetLanguage);
+    if (!sourceLanguage || !targetLanguage) throw new Error('Chọn ngôn ngữ hợp lệ cho bộ nhận giọng trước khi thu.');
     const translationModelKey = options.translationModelKey || this.state.translationModelKey;
     const pauseMs = ClassroomController.clampPause(options.pauseMs ?? this.state.pauseMs);
     const readingPauseMs = ClassroomController.clampPause(options.readingPauseMs ?? this.state.readingPauseMs);
@@ -260,7 +265,7 @@ export class ClassroomController {
       recordingId,
       segmentIndex: 1,
       kind: 'translating',
-      label: 'Đang dịch',
+      label: 'Toàn buổi',
       startMs: 0,
       status: 'recording',
       mimeType: WebAudioRecorder.getBestSupportedMimeType() || 'audio/webm',
@@ -285,7 +290,7 @@ export class ClassroomController {
       epoch: currentEpoch,
       pauseMs,
       readingPauseMs,
-      speechProvider: options.speechProvider ?? this.state.speechProvider, transcriptionMode, speakerCount,
+      speechProvider, transcriptionMode, speakerCount,
       micState: 'idle', receivedAudioMs: 0,
       lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
       speakerStatus: 'idle', speakerMessage: null,
@@ -299,15 +304,6 @@ export class ClassroomController {
     this.speechItemLocations.clear();
     this.captionSpeakers.clear();
     this.notify();
-
-    // Duration timer
-    this.durationIntervalId = setInterval(() => {
-      if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
-      const durationMs = Date.now() - this.startTime;
-      this.state.durationMs = durationMs;
-      if (this.pcmCapture?.state === 'suspended') this.state.micState = 'suspended';
-      this.notify();
-    }, 500);
 
     // Live Utterance Assembler
     this.assembler = new LiveUtteranceAssembler(mode);
@@ -353,7 +349,7 @@ export class ClassroomController {
           ).then(() => resolve(completedText || accumulated), reject);
         });
       },
-      sourceLanguage: sourceLanguage.split('-')[0],
+      sourceLanguage,
       targetLanguage,
       minIntervalMs: 700,
     });
@@ -423,6 +419,16 @@ export class ClassroomController {
       });
 
       await this.audioRecorder.start(2000);
+      // Permission prompts and audio initialization are outside the file's
+      // timeline. Use the recorder's actual start for captions and lesson time.
+      this.startTime = this.audioRecorder.startedAt || Date.now();
+      this.state.durationMs = 0;
+      this.durationIntervalId = setInterval(() => {
+        if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
+        this.state.durationMs = Date.now() - this.startTime;
+        if (this.pcmCapture?.state === 'suspended') this.state.micState = 'suspended';
+        this.notify();
+      }, 500);
     } catch (err) {
       this.state.error = `Không thu được micro: ${err instanceof Error ? err.message : String(err)}`;
       this.state.state = 'stopped';
@@ -532,14 +538,15 @@ export class ClassroomController {
         }
         const rms = Math.sqrt(sum / samples.length);
         const now = Date.now();
+        const startMs = Math.max(0, now - this.startTime - chunkMs);
         const isVoice = rms >= 0.015;
 
-        const forwardPcm = (s: Float32Array, r: number) => {
+        const forwardPcm = (item: CapturedPcm) => {
           if (this.pcmReady && this.speechRecognizer) {
-            this.speechRecognizer.pushPcm(s, r);
+            this.pushRecognitionAudio(item);
           } else if (this.pcmQueueMs < 10_000) {
-            this.pcmQueue.push({ samples: s, rate: r });
-            this.pcmQueueMs += (s.length / r) * 1000;
+            this.pcmQueue.push(item);
+            this.pcmQueueMs += (item.samples.length / item.rate) * 1000;
           } else {
             const message = 'Nhận giọng chưa sẵn sàng quá 10 giây. Audio vẫn được lưu trên máy; hãy kiểm tra micro.';
             if (this.state.error !== message) { this.state.error = message; this.notify(); }
@@ -551,17 +558,17 @@ export class ClassroomController {
           if (!this.pcmVoiceActive) {
             this.pcmVoiceActive = true;
             for (const item of this.pcmPreRollBuffer) {
-              forwardPcm(item.samples, item.rate);
+              forwardPcm(item);
             }
             this.pcmPreRollBuffer = [];
             this.pcmPreRollMs = 0;
           }
-          forwardPcm(samples, rate);
+          forwardPcm({ samples, rate, startMs });
         } else {
           // Below threshold
           if (this.pcmVoiceActive) {
             if (now - this.pcmLastVoiceTime <= 900) {
-              forwardPcm(samples, rate);
+              forwardPcm({ samples, rate, startMs });
             } else {
               this.pcmVoiceActive = false;
               if (this.pcmReady && this.speechRecognizer) {
@@ -571,7 +578,7 @@ export class ClassroomController {
           }
 
           // Buffer up to 300ms pre-roll during silence
-          this.pcmPreRollBuffer.push({ samples, rate });
+          this.pcmPreRollBuffer.push({ samples, rate, startMs });
           this.pcmPreRollMs += chunkMs;
           while (this.pcmPreRollMs > 300 && this.pcmPreRollBuffer.length > 1) {
             const removed = this.pcmPreRollBuffer.shift()!;
@@ -597,6 +604,10 @@ export class ClassroomController {
   }
 
   private captionRevisions = new Map<number, number>();
+  private pushRecognitionAudio(item: CapturedPcm) {
+    if (this.speechRecognizer instanceof GeminiTranscribeRecognizer) this.speechRecognizer.pushPcm(item.samples, item.rate, item.startMs);
+    else this.speechRecognizer?.pushPcm(item.samples, item.rate);
+  }
   private callbacksForRecognizer(isCurrent: () => boolean): SpeechRecognitionCallbacks {
     const callbacks = this.speechCallbacks!;
     return {
@@ -625,7 +636,7 @@ export class ClassroomController {
     this.speechRecognizer = recognizer;
     recognizer.start(epoch);
     this.pcmReady = true;
-    for (const item of this.pcmQueue) recognizer.pushPcm(item.samples, item.rate);
+    for (const item of this.pcmQueue) this.pushRecognitionAudio(item);
     this.pcmQueue = []; this.pcmQueueMs = 0;
   }
 
@@ -650,7 +661,7 @@ export class ClassroomController {
     await recognizer.start(epoch, language);
     if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
     this.pcmReady = true;
-    for (const item of this.pcmQueue) recognizer.pushPcm(item.samples, item.rate);
+    for (const item of this.pcmQueue) this.pushRecognitionAudio(item);
     this.pcmQueue = []; this.pcmQueueMs = 0;
     this.renewalTimer = setTimeout(() => {
       this.renewalTimer = null;
@@ -688,7 +699,14 @@ export class ClassroomController {
 
   public setSpeechProvider(provider: SpeechProvider): void {
     if (provider === this.state.speechProvider) return;
+    const sourceLanguage = inputLanguage(this.state.sourceLanguage, provider);
+    if (!sourceLanguage && this.state.state === 'recording') {
+      this.state.error = 'Bộ nhận giọng đã chọn không hỗ trợ ngôn ngữ đầu vào của buổi này. Kết thúc buổi để đổi ngôn ngữ hoặc bộ nhận giọng.';
+      this.notify();
+      return;
+    }
     this.state.speechProvider = provider;
+    if (this.state.state !== 'recording') this.state.sourceLanguage = sourceLanguage ?? inputLanguage('ja-JP', provider)!;
     if (this.apiState !== 'paused' && this.apiState !== 'pausing') {
       this.restartRecognizer();
     }
@@ -825,9 +843,6 @@ export class ClassroomController {
     this.state.apiState = 'pausing';
     this.notify();
 
-    const pauseTimeMs = Date.now() - this.startTime;
-    const recordingId = this.state.recordingId!;
-
     // 1. Cut off API audio immediately
     this.pcmReady = false;
     this.pcmQueue = [];
@@ -854,46 +869,10 @@ export class ClassroomController {
       void drain.finally(() => this.pendingRecognizerDrains.delete(drain));
     }
 
-    // 3. Switch audio segment to "Nghỉ API"
-    const prevSegIndex = this.currentSegmentIndex;
-    const nextSegIndex = prevSegIndex + 1;
-    this.currentSegmentIndex = nextSegIndex;
-    this.activeSegmentKind = 'apiPaused';
-    this.segmentStartTimes.set(nextSegIndex, pauseTimeMs);
-    const recorderSwitch = this.audioRecorder?.switchSegment(nextSegIndex, pauseTimeMs);
-    if (recorderSwitch) {
-      this.pendingRecorderSwitches.add(recorderSwitch);
-      void recorderSwitch.catch((err) => console.warn('Recorder segment switch failed after pause:', err))
-        .finally(() => this.pendingRecorderSwitches.delete(recorderSwitch));
-    }
-
-    const prevStartMs = this.segmentStartTimes.get(prevSegIndex) ?? 0;
-    await updateAudioSegment(recordingId, prevSegIndex, {
-      endMs: pauseTimeMs,
-      durationMs: Math.max(0, pauseTimeMs - prevStartMs),
-      status: 'completed',
-    }).catch(() => undefined);
-
-    await createAudioSegment({
-      recordingId,
-      segmentIndex: nextSegIndex,
-      kind: 'apiPaused',
-      label: 'Nghỉ API',
-      startMs: pauseTimeMs,
-      status: 'recording',
-      mimeType: this.audioRecorder?.stream ? WebAudioRecorder.getBestSupportedMimeType() : 'audio/webm',
-    }).catch(() => undefined);
-
-    try {
-      await recorderSwitch;
-    } catch (err) {
-      console.warn('Lỗi chuyển segment recorder khi pause:', err);
-    }
-
+    // Only API input pauses. The same MediaRecorder keeps all session audio.
     this.apiState = 'paused';
     this.state.apiState = 'paused';
-    this.state.activeSegmentIndex = nextSegIndex;
-    this.state.activeSegmentKind = 'apiPaused';
+    this.state.activeSegmentKind = 'translating';
     this.state.speechState = 'stopped';
     this.notify();
   }
@@ -912,38 +891,6 @@ export class ClassroomController {
     this.notify();
 
     const resumeTimeMs = Date.now() - this.startTime;
-    const recordingId = this.state.recordingId!;
-
-    // 1. Switch audio segment to "Đang dịch"
-    const prevSegIndex = this.currentSegmentIndex;
-    const nextSegIndex = prevSegIndex + 1;
-    this.currentSegmentIndex = nextSegIndex;
-    this.activeSegmentKind = 'translating';
-    this.segmentStartTimes.set(nextSegIndex, resumeTimeMs);
-
-    const prevStartMs = this.segmentStartTimes.get(prevSegIndex) ?? 0;
-    await updateAudioSegment(recordingId, prevSegIndex, {
-      endMs: resumeTimeMs,
-      durationMs: Math.max(0, resumeTimeMs - prevStartMs),
-      status: 'completed',
-    }).catch(() => undefined);
-
-    await createAudioSegment({
-      recordingId,
-      segmentIndex: nextSegIndex,
-      kind: 'translating',
-      label: 'Đang dịch',
-      startMs: resumeTimeMs,
-      status: 'recording',
-      mimeType: this.audioRecorder?.stream ? WebAudioRecorder.getBestSupportedMimeType() : 'audio/webm',
-    }).catch(() => undefined);
-
-    try {
-      await this.audioRecorder?.switchSegment(nextSegIndex, resumeTimeMs);
-    } catch (err) {
-      console.warn('Lỗi chuyển segment recorder khi resume:', err);
-    }
-
     // 2. Discard any PCM received while paused (no replay!)
     this.pcmQueue = [];
     this.pcmQueueMs = 0;
@@ -955,7 +902,6 @@ export class ClassroomController {
     // 3. Start recognizer with whole-session offset
     this.apiState = 'active';
     this.state.apiState = 'active';
-    this.state.activeSegmentIndex = nextSegIndex;
     this.state.activeSegmentKind = 'translating';
     this.state.speechState = 'listening';
     this.notify();
@@ -1012,7 +958,6 @@ export class ClassroomController {
       try { await this.audioRecorder.stop(); } catch (error) { stopErrors.push(String(error)); }
       this.audioRecorder = null;
     }
-    await Promise.all([...this.pendingRecorderSwitches]);
 
     // Capture has ended even if the network still owes a final transcript.
     // Persist that fact now so reloading cannot restore a phantom recording.
@@ -1080,7 +1025,7 @@ export class ClassroomController {
         durationMs,
         ...(this.recordingConfig ? { config: this.recordingConfig } : {}),
       });
-      // Native verbatim diarization already ran within each transcription request.
+      await queueAudio(recordingId).catch(error => console.warn('Audio đang chờ đồng bộ:', error));
     }
   }
 
@@ -1120,8 +1065,9 @@ export class ClassroomController {
     }
     this.state.speakerStatus = 'working'; this.state.speakerMessage = 'Đang phân biệt người nói từ audio…'; this.notify();
     try {
-      const audio = this.state.durationMs <= 30 * 60_000 ? await getAudioBlob(recordingId, 4 * 1024 * 1024) : null;
-      if (!audio || audio.blob.size > 4 * 1024 * 1024 || this.state.durationMs > 30 * 60_000) {
+      const audio = await getAudioBlob(recordingId, 4 * 1024 * 1024);
+      const audioDurationMs = audio?.durationMs ?? this.state.durationMs;
+      if (!audio || audio.blob.size > 4 * 1024 * 1024 || audioDurationMs > 30 * 60_000) {
         this.state.speakerStatus = 'unavailable';
         this.state.speakerMessage = 'Phân biệt người nói cần audio trên máy, tối đa 4 MB và 30 phút.';
         this.notify(); return;
@@ -1132,7 +1078,7 @@ export class ClassroomController {
       try {
         const form = new FormData();
         form.set('audio', audio.blob, audio.mimeType.startsWith('audio/mp4') ? 'recording.m4a' : 'recording.webm');
-        form.set('durationMs', String(Math.max(1, Math.round(this.state.durationMs))));
+        form.set('durationMs', String(Math.max(1, Math.round(audioDurationMs))));
         form.set('speakerCount', String(this.state.speakerCount));
         response = await fetch('/api/speech/diarize', { method: 'POST', body: form, signal: abort.signal });
       } finally { clearTimeout(timeout); }
@@ -1171,6 +1117,16 @@ export class ClassroomController {
     await saveCaption(updated);
     if (this.state.recordingId !== caption.recordingId) return;
     this.state.captions = this.state.captions.map(item => item.id === captionId ? updated : item);
+    this.notify();
+  }
+
+  public setLanguages(source: string, target: string): void {
+    if (this.state.state === 'recording' || this.starting || this.stopping) return;
+    const sourceLanguage = inputLanguage(source, this.state.speechProvider);
+    const targetLanguage = canonicalLanguage(target);
+    if (!sourceLanguage || !targetLanguage) return;
+    this.state.sourceLanguage = sourceLanguage;
+    this.state.targetLanguage = targetLanguage;
     this.notify();
   }
 

@@ -14,7 +14,7 @@ export function buildTranslationSystemPrompt(
   targetLanguage: string
 ): string {
   const properNameRule =
-    targetLanguage === 'ja'
+    targetLanguage.split('-')[0] === 'ja'
       ? 'Use established Japanese names; render unfamiliar foreign names in katakana only when their pronunciation is known from the source or glossary. If uncertain, preserve original spelling in parentheses; never invent kanji or a pronunciation.'
       : 'Preserve a Japanese name in its original script when its reading is unknown; use a well-established or glossary-provided romanization only when known. Never invent a Vietnamese name, meaning or pronunciation. Keep other proper names as written unless a conventional target name is known.';
 

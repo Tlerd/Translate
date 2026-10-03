@@ -14,7 +14,7 @@ interface GoogleRecognizerFixture {
   model?: string;
   callbacks: GoogleCallbacks;
   epoch: number;
-  pushes: Array<{ samples: Float32Array; rate: number }>;
+  pushes: Array<{ samples: Float32Array; rate: number; startMs?: number }>;
   stopImpl: () => Promise<void>;
   finalOnStop: (() => void) | null;
   updateSettings: (settings: unknown) => void;
@@ -37,6 +37,7 @@ const shared = vi.hoisted(() => ({
   addAudioChunk: vi.fn(),
   saveCaption: vi.fn(),
   getAudioBlob: vi.fn(),
+  queueAudio: vi.fn(),
   streamTranslate: vi.fn(),
   createAudioSegment: vi.fn().mockResolvedValue(undefined),
   updateAudioSegment: vi.fn().mockResolvedValue(undefined),
@@ -48,12 +49,12 @@ vi.mock('@/features/recording/gemini-transcribe-recognition', () => ({
   GeminiTranscribeRecognizer: class {
     callbacks: GoogleCallbacks;
     epoch = 0;
-    pushes: Array<{ samples: Float32Array; rate: number }> = [];
+    pushes: Array<{ samples: Float32Array; rate: number; startMs?: number }> = [];
     stopImpl: () => Promise<void> = async () => undefined;
     finalOnStop: (() => void) | null = null;
     constructor(callbacks: GoogleCallbacks) { this.callbacks = callbacks; shared.recognizers.push(this); }
     async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
-    pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
+    pushPcm(samples: Float32Array, rate: number, startMs?: number) { this.pushes.push({ samples, rate, startMs }); }
     finalizeUtterance() {}
     updateSettings = vi.fn();
     async stop() {
@@ -123,6 +124,7 @@ vi.mock('@/features/recording/audio-recorder', () => ({
   },
 }));
 
+vi.mock('@/storage/audio-assets', () => ({ queueAudio: shared.queueAudio }));
 vi.mock('@/storage/recordings', () => ({
   createRecording: shared.createRecording,
   updateRecording: shared.updateRecording,
@@ -156,6 +158,7 @@ describe('ClassroomController Google speech integration', () => {
     shared.addAudioChunk.mockReset().mockResolvedValue(undefined);
     shared.saveCaption.mockReset().mockResolvedValue(undefined);
     shared.getAudioBlob.mockReset().mockResolvedValue(null);
+    shared.queueAudio.mockReset().mockResolvedValue(undefined);
     shared.streamTranslate.mockReset().mockImplementation(async (_request: unknown, onDelta: (text: string) => void, onDone: (text: string, model: string) => void) => {
       onDelta('translated'); onDone('translated', 'test-model');
     });
@@ -207,6 +210,55 @@ describe('ClassroomController Google speech integration', () => {
     expect(shared.getAudioBlob).not.toHaveBeenCalled();
   });
 
+  it('keeps capture languages locked when a new provider cannot recognize the selected language', async () => {
+    const controller = new ClassroomController();
+    controller.setLanguages('yue-Hant-HK', 'vi');
+    await controller.start({ speechProvider: 'google-transcribe' });
+    controller.setSpeechProvider('google-flash-live');
+    expect(controller.snapshot()).toMatchObject({ sourceLanguage: 'yue-Hant-HK', speechProvider: 'google-transcribe' });
+    expect(controller.snapshot().error).toContain('không hỗ trợ ngôn ngữ');
+    controller.setLanguages('es-419', 'ja-JP');
+    expect(controller.snapshot().sourceLanguage).toBe('yue-Hant-HK');
+    await controller.stop();
+    controller.setSpeechProvider('google-flash-live');
+    expect(controller.snapshot().sourceLanguage).toBe('ja');
+  });
+
+  it('rejects unsupported language options before creating a lesson or acquiring the microphone', async () => {
+    const controller = new ClassroomController();
+    await expect(controller.start({ sourceLanguage: 'invalid-language', speechProvider: 'google-transcribe' })).rejects.toThrow('ngôn ngữ hợp lệ');
+    expect(shared.createRecording).not.toHaveBeenCalled();
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('starts the lesson audio timeline after microphone permission rather than before the prompt', async () => {
+    let now = 1700000000000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    getUserMedia.mockImplementation(async () => { now += 7000; return stream; });
+    const controller = new ClassroomController();
+    await controller.start();
+    now += 2000;
+    await controller.stop();
+    expect(controller.snapshot().durationMs).toBe(2000);
+  });
+
+  it('passes the full-session timestamp after VAD omits several seconds of silence', async () => {
+    let now = 1700000000000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const controller = new ClassroomController();
+    await controller.start();
+    now += 1000;
+    shared.captures[0].emit(new Float32Array(1600).fill(.2), 16000);
+    now += 1000;
+    shared.captures[0].emit(new Float32Array(1600), 16000);
+    now += 5000;
+    shared.captures[0].emit(new Float32Array(1600), 16000);
+    now += 100;
+    shared.captures[0].emit(new Float32Array(1600).fill(.2), 16000);
+    expect(shared.recognizers[0].pushes.at(-1)?.startMs).toBe(7000);
+    await controller.stop();
+  });
+
   it('reconnects Live with smart mode and keeps the required speaker roster', async () => {
     const controller = new ClassroomController();
     await controller.start({ speechProvider: 'google' });
@@ -229,7 +281,7 @@ describe('ClassroomController Google speech integration', () => {
     recognizer.finalOnStop = () => recognizer.emit('最後の言葉', true);
     const samples = new Float32Array(8000).fill(0.2);
     shared.captures[0].emit(samples, 16000);
-    expect(recognizer.pushes).toEqual([{ samples, rate: 16000 }]);
+    expect(recognizer.pushes).toEqual([{ samples, rate: 16000, startMs: expect.any(Number) }]);
     await controller.stop();
     expect(controller.snapshot()).toMatchObject({ state: 'stopped', speechProvider: 'google-transcribe' });
     expect(controller.snapshot().captions).toEqual([expect.objectContaining({ source: '最後の言葉', translation: 'translated', isFinal: true })]);
@@ -246,7 +298,7 @@ describe('ClassroomController Google speech integration', () => {
     expect(controller.snapshot().micState).toBe('live');
     const samples = new Float32Array([0.25, -0.25]);
     (shared.captures[0] as PcmCaptureFixture).emit(samples, 48_000);
-    expect((shared.recognizers[0] as GoogleRecognizerFixture).pushes).toEqual([{ samples, rate: 48_000 }]);
+    expect((shared.recognizers[0] as GoogleRecognizerFixture).pushes).toEqual([{ samples, rate: 48_000, startMs: expect.any(Number) }]);
     await controller.stop();
     expect(shared.events.indexOf('pcm.stop')).toBeLessThan(shared.events.indexOf('recorder.stop'));
   });

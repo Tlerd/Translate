@@ -1,3 +1,4 @@
+import { canonicalLanguage } from '@/shared/languages';
 import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
@@ -124,6 +125,9 @@ export async function POST(req: Request): Promise<Response> {
     return makeErrorResponse(415, 'INTERNAL_ERROR', 'Định dạng audio chưa được hỗ trợ.');
   }
 
+  const language = form.get('language');
+  const languageCode = typeof language === 'string' && language ? canonicalLanguage(language) : undefined;
+  if (language && !languageCode) return makeErrorResponse(400, 'INTERNAL_ERROR', 'Mã ngôn ngữ không hợp lệ.');
   const apiKey = getServerEnv().GOOGLE_API_KEY;
   if (!apiKey) {
     return makeErrorResponse(503, 'MISSING_CONFIG', 'Chưa cấu hình GOOGLE_API_KEY cho nhận giọng.');
@@ -154,7 +158,7 @@ export async function POST(req: Request): Promise<Response> {
       input: [{ type: 'audio', uri: uploadedFile.uri, mime_type: mimeType }],
       generation_config: {
         transcription_config: {
-          language_codes: typeof form.get('language') === 'string' && /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/.test(String(form.get('language'))) ? [String(form.get('language'))] : [],
+          language_codes: languageCode ? [languageCode] : [],
           mode: mode === 'smart' ? 'smart' : {
             type: 'verbatim',
             diarization_mode: 'speaker',

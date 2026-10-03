@@ -5,6 +5,7 @@ import { ClassroomController, type ControllerState, type StartOptions } from './
 import type { ClassroomMode } from '@/shared/recording';
 import { loadSettings, saveSettings, settingsUpdatedEvent } from '@/storage/recordings';
 import type { AppSettings } from '@/shared/recording';
+import { inputLanguage } from '@/shared/languages';
 
 interface RecordingContextValue {
   controller: ClassroomController;
@@ -17,6 +18,7 @@ interface RecordingContextValue {
   setTranslationModel: (modelKey: string) => void;
   setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
+  setLanguages: (source: string, target: string) => void;
   setReadingPauseMs: (milliseconds: number) => void;
 }
 
@@ -50,6 +52,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (settings.translationModel !== undefined) controller.setTranslationModel(settings.translationModel);
       if (settings.translationThinkingLevel !== undefined) controller.setTranslationThinkingLevel(settings.translationThinkingLevel);
       if (settings.speechProvider !== undefined) controller.setSpeechProvider(settings.speechProvider);
+      const current = controller.snapshot();
+      if (settings.sourceLanguage !== undefined || settings.targetLanguage !== undefined || settings.speechProvider !== undefined) {
+        const source = inputLanguage(settings.sourceLanguage ?? current.sourceLanguage, current.speechProvider) ?? current.sourceLanguage;
+        controller.setLanguages(source, settings.targetLanguage ?? current.targetLanguage);
+      }
       controller.setTranscriptionSettings({ transcriptionMode: settings.transcriptionMode, speakerCount: settings.speakerCount });
     };
 
@@ -110,6 +117,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setTranslationThinkingLevel: updateTranslationThinkingLevel,
     setPauseMs: updatePauseMs,
     setReadingPauseMs: updateReadingPauseMs,
+    setLanguages: (source, target) => {
+      settingsChangedByUserRef.current = true;
+      controllerRef.current!.setLanguages(source, target);
+      const next = controllerRef.current!.snapshot();
+      void saveSettings({ sourceLanguage: next.sourceLanguage, targetLanguage: next.targetLanguage }).catch(error => console.warn('Không thể lưu ngôn ngữ:', error));
+    },
   };
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;

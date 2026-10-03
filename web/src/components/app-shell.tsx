@@ -19,6 +19,12 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
     setSidebarOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
+
   const isRecording = recordingState.state === 'recording';
 
   const formatDuration = (ms: number) => {
@@ -41,6 +47,7 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
 
       {/* Sidebar */}
       <aside
+        id="recording-library"
         className={`${styles.sidebarWrapper} ${sidebarOpen ? styles.sidebarOpen : ''}`}
       >
         <LibrarySidebar onCloseMobile={() => setSidebarOpen(false)} />
@@ -51,10 +58,12 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
         <header className={styles.topBar}>
           <div className={styles.topBarLeft}>
             <button
-              className={styles.toggleButton}
+              className={`${styles.toggleButton} ${styles.menuButton}`}
               onClick={() => setSidebarOpen(!sidebarOpen)}
               title="Mở/Đóng danh sách bản ghi"
-              aria-label="Toggle menu"
+              aria-label={sidebarOpen ? 'Đóng danh sách bản ghi' : 'Mở danh sách bản ghi'}
+              aria-expanded={sidebarOpen}
+              aria-controls="recording-library"
             >
               {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
             </button>

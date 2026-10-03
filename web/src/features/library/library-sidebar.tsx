@@ -1,25 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter, useParams } from 'next/navigation';
-import { Plus, Search, Upload, Settings } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { Plus, Search, Settings } from 'lucide-react';
 import { listRecordings } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
-import { importWebBundle, importApkExport } from '@/storage/export-import';
 import { RecordingList } from './recording-list';
 import { useRecording } from '@/features/recording/recording-context';
-import type { RecordingItem, WebExportBundle, ApkExportJson } from '@/shared/recording';
+import type { RecordingItem } from '@/shared/recording';
 
 export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }) {
-  const router = useRouter();
   const params = useParams();
   const currentId = typeof params?.id === 'string' ? params.id : null;
 
   const { state: recordingState } = useRecording();
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadList = useCallback(async () => {
     try {
@@ -38,56 +35,6 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
     window.addEventListener(dataEvent, reload);
     return () => { clearInterval(interval); window.removeEventListener(dataEvent, reload); };
   }, [loadList]);
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    let jsonFile: File | null = null;
-    let audioFile: File | null = null;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.name.endsWith('.json')) {
-        jsonFile = file;
-      } else if (file.name.endsWith('.wav') || file.name.endsWith('.webm') || file.name.endsWith('.mp4')) {
-        audioFile = file;
-      }
-    }
-
-    if (!jsonFile) {
-      alert('Vui lòng chọn ít nhất một file JSON xuất bản ghi hoặc conversation.json từ APK.');
-      return;
-    }
-
-    try {
-      const text = await jsonFile.text();
-      const parsed = JSON.parse(text);
-
-      let imported: RecordingItem;
-      if (parsed.schemaVersion === 1) {
-        // Web export bundle
-        imported = await importWebBundle(parsed as WebExportBundle, audioFile || undefined);
-      } else if (parsed.session && Array.isArray(parsed.turns)) {
-        // APK export
-        imported = await importApkExport(parsed as ApkExportJson, audioFile || undefined);
-      } else {
-        throw new Error('File JSON không đúng định dạng xuất của Web hoặc APK.');
-      }
-
-      await loadList();
-      router.push(`/recordings/${imported.id}`);
-      if (onCloseMobile) onCloseMobile();
-    } catch (err) {
-      alert(`Lỗi nhập file: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   const filtered = recordings.filter((r) =>
     r.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -119,30 +66,6 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
             <span>Buổi mới</span>
           </Link>
 
-          <button
-            onClick={handleImportClick}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '10px 12px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-secondary)',
-              borderRadius: 'var(--radius-sm)',
-            }}
-            title="Nhập bản ghi (JSON web hoặc APK conversation.json)"
-          >
-            <Upload size={18} />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,.wav,.webm,.mp4"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
         </div>
 
         {/* Search */}

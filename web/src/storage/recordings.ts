@@ -1,4 +1,6 @@
 import { getDb } from './db';
+import { notifyAudio } from './audio-assets';
+import { compareAudioChunkOrder } from '@/shared/audio';
 import type {
   RecordingItem,
   AudioChunk,
@@ -94,14 +96,17 @@ export async function deleteAudioOnly(id: string): Promise<void> {
     throw new Error('Buổi đang thu không thể xóa audio.');
   }
 
-  await db.transaction('rw', [db.recordings, db.audioChunks, db.audioSegments], async () => {
+  await db.transaction('rw', [db.recordings, db.audioChunks, db.audioSegments, db.audioAssets, db.audioJobs], async () => {
     await db.audioChunks.where('recordingId').equals(id).delete();
     await db.audioSegments.where('recordingId').equals(id).delete();
+    await db.audioAssets.put({ recordingId: id, status: 'deleted' });
+    await db.audioJobs.put({ recordingId: id, action: 'delete', attempts: 0, nextAttemptAt: 0 });
     await db.recordings.update(id, {
       audioState: 'deleted',
       audioDeletedAt: new Date().toISOString(),
     });
   });
+  notifyAudio(true);
 }
 
 export async function deleteRecording(id: string): Promise<void> {
@@ -114,8 +119,10 @@ export async function deleteRecording(id: string): Promise<void> {
 
   await db.transaction(
     'rw',
-    [db.recordings, db.audioChunks, db.audioSegments, db.captions, db.summaries, db.images],
+    [db.recordings, db.audioChunks, db.audioSegments, db.captions, db.summaries, db.images, db.audioAssets, db.audioJobs],
     async () => {
+      await db.audioAssets.put({ recordingId: id, status: 'deleted' });
+      await db.audioJobs.put({ recordingId: id, action: 'delete', attempts: 0, nextAttemptAt: 0 });
       await db.recordings.delete(id);
       await db.audioChunks.where('recordingId').equals(id).delete();
       await db.audioSegments.where('recordingId').equals(id).delete();
@@ -124,6 +131,7 @@ export async function deleteRecording(id: string): Promise<void> {
       await db.images.where('recordingId').equals(id).delete();
     }
   );
+  notifyAudio(true);
 }
 
 // Audio Chunks
@@ -150,11 +158,11 @@ export async function getAudioChunks(recordingId: string): Promise<AudioChunk[]>
   return chunks.sort(compareAudioChunkOrder);
 }
 
-function compareAudioChunkOrder(a: AudioChunk, b: AudioChunk): number {
-  return a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0) || a.sequence - b.sequence;
-}
-
-export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Promise<{ blob: Blob; mimeType: string } | null> {
+export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Promise<{ blob: Blob; mimeType: string; durationMs?: number } | null> {
+  const asset = await getDb().audioAssets.get(recordingId);
+  if (asset?.status === 'deleted') return null;
+  if (asset?.blob && asset.file) return asset.blob.size <= maxBytes ? { blob: asset.blob, mimeType: asset.file.mimeType, durationMs: asset.file.durationMs } : null;
+  if ((asset?.remote?.file?.sizeBytes ?? 0) > maxBytes) return null;
   const chunks: AudioChunk[] = [];
   let bytes = 0;
   let oversized = false;
@@ -164,6 +172,17 @@ export async function getAudioBlob(recordingId: string, maxBytes = Infinity): Pr
     if (!oversized) chunks.push(chunk);
   });
   if (oversized) return null;
+  if (typeof Worker !== 'undefined' && (chunks.length || asset?.remote?.state === 'available')) {
+    const recording = await getRecording(recordingId);
+    if (recording && recording.state !== 'recording') {
+      // Export and speaker analysis use the same verified whole-session file
+      // as playback, including audio that currently only exists in cloud.
+      const { playableAudio } = await import('./audio-sync');
+      const audio = await playableAudio(recordingId);
+      return audio.blob && audio.file && audio.blob.size <= maxBytes
+        ? { blob: audio.blob, mimeType: audio.file.mimeType, durationMs: audio.file.durationMs } : null;
+    }
+  }
   chunks.sort(compareAudioChunkOrder);
   if (chunks.length === 0) return null;
   const mimeType = chunks[0]?.mimeType || 'audio/webm';

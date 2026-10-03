@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
+import type { AudioSyncJob, LocalAudioAsset } from '@/shared/audio';
 import type {
   RecordingItem,
   AudioChunk,
@@ -17,6 +18,8 @@ export class AppDatabase extends Dexie {
   recordings!: EntityTable<RecordingItem, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'id'>;
   audioSegments!: EntityTable<AudioSegmentItem, 'id'>;
+  audioAssets!: EntityTable<LocalAudioAsset, 'recordingId'>;
+  audioJobs!: EntityTable<AudioSyncJob, 'recordingId'>;
   // Caption numbers restart in each recording, so both fields form its identity.
   get captions(): Table<CaptionItem, [string, number]> {
     return this.table('captionItems');
@@ -50,6 +53,10 @@ export class AppDatabase extends Dexie {
     this.version(4).stores({
       audioSegments: '++id, [recordingId+segmentIndex], recordingId, segmentIndex, status',
       audioChunks: '++id, [recordingId+sequence], recordingId, sequence, [recordingId+segmentIndex]',
+    });
+    this.version(5).stores({
+      audioAssets: 'recordingId, status',
+      audioJobs: 'recordingId, action, nextAttemptAt',
     });
   }
 }

@@ -54,6 +54,17 @@ describe('unary Gemini transcription', () => {
     expect(callbacks.onTranscript.mock.calls[0][5].startMs).toBeCloseTo(5000, 0);
     expect(callbacks.onTranscript.mock.calls[0][5].endMs).toBe(5500);
   });
+  it('uses capture timestamps across VAD gaps instead of compressing omitted silence', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ text: 'words' })));
+    const { recognizer, callbacks } = setup();
+    recognizer.pushPcm(new Float32Array(16000).fill(.2), 16000, 2000);
+    recognizer.finalizeUtterance();
+    recognizer.pushPcm(new Float32Array(8000).fill(.2), 16000, 10000);
+    await recognizer.stop();
+    expect(callbacks.onTranscript.mock.calls[0][5].startMs).toBe(2000);
+    expect(callbacks.onTranscript.mock.calls[1][5].startMs).toBe(10000);
+    expect(callbacks.onTranscript.mock.calls[1][5].endMs).toBeCloseTo(10500, 0);
+  });
   it('sends the Transcribe model with queued PCM segments and preserves final timing', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'Transcribe transcript', turns: [] }));
     vi.stubGlobal('fetch', fetcher);

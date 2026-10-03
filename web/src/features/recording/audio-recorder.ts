@@ -20,7 +20,6 @@ export class WebAudioRecorder {
   private volumeIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private currentSegmentIndex = 1;
-  private timesliceMs = 2000;
   private startTime = 0;
   private mimeType = 'audio/webm';
   private callbacks: AudioRecorderCallbacks;
@@ -33,6 +32,7 @@ export class WebAudioRecorder {
     this.callbacks = callbacks;
   }
   public get stream(): MediaStream | null { return this.mediaStream; }
+  public get startedAt(): number { return this.startTime; }
   public get segmentIndex(): number { return this.currentSegmentIndex; }
   public async resume(): Promise<void> {
     if (this.audioContext?.state === 'suspended') await this.audioContext.resume();
@@ -119,7 +119,6 @@ export class WebAudioRecorder {
         // Volume metering is non-fatal
       }
 
-      this.timesliceMs = timesliceMs;
       this.currentSegmentIndex = 1;
       this.pendingChunkWrites.clear();
       this.segmentPendingWrites.clear();
@@ -140,8 +139,7 @@ export class WebAudioRecorder {
   }
 
   private setupRecorderListeners(recorder: MediaRecorder, segmentIndex: number): void {
-    // Each MediaRecorder owns its own counter. The old recorder can emit its
-    // final chunk after the next recorder has already started.
+    // One recorder and one sequence counter for the entire session.
     let sequence = 0;
     recorder.ondataavailable = (event: BlobEvent) => {
       // MediaRecorder emits one last dataavailable event as part of stop().
@@ -169,51 +167,6 @@ export class WebAudioRecorder {
     recorder.onerror = (e) => {
       this.callbacks.onError(`Lỗi MediaRecorder: ${e}`);
     };
-  }
-
-  public async switchSegment(nextSegmentIndex: number, boundaryMs = Date.now() - this.startTime): Promise<void> {
-    if (!this.isRecording || !this.mediaStream) return;
-    const oldRecorder = this.mediaRecorder;
-    const oldIndex = this.currentSegmentIndex;
-    this.currentSegmentIndex = nextSegmentIndex;
-
-    // Start new recorder immediately on the same mediaStream so audio capture is continuous
-    const newRecorder = new MediaRecorder(this.mediaStream, { mimeType: this.mimeType });
-    this.setupRecorderListeners(newRecorder, nextSegmentIndex);
-    this.mediaRecorder = newRecorder;
-    newRecorder.start(this.timesliceMs);
-
-    // Stop old recorder and await its stop event & final data chunk
-    if (oldRecorder && oldRecorder.state !== 'inactive') {
-      try {
-        await new Promise<void>((resolve) => {
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(fallback);
-            resolve();
-          };
-          const fallback = setTimeout(finish, 2000);
-          oldRecorder.addEventListener('stop', finish, { once: true });
-          try {
-            oldRecorder.stop();
-          } catch {
-            finish();
-          }
-        });
-      } catch {
-        // ignore
-      }
-    }
-
-    // Await any pending chunk writes for the old segment
-    const oldPending = this.segmentPendingWrites.get(oldIndex);
-    if (oldPending) {
-      await Promise.all([...oldPending]);
-      this.segmentPendingWrites.delete(oldIndex);
-    }
-    await this.callbacks.onSegmentComplete?.(oldIndex, boundaryMs);
   }
 
   public async stop(): Promise<void> {

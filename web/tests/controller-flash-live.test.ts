@@ -23,6 +23,7 @@ vi.mock('@/features/recording/audio-recorder', () => ({
     async switchSegment() {}
   },
 }));
+vi.mock('@/storage/audio-assets', () => ({ queueAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/storage/recordings', () => ({
   createRecording: vi.fn().mockResolvedValue({ id: 'flash-session', state: 'recording', audioState: 'present' }),
   updateRecording: vi.fn().mockResolvedValue(undefined),

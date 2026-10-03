@@ -8,6 +8,7 @@ import { readCloudRecording, readCloudRecordingIndex, writeCloudRecording } from
 
 function fakeNeon() {
   const rows = new Map<string, CloudRow>();
+  const audioTombstones = new Set<string>();
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const statement = strings.join('?');
     if (statement.includes('CREATE TABLE')) return [];
@@ -31,6 +32,7 @@ function fakeNeon() {
       if (rows.has(key)) return [];
       const row: CloudRow = { id, version: 1, payload: rawPayload ? JSON.parse(rawPayload) as CloudPayload : null };
       rows.set(key, row);
+      if (statement.includes('INSERT INTO recording_audio')) audioTombstones.add(key);
       return [row];
     }
     if (statement.includes('UPDATE recording_sync')) {
@@ -40,11 +42,12 @@ function fakeNeon() {
       if (!current || current.version !== expectedVersion) return [];
       const row: CloudRow = { id, version: current.version + 1, payload: rawPayload ? JSON.parse(rawPayload) as CloudPayload : null };
       rows.set(key, row);
+      if (statement.includes('INSERT INTO recording_audio')) audioTombstones.add(key);
       return [row];
     }
     throw new Error(`Unexpected SQL: ${statement}`);
   };
-  return { sql, rows };
+  return { sql, rows, audioTombstones };
 }
 
 describe('cloud recording SQL compare-and-swap', () => {
@@ -82,6 +85,18 @@ describe('cloud recording SQL compare-and-swap', () => {
     delete process.env.POSTGRES_URL;
     await expect(writeCloudRecording('owner-a', 'rec', 0, null)).rejects.toThrow('CLOUD_NOT_CONFIGURED');
     expect(neonMock).not.toHaveBeenCalled();
+  });
+
+  it('commits an audio tombstone for old text-only deletions without deleting on a CAS conflict', async () => {
+    const fake = fakeNeon();
+    neonMock.mockReturnValue(fake.sql);
+    fake.rows.set('owner-a:rec', { id: 'rec', version: 2, payload: null });
+    expect(await writeCloudRecording('owner-a', 'rec', 1, null)).toBeNull();
+    expect(fake.audioTombstones.size).toBe(0);
+    expect(await writeCloudRecording('owner-a', 'rec', 2, null)).toMatchObject({ version: 3, payload: null });
+    expect(fake.audioTombstones).toEqual(new Set(['owner-a:rec']));
+    expect(await writeCloudRecording('owner-b', 'new-rec', 0, null)).toMatchObject({ version: 1 });
+    expect(fake.audioTombstones.has('owner-b:new-rec')).toBe(true);
   });
 
   it('serves an id/version index in cursor pages and returns payloads only for explicit IDs', async () => {

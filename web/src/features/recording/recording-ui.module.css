@@ -804,6 +804,10 @@
 }
 
 @media (max-width: 480px) {
+  .diagnosticDetail {
+    display: none;
+  }
+
   .modeSwitchBtn span {
     font-size: 0.74rem;
   }

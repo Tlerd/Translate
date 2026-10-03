@@ -53,6 +53,17 @@ describe('POST /api/speech/transcribe', () => {
     expect(mocks.upload).not.toHaveBeenCalled();
   });
 
+  it.each(['es-419', 'yue-Hant-HK', 'cmn-Hans-CN'])('preserves the selected BCP-47 hint %s in the actual provider request', async language => {
+    const response = await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2000, { language }));
+    expect(response.status).toBe(200);
+    expect(mocks.create.mock.calls[0][0].generation_config.transcription_config.language_codes).toEqual([language]);
+  });
+
+  it('rejects malformed language hints before uploading to Google', async () => {
+    expect((await POST(formRequest(new File(['audio'], 'voice.wav', { type: 'audio/wav' }), 2000, { language: 'ja_JP' }))).status).toBe(400);
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+
   it('uses verbatim unary transcription and cleans up the provider upload', async () => {
     const response = await POST(formRequest(new File(['audio-data'], 'recording.wav', { type: 'audio/wav' })));
     expect(response.status).toBe(200);

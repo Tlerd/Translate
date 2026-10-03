@@ -1,3 +1,4 @@
+import { synchronizeAudio } from './audio-sync';
 import { getDb } from './db';
 import { cloudPayloadSchema, cloudRecordingIndexPageSchema, cloudRowResponseSchema, type CloudPayload, type CloudRecordingIndexItem, type CloudRow } from '@/shared/cloud-recording';
 import type { RecordingItem, RecordingState } from '@/shared/recording';
@@ -6,7 +7,7 @@ interface Baseline { version: number; content: string | null }
 let running: Promise<void> | null = null;
 export const syncEvent = 'recordings-cloud-sync';
 export const dataEvent = 'recordings-cloud-updated';
-export type SyncState = { state: 'syncing' | 'done' | 'error'; message: string };
+export type SyncState = { state: 'syncing' | 'done' | 'error'; message: string; phase?: 'text' | 'audio' };
 function publish(state: SyncState) { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(syncEvent, { detail: state })); }
 function signature(payload: CloudPayload | null) { return payload === null ? null : JSON.stringify(payload); }
 function cloudRecording(recording: RecordingItem, state: RecordingState = recording.state): RecordingItem {
@@ -25,14 +26,14 @@ async function snapshot(id: string, db = getDb()): Promise<CloudPayload | null> 
   if (!recording) return null;
   const captions = await db.captions.where('recordingId').equals(id).sortBy('id');
   const summaries = await db.summaries.where('recordingId').equals(id).sortBy('id');
-  // Binary audio/images and app settings never leave this browser.
+  // Audio binaries use a separate private Blob API; images/settings stay local.
   return cloudPayloadSchema.parse({ recording: cloudRecording(recording), captions, summaries });
 }
 type IngestResult = 'imported' | 'local-edited' | 'active';
 async function ingest(row: CloudRow, expectedLocalContent: string | null): Promise<IngestResult> {
   const db = getDb();
   if (row.payload && !cloudPayloadSchema.safeParse(row.payload).success) throw new Error('Dữ liệu cloud không hợp lệ.');
-  return db.transaction('rw', [db.recordings, db.captions, db.summaries, db.settings], async () => {
+  return db.transaction('rw', [db.recordings, db.captions, db.summaries, db.settings, db.audioChunks, db.audioSegments, db.audioAssets, db.audioJobs, db.images], async () => {
     // Re-read inside the write transaction. Edits made since the initial
     // download snapshot must stay local and dirty for the next sync attempt.
     const current = await snapshot(row.id, db);
@@ -55,6 +56,11 @@ async function ingest(row: CloudRow, expectedLocalContent: string | null): Promi
       await db.settings.put({ key: `cloud:${row.id}`, value: JSON.stringify({ version: row.version, content: signature(baselinePayload) }) });
     } else {
       await db.recordings.delete(row.id);
+      await db.audioChunks.where('recordingId').equals(row.id).delete();
+      await db.audioSegments.where('recordingId').equals(row.id).delete();
+      await db.audioAssets.delete(row.id);
+      await db.images.where('recordingId').equals(row.id).delete();
+      await db.audioJobs.put({ recordingId: row.id, action: 'delete', attempts: 0, nextAttemptAt: 0 });
       await db.captions.where('recordingId').equals(row.id).delete();
       await db.summaries.where('recordingId').equals(row.id).delete();
       await remember(row);
@@ -117,7 +123,7 @@ async function preserveConflict(payload: CloudPayload) {
   });
   const row = await upload(id, 0, copy); if (row) await remember(row);
 }
-async function runSync() {
+async function runSync(retryAudio: boolean) {
   publish({ state: 'syncing', message: 'Đang đồng bộ chữ…' });
   const remoteIndex = await fetchIndex();
   const db = getDb(); const local = await db.recordings.toArray();
@@ -146,10 +152,19 @@ async function runSync() {
     }
   }
   window.dispatchEvent(new Event(dataEvent));
-  publish({ state: 'done', message: conflicts ? `Đã đồng bộ; giữ ${conflicts} bản sao do sửa đồng thời.` : 'Đã đồng bộ chữ · audio trên máy' });
+  publish({ state: 'syncing', phase: 'audio', message: 'Chữ đã đồng bộ · đang đồng bộ audio…' });
+  try {
+    const result = await synchronizeAudio(retryAudio);
+    publish({ state: result.pending ? 'error' : 'done', phase: 'audio', message: result.pending
+      ? `Chữ đã đồng bộ · ${result.pending} audio đang chờ thử lại${result.errors ? ' do lỗi' : ''}. Bản gốc trên máy vẫn được giữ.`
+      : conflicts ? `Chữ và audio đã đồng bộ; giữ ${conflicts} bản sao do sửa đồng thời.` : 'Chữ và audio đã đồng bộ' });
+  } catch (error) {
+    publish({ state: 'error', phase: 'audio', message: `Chữ đã đồng bộ · audio lỗi: ${error instanceof Error ? error.message : 'chưa đồng bộ'}` });
+  }
+  window.dispatchEvent(new Event(dataEvent));
 }
-export function synchronizeRecordings(): Promise<void> {
+export function synchronizeRecordings(retryAudio = false): Promise<void> {
   if (running) return running;
-  running = runSync().catch(error => publish({ state: 'error', message: error instanceof Error ? error.message : 'Chưa đồng bộ. Dữ liệu trên máy được giữ.' })).finally(() => { running = null; });
+  running = runSync(retryAudio).catch(error => publish({ state: 'error', message: error instanceof Error ? error.message : 'Chưa đồng bộ. Dữ liệu trên máy được giữ.' })).finally(() => { running = null; });
   return running;
 }

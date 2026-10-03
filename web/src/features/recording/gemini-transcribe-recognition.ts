@@ -11,6 +11,7 @@ export class GeminiTranscribeRecognizer {
   private resampler: Pcm16kResampler | null = null;
   private samples: Float32Array[] = [];
   private sampleCount = 0;
+  private captureStartMs: number | null = null;
   private silenceSamples = 0;
   private speechSamples = 0;
   private queuedSamples = 0;
@@ -40,17 +41,19 @@ export class GeminiTranscribeRecognizer {
     this.callbacks.onStateChange('listening');
   }
 
-  pushPcm(input: Float32Array, rate: number): void {
+  pushPcm(input: Float32Array, rate: number, startMs?: number): void {
     if (!this.running || this.failed) return;
+    if (startMs !== undefined && this.captureStartMs !== null && this.sampleCount && startMs > this.captureStartMs + this.sampleCount / 16 + 200) this.finalizeUtterance();
     this.resampler ??= new Pcm16kResampler(rate);
     const samples = this.resampler.push(input);
-    this.append(samples);
+    this.append(samples, startMs);
     // A maximum of 15 seconds bounds request size and latency during continuous speech.
     if (this.sampleCount >= 15 * 16000 || (this.sampleCount >= 16000 && this.silenceSamples >= this.pauseMs * 16)) this.finalizeUtterance();
   }
 
-  private append(samples: Float32Array): void {
+  private append(samples: Float32Array, startMs?: number): void {
     if (!samples.length) return;
+    if (!this.sampleCount) this.captureStartMs = startMs !== undefined && Number.isFinite(startMs) ? Math.max(0, startMs) : null;
     this.samples.push(samples);
     this.sampleCount += samples.length;
     let power = 0;
@@ -62,10 +65,12 @@ export class GeminiTranscribeRecognizer {
   finalizeUtterance(): void {
     if (!this.sampleCount) return;
     const count = this.sampleCount;
+    const startMs = this.captureStartMs ?? this.offsetMs + this.processedSamples / 16;
     const timing = {
-      startMs: Math.round(this.offsetMs + this.processedSamples / 16),
-      endMs: Math.round(this.offsetMs + (this.processedSamples + count) / 16),
+      startMs: Math.round(startMs),
+      endMs: Math.round(startMs + count / 16),
     };
+    this.captureStartMs = null;
     this.processedSamples += count;
     const hasSpeech = this.speechSamples >= 320;
     this.speechSamples = 0;

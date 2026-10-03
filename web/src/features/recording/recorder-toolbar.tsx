@@ -2,9 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Mic, Square, Volume2, BookOpen, Layers, Settings, Pause, Play, AlertTriangle } from 'lucide-react';
+import { Mic, Square, Volume2, BookOpen, Layers, Settings, Pause, Play, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { useRecording } from './recording-context';
 import styles from './recording-ui.module.css';
+import { LanguageSelect } from './language-select';
+import languageStyles from './language-select.module.css';
+import { inputLanguages, inputLanguage, languageName, OUTPUT_LANGUAGES } from '@/shared/languages';
 import { speechProviderName } from '@/shared/transcription';
 
 interface RecorderToolbarProps {
@@ -21,6 +24,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
     pauseApi,
     resumeApi,
     switchMode,
+    setLanguages,
   } = useRecording();
 
   const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | 'pausing' | 'resuming' | null>(null);
@@ -104,6 +108,21 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
   return (
     <div className={`${styles.toolbar} ${isRecording ? styles.recordingToolbar : ''}`}>
+      <div className={`${languageStyles.row} ${isRecording ? languageStyles.recordingControls : ''}`}>
+        <LanguageSelect label="Ngôn ngữ đầu vào" value={inputLanguage(state.sourceLanguage, state.speechProvider) ?? state.sourceLanguage}
+          options={inputLanguages(state.speechProvider)} disabled={isRecording || pendingAction !== null}
+          onChange={code => setLanguages(code, state.targetLanguage)} />
+        <button type="button" className={languageStyles.swap} aria-label="Đổi chiều ngôn ngữ" title="Đổi chiều ngôn ngữ"
+          disabled={isRecording || pendingAction !== null || !inputLanguage(state.targetLanguage, state.speechProvider)}
+          onClick={() => setLanguages(state.targetLanguage, state.sourceLanguage)}><ArrowLeftRight size={20} /></button>
+        <LanguageSelect label="Ngôn ngữ đầu ra" value={state.targetLanguage} options={OUTPUT_LANGUAGES}
+          disabled={isRecording || pendingAction !== null} onChange={code => setLanguages(state.sourceLanguage, code)} />
+      </div>
+      {isRecording && <div className={languageStyles.recordingPair} aria-label="Ngôn ngữ buổi đang thu">
+        <div><small>Ngôn ngữ đầu vào</small><span title={state.sourceLanguage}>{languageName(state.sourceLanguage)}</span></div>
+        <ArrowLeftRight size={16} aria-hidden="true" />
+        <div><small>Ngôn ngữ đầu ra</small><span title={state.targetLanguage}>{languageName(state.targetLanguage)}</span></div>
+      </div>}
       {/* Primary Clean Action Row */}
       <div className={styles.primaryActionRow}>
         <div className={styles.primaryActionsLeft}>
@@ -127,7 +146,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
                   onClick={handleResumeApi}
                   disabled={pendingAction !== null || state.apiState === 'resuming'}
                   className={`${styles.recordActionBtn} ${styles.recordBtnResume}`}
-                  title="Tiếp tục nhận giọng và dịch (mở đoạn Đang dịch mới)"
+                  title="Tiếp tục nhận giọng và dịch; ghi âm toàn buổi vẫn liên tục"
                 >
                   <Play size={16} fill="#fff" />
                   <span>{pendingAction === 'resuming' || state.apiState === 'resuming' ? 'Đang tiếp tục…' : 'Tiếp tục'}</span>
@@ -138,7 +157,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
                   onClick={handlePauseApi}
                   disabled={pendingAction !== null || state.apiState === 'pausing'}
                   className={`${styles.recordActionBtn} ${styles.recordBtnPause}`}
-                  title="Dừng API nhận giọng/dịch (mở đoạn Nghỉ API; ghi âm cục bộ vẫn tiếp tục)"
+                  title="Dừng gửi âm thanh mới tới API; các câu đã nhận tiếp tục dịch, ghi âm vẫn tiếp tục"
                 >
                   <Pause size={16} fill="#fff" />
                   <span>{pendingAction === 'pausing' || state.apiState === 'pausing' ? 'Đang dừng…' : 'Dừng API'}</span>
@@ -250,7 +269,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               <span>Xác nhận kết thúc buổi học?</span>
             </div>
             <div className={styles.confirmMessage}>
-              Buổi học đã đóng sẽ không thể thu tiếp. Toàn bộ các đoạn audio và bản dịch đã ghi sẽ được chốt và lưu lại trên máy.
+              Buổi học đã đóng sẽ không thể thu tiếp. Audio toàn buổi và bản dịch được lưu trên máy, sau đó tự đồng bộ khi có mạng.
             </div>
             <div className={styles.confirmActions}>
               <button
@@ -300,16 +319,16 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               } as const)[state.micState]
             }
           </span>
-          <span>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>
+          <span className={styles.diagnosticDetail}>Audio PCM nhận: {Math.floor(state.receivedAudioMs / 1000)}s</span>
           <span>{state.speakerCount} người nói</span>
-          <span>Kết quả nhận: {state.transcriptCount}</span>
-          <span>
+          <span className={styles.diagnosticDetail}>Kết quả nhận: {state.transcriptCount}</span>
+          <span className={styles.diagnosticDetail}>
             Kết quả cuối:{' '}
             {state.lastTranscriptAt === null
               ? 'chưa có'
               : new Date(state.lastTranscriptAt).toLocaleTimeString()}
           </span>
-          {state.translationLatencyMs !== null && <span>Dịch: {state.translationLatencyMs}ms</span>}
+          {state.translationLatencyMs !== null && <span className={styles.diagnosticDetail}>Dịch: {state.translationLatencyMs}ms</span>}
         </div>
       )}
 

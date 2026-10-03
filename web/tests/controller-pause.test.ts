@@ -61,7 +61,8 @@ class FakeMediaRecorder {
   state: RecordingState = 'inactive';
   ondataavailable: ((event: BlobEvent) => void) | null = null;
   private listeners = new Map<string, Array<() => void>>();
-  constructor(public stream: MediaStream, public options?: MediaRecorderOptions) {}
+  static instances: FakeMediaRecorder[] = [];
+  constructor(public stream: MediaStream, public options?: MediaRecorderOptions) { FakeMediaRecorder.instances.push(this); }
   start() { this.state = 'recording'; }
   stop() {
     this.state = 'inactive';
@@ -73,11 +74,12 @@ class FakeMediaRecorder {
   }
 }
 
-describe('ClassroomController Pause / Resume API and Segment switching', () => {
+describe('ClassroomController API pause with continuous audio', () => {
   let controller: ClassroomController;
   let db: AppDatabase;
 
   beforeEach(() => {
+    FakeMediaRecorder.instances.length = 0;
     recognizerPushes.length = 0;
     recognizerStartCount = 0;
     recognizerStopCount = 0;
@@ -109,7 +111,7 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     vi.unstubAllGlobals();
   });
 
-  it('pauses API: creates segment 2 (apiPaused), stops recognizer, ignores audio during pause', async () => {
+  it('pauses only API input, keeping the recorder alive and one full-session file', async () => {
     await controller.start({
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
@@ -134,30 +136,23 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     await controller.pauseApi();
 
     expect(controller.snapshot().apiState).toBe('paused');
-    expect(controller.snapshot().activeSegmentIndex).toBe(2);
-    expect(controller.snapshot().activeSegmentKind).toBe('apiPaused');
+    expect(controller.snapshot().activeSegmentIndex).toBe(1);
+    expect(controller.snapshot().activeSegmentKind).toBe('translating');
     expect(recognizerStopCount).toBe(1);
 
     // Push PCM while paused -> recognizer MUST NOT receive it
     activePcm?.onPcm?.(new Float32Array([0.3, 0.4]), 16000);
     expect(recognizerPushes.length).toBe(1); // Still 1
 
-    // Verify DB segments
     const segments = await getAudioSegments(recordingId);
-    expect(segments.length).toBe(2);
-    expect(segments[0]).toMatchObject({
-      segmentIndex: 1,
-      kind: 'translating',
-      status: 'completed',
-    });
-    expect(segments[1]).toMatchObject({
-      segmentIndex: 2,
-      kind: 'apiPaused',
-      status: 'recording',
-    });
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ segmentIndex: 1, status: 'recording' });
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+    expect(FakeMediaRecorder.instances[0].state).toBe('recording');
+
   });
 
-  it('resumes API: creates segment 3 (translating), restarts recognizer with session offset, accepts audio again', async () => {
+  it('resumes API with whole-session offset without restarting audio capture', async () => {
     await controller.start({
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
@@ -183,7 +178,7 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     await controller.resumeApi();
 
     expect(controller.snapshot().apiState).toBe('active');
-    expect(controller.snapshot().activeSegmentIndex).toBe(3);
+    expect(controller.snapshot().activeSegmentIndex).toBe(1);
     expect(controller.snapshot().activeSegmentKind).toBe('translating');
     expect(recognizerStartCount).toBe(2);
     expect(typeof lastOffsetMs).toBe('number');
@@ -192,12 +187,11 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     activePcm?.onPcm?.(new Float32Array([0.5, 0.6]), 16000);
     expect(recognizerPushes.length).toBe(2);
 
-    // Verify DB segments
     const segments = await getAudioSegments(recordingId);
-    expect(segments.length).toBe(3);
-    expect(segments[0]).toMatchObject({ segmentIndex: 1, kind: 'translating', status: 'completed' });
-    expect(segments[1]).toMatchObject({ segmentIndex: 2, kind: 'apiPaused', status: 'completed' });
-    expect(segments[2]).toMatchObject({ segmentIndex: 3, kind: 'translating', status: 'recording' });
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ segmentIndex: 1, status: 'recording' });
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+
   });
 
   it('pauses and resumes while the previous recognizer is still draining', async () => {
@@ -217,7 +211,7 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
     finishDrain();
   });
 
-  it('stops while paused: completes the paused segment and marks session stopped', async () => {
+  it('stops while API paused: persists the last audio chunk and queues a full-session upload', async () => {
     await controller.start({
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
@@ -227,16 +221,17 @@ describe('ClassroomController Pause / Resume API and Segment switching', () => {
 
     const recordingId = controller.snapshot().recordingId!;
     await controller.pauseApi();
-    expect(controller.snapshot().activeSegmentIndex).toBe(2);
+    expect(controller.snapshot().activeSegmentIndex).toBe(1);
 
     await controller.stop();
 
     expect(controller.snapshot().state).toBe('stopped');
 
     const segments = await getAudioSegments(recordingId);
-    expect(segments.length).toBe(2);
+    expect(segments).toHaveLength(1);
     expect(segments[0].status).toBe('completed');
-    expect(segments[1].status).toBe('completed');
+    expect(await db.audioChunks.where('recordingId').equals(recordingId).count()).toBe(1);
+    expect((await db.audioJobs.get(recordingId))?.action).toBe('upload');
   });
 
   it('sound threshold: suppresses low-energy silence and flushes pre-roll when voice is detected', async () => {

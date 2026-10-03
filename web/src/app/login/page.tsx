@@ -3,11 +3,14 @@ import { auth, signIn } from '@/auth';
 import { redirect } from 'next/navigation';
 import { AudioLines, ArrowRight } from 'lucide-react';
 import styles from '../welcome.module.css';
+import { ownerEmail, ownerSession } from '@/server/auth-policy';
+
+export const dynamic = 'force-dynamic';
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await auth();
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  if (owner && session?.user?.email?.trim().toLowerCase() === owner) redirect('/app');
+  const owner = ownerEmail();
+  if (ownerSession(session)) redirect('/app');
   const { error } = await searchParams;
   const configured = Boolean(process.env.AUTH_SECRET && process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && owner);
   const message = error === 'AccessDenied'

@@ -222,7 +222,7 @@ Policy khởi điểm tại `ai.server.ts`: dịch timeout 12 giây, tóm tắt 
 | GitHub repository | [Tlerd/Translate](https://github.com/Tlerd/Translate) |
 | Git remote URL | `https://github.com/Tlerd/Translate.git` |
 | Thư mục gốc Git dự kiến | `D:/idea/may-dich-offline/`, không khởi tạo Git riêng lồng trong `web/` |
-| Vercel Production URL | [translate-psi-khaki.vercel.app](https://translate-psi-khaki.vercel.app/) |
+| Vercel Production URL | [translate-ruby-phi.vercel.app](https://translate-ruby-phi.vercel.app/app) |
 | Vercel Root Directory | `web` |
 | Nhánh phát hành đề xuất | `main`; kiểm tra Production Branch của dự án Vercel trước lần push đầu |
 
@@ -440,7 +440,7 @@ Chia thành các bước nhỏ có đầu ra rõ. Model hoàn thành và báo ki
 | P3: AI server và dịch | `config/`, `shared/ai-contracts.ts`, auth/guard/quota, hai Adapter, prompt dịch, models/translate routes, scheduler | Nhánh dịch ưu tiên model rẻ, sát lời nói; chặn dùng model tóm tắt; SSE/revision/cancel/429 đúng; không dịch bù |
 | P4: Tóm tắt và ảnh | Hai prompt/tác vụ/route còn lại, hai panel, lưu kết quả | Model tóm tắt mạnh/ổn khác model dịch, chỉ chạy khi bấm; một preset Mặc định; sau đó tạo ảnh bằng model ảnh đã chọn; lưu/mở lại được |
 | P5: Nghiệm thu mobile/web | Test chức năng rủi ro + kiểm tra browser desktop/mobile + buổi 60 phút | Qua các ca bên dưới; giới hạn còn lại ghi rõ trong README; chưa đạt thì chưa thay APK |
-| P6: GitHub/Vercel/PWA | Hoàn thành mục 5.3: init Git nếu thiếu, commit/push vào `Tlerd/Translate`, kiểm tra env/auth callback và manifest/icon, theo dõi/sửa deployment đến khi đạt | Commit cuối đã lên GitHub; Vercel `READY` đúng commit; `https://translate-psi-khaki.vercel.app/` hoạt động đúng; báo rõ kết quả từng provider và thiết bị |
+| P6: GitHub/Vercel/PWA | Hoàn thành mục 5.3: init Git nếu thiếu, commit/push vào `Tlerd/Translate`, kiểm tra env/auth callback và manifest/icon, theo dõi/sửa deployment đến khi đạt | Commit cuối đã lên GitHub; Vercel `READY` đúng commit; `https://translate-ruby-phi.vercel.app/app` hoạt động đúng; báo rõ kết quả từng provider và thiết bị |
 
 Kiểm tra tập trung:
 
@@ -456,6 +456,6 @@ Lệnh kiểm tra sẽ khai báo trong `web/package.json`: `npm run lint`, `npm 
 
 > Đọc `D:/idea/may-dich-offline/DINH-HUONG-APP-WEB-VA-MODEL.md` và triển khai lần lượt P0–P6 khi được giao triển khai. Đây là rebuild web responsive trong `web/`, giữ `app/` và `releases/` làm đối chiếu. Hai phần độc lập: A dịch sát nút bằng model ưu tiên rẻ; B chỉ khi bấm Tóm tắt mới gọi model mạnh/ổn khác model dịch, tạo một preset Mặc định rồi cho phép tạo ảnh. Hai model dịch/tóm tắt bắt buộc khác nhau, không dùng chung dù khác prompt/API; server phải kiểm tra điều này. STT dùng Web Speech; ảnh có API/model sinh ảnh riêng trong phần B. Dùng cây file mục 8, hợp đồng mục 4 và nghiệm thu mục 10. Chỉ lấy ý tưởng sidebar chứa bản ghi từ ảnh, không thiết kế lại toàn bộ giao diện. Giữ dừng thủ công, hai chế độ học, bản gốc/dịch, không dịch bù, không tự xóa. Báo rõ phần mock và phần đã thử thật; không tự bật dịch vụ trả phí. Nếu thiếu tài khoản/quyền cho kiểm thử thực, hoàn thành phần độc lập và ghi điều kiện còn thiếu, không tuyên bố đã deploy hoặc hoạt động thực.
 
-> Phần phát hành bắt buộc của cùng công việc: đưa mã web lên `https://github.com/Tlerd/Translate`. Nếu gốc `D:/idea/may-dich-offline/` chưa có Git thì `git init` tại đó, kiểm tra remote/lịch sử trước khi gắn `origin`, commit và push theo mục 5.3. Dùng dự án Vercel người dùng đã liên kết, Root Directory `web`, URL Production `https://translate-psi-khaki.vercel.app/`. Theo dõi đúng commit, sửa lỗi rồi commit/push tiếp đến khi mã cuối đã lên repo và deployment hoạt động; không dừng ở việc chỉ hướng dẫn người dùng tự push. Nội dung này chỉ được thực hiện khi nhận nhiệm vụ triển khai, không trong lượt lập kế hoạch.
+> Phần phát hành bắt buộc của cùng công việc: đưa mã web lên `https://github.com/Tlerd/Translate`. Nếu gốc `D:/idea/may-dich-offline/` chưa có Git thì `git init` tại đó, kiểm tra remote/lịch sử trước khi gắn `origin`, commit và push theo mục 5.3. Dùng dự án Vercel người dùng đã liên kết, Root Directory `web`, URL Production `https://translate-ruby-phi.vercel.app/app`. Theo dõi đúng commit, sửa lỗi rồi commit/push tiếp đến khi mã cuối đã lên repo và deployment hoạt động; không dừng ở việc chỉ hướng dẫn người dùng tự push. Nội dung này chỉ được thực hiện khi nhận nhiệm vụ triển khai, không trong lượt lập kế hoạch.
 
 **Trạng thái cuối tài liệu: đã bổ sung kế hoạch GitHub/Vercel; lượt này không init Git, commit, push hoặc deploy. P0–P6 chưa được nghiệm thu qua lượt cập nhật tài liệu này.**

@@ -338,8 +338,18 @@ async function run() {
         modelKey: 'google:gemini-3.8-flash', title: 'Sở thích âm nhạc', overview: 'Âm nhạc và hoạt động ngày nghỉ.',
         sections: [{ heading: 'Sở thích', bullets: ['Nghe nhạc cổ điển.'], captionIds: [1, 2] }], generatedAt: new Date().toISOString() },
     };
-    await page.locator('input[type=file]').setInputFiles({ name: 'recording.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) });
-    await page.waitForURL(`**/recordings/${recordingId}`);
+    assert.equal(await page.locator('input[type=file]').count(), 0, 'Redundant sidebar upload was removed');
+    await page.evaluate(bundle => new Promise((resolve, reject) => {
+      const open = indexedDB.open('may_dich_offline_db'); open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const database = open.result, transaction = database.transaction(['recordings', 'captionItems', 'summaries'], 'readwrite');
+        transaction.objectStore('recordings').put(bundle.recording);
+        bundle.captions.forEach(caption => transaction.objectStore('captionItems').put(caption));
+        transaction.objectStore('summaries').put(bundle.summary);
+        transaction.oncomplete = () => { database.close(); resolve(); }; transaction.onerror = () => reject(transaction.error);
+      };
+    }), bundle);
+    await page.goto(`${baseUrl}/recordings/${recordingId}`);
     assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).inputValue(), 'Giảng viên');
     const history = page.getByText('Lời nhận dạng trước đó (1)', { exact: true });
     await history.click();
@@ -413,8 +423,8 @@ async function run() {
     await page.locator('#speech-provider').selectOption('google-transcribe');
     assert.equal(await page.locator('#transcription-mode option').count(), 2);
     assert.equal(await page.locator('#speaker-count option').count(), 8);
-    assert.equal(await page.locator('#speaker-count').getAttribute('required'), '');
-    assert.match(await page.locator('body').innerText(), /1,50 USD/);
+    assert.match(await page.locator('#speaker-count').inputValue(), /^[1-8]$/);
+    assert.match(await page.locator('body').innerText(), /0,005 USD\/phút/);
     await page.locator('#transcription-mode').selectOption('smart');
     await page.locator('#speaker-count').selectOption('8');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
@@ -445,6 +455,7 @@ async function run() {
     await page.getByText('Đây là câu tiếp theo.', { exact: true }).waitFor();
     await page.evaluate(() => window.__speech.say('最後まで保存します。', false));
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     await page.getByText('Lưu đến hết câu.', { exact: true }).waitFor();
     const requests = await page.evaluate(() => window.__translationRequests);
@@ -473,6 +484,7 @@ async function run() {
     await page.evaluate(() => { window.__failTranslation = 'API失敗。'; window.__speech.say('API失敗。', true); });
     await page.getByText('Lỗi dịch: Lỗi API mô phỏng để kiểm thử', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     const errorRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
     const failed = await storedRows(page, 'captionItems', errorRecordingId);
@@ -486,6 +498,7 @@ async function run() {
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
     await page.evaluate(() => window.__speech.say('遅れて届いた結果を全部残します。', false));
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     await page.getByText('遅れて届いた結果を全部残します。', { exact: true }).waitFor();
     const correctedRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
@@ -512,6 +525,7 @@ async function run() {
     await page.getByText('Speaker 1', { exact: true }).waitFor();
     await page.getByText('Speaker 2', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).inputValue(), 'spk_1');
     assert.equal(await page.getByRole('combobox', { name: 'Người nói cho câu 2', exact: true }).inputValue(), 'spk_2');
@@ -585,6 +599,7 @@ async function run() {
     await page.screenshot({ path: path.join(outputDir, 'flash-live-multiple-sentences.png') });
 
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => window.__liveTokenRequests.at(-1).model), 'gemini-3.1-flash-live-preview');
     const flashRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);
@@ -610,6 +625,7 @@ async function run() {
     await page.evaluate(() => window.__liveSockets.at(-1).say('私は音楽が好きです。'));
     await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).click();
+    await page.getByRole('button', { name: 'Kết thúc và lưu', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     await page.getByRole('combobox', { name: 'Người nói cho câu 1', exact: true }).selectOption('spk_8');
     const liveSocketRecordingId = await page.evaluate(() => window.__translationRequests.at(-1).recordingId);

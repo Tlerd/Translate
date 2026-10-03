@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Cloud, RefreshCw, CloudOff } from 'lucide-react';
 import { synchronizeRecordings, syncEvent, type SyncState } from '@/storage/cloud-sync';
 import styles from './cloud-sync-status.module.css';
+import { audioWorkEvent } from '@/shared/audio';
 
 export function CloudSyncStatus() {
   const [status, setStatus] = useState<SyncState>({ state: 'syncing', message: 'Đang kiểm tra đồng bộ…' });
@@ -19,7 +20,10 @@ export function CloudSyncStatus() {
     };
 
     window.addEventListener(syncEvent, update);
-    window.addEventListener('online', visible);
+    const audioReady = () => { void synchronizeRecordings(); };
+    const online = () => { void synchronizeRecordings(true); };
+    window.addEventListener(audioWorkEvent, audioReady);
+    window.addEventListener('online', online);
     document.addEventListener('visibilitychange', visible);
 
     void synchronizeRecordings();
@@ -28,7 +32,8 @@ export function CloudSyncStatus() {
     return () => {
       clearInterval(timer);
       window.removeEventListener(syncEvent, update);
-      window.removeEventListener('online', visible);
+      window.removeEventListener(audioWorkEvent, audioReady);
+      window.removeEventListener('online', online);
       document.removeEventListener('visibilitychange', visible);
     };
   }, []);
@@ -36,7 +41,7 @@ export function CloudSyncStatus() {
   const handleSyncClick = async () => {
     setIsManualSyncing(true);
     try {
-      await synchronizeRecordings();
+      await synchronizeRecordings(true);
     } finally {
       setIsManualSyncing(false);
     }
@@ -46,8 +51,8 @@ export function CloudSyncStatus() {
   const isError = status.state === 'error';
 
   const getLabel = () => {
-    if (isSyncing) return 'Đang đồng bộ…';
-    if (isError) return 'Lỗi đồng bộ';
+    if (isSyncing) return status.phase === 'audio' ? 'Audio đang tải…' : 'Đang đồng bộ chữ…';
+    if (isError) return status.phase === 'audio' ? 'Chữ đã đồng bộ · audio lỗi' : 'Lỗi đồng bộ chữ';
     return 'Đã đồng bộ';
   };
 
