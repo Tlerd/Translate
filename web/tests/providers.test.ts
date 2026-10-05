@@ -43,6 +43,20 @@ import {
 } from '@/server/ai/providers/openai';
 
 describe('provider SDK boundaries', () => {
+  it('reads the final OpenAI usage-only chunk without counting reasoning twice', async () => {
+    sdk.openAiCompletion.mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { content: 'dịch' } }] };
+      yield { choices: [], usage: { prompt_tokens: 100, completion_tokens: 30, total_tokens: 130,
+        prompt_tokens_details: { cached_tokens: 40 }, completion_tokens_details: { reasoning_tokens: 10 } } };
+    })());
+    const onUsage = vi.fn();
+    const parts: string[] = [];
+    for await (const part of streamOpenAiText({ apiKey: 'key', modelId: 'm', userPrompt: 'p', onUsage })) parts.push(part);
+    expect(parts).toEqual(['dịch']);
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onUsage).toHaveBeenCalledWith({ inputTokens: 100, outputTokens: 20, thinkingTokens: 10, cachedInputTokens: 40, totalTokens: 130 });
+    expect(sdk.openAiCompletion.mock.calls.at(-1)?.[0].stream_options).toEqual({ include_usage: true });
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

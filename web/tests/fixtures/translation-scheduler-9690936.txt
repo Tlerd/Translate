@@ -4,7 +4,6 @@ import {
   stablePrefixCandidate,
   splitFinal,
   joinTranslations,
-  remainingAfterCommitted,
 } from './stable-segmenter';
 
 export interface ContextTurn {
@@ -56,7 +55,6 @@ interface ScheduledJob {
 }
 
 interface ActiveTranslation {
-  job: ScheduledJob;
   requestId: number;
   epoch: number;
   blockId: number;
@@ -148,12 +146,6 @@ export class LiveTranslationScheduler {
 
   public setEarlySegments(enabled: boolean): void {
     this.earlySegments = enabled;
-    if (!enabled) {
-      for (const { timer } of this.segmentDebounceTimers.values()) clearTimeout(timer);
-      this.segmentDebounceTimers.clear();
-      this.jobQueue = this.jobQueue.filter((job) => job.requestKind !== 'segment');
-      this.resolveIdleIfReady();
-    }
   }
 
   public setPauseMs(pauseMs: number): void {
@@ -248,21 +240,6 @@ export class LiveTranslationScheduler {
     }
 
     // Early segment final handling
-    if (this.activeTranslation?.captionId === captionId &&
-        this.activeTranslation.requestKind !== 'segment' &&
-        this.matchesLatestJob(this.activeTranslation.job)) {
-      this.jobQueue = this.jobQueue.filter((job) => job.snapshot.captionId !== captionId);
-      return;
-    }
-    if (this.activeTranslation?.captionId === captionId &&
-        this.activeTranslation.requestKind === 'segment') {
-      if (this.matchesLatestJob(this.activeTranslation.job)) {
-        // Completion will commit this segment and schedule only the remainder.
-        this.jobQueue = this.jobQueue.filter((job) => job.snapshot.captionId !== captionId);
-        return;
-      }
-      this.cancelInflight();
-    }
     if (this.earlySegments) {
       const committed = this.captionCommittedSegments.get(captionId);
       if (committed && committed.sources.length > 0) {
@@ -337,6 +314,14 @@ export class LiveTranslationScheduler {
       return;
     }
 
+    // Reuse the active stream too; completion will promote it to the latest
+    // equivalent source revision. Do not abort and restart already billed work.
+    if (this.activeTranslation?.captionId === captionId &&
+        LiveTranslationScheduler.isEquivalentMeaning(this.activeTranslation.sourceText, snapshot.text)) {
+      this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
+      return;
+    }
+
     this.enqueueJob({
       snapshot,
       sourceToTranslate: snapshot.text,
@@ -363,11 +348,7 @@ export class LiveTranslationScheduler {
         if (this.closed || this.captionFinals.get(captionId)) return;
         const latest = this.latestSources.get(captionId) ?? '';
         const curCommitted = this.captionCommittedSegments.get(captionId)?.sources ?? [];
-        if (!remainingAfterCommitted(latest, curCommitted)?.startsWith(candidate)) return;
-
-        if (this.activeTranslation?.captionId === captionId &&
-            this.activeTranslation.sourceText === candidate &&
-            this.matchesLatestJob(this.activeTranslation.job)) return;
+        if (!latest.startsWith(curCommitted.join('') + candidate)) return;
 
         const curTargets = this.captionCommittedSegments.get(captionId)?.targets ?? [];
         const sameCaptionTurns: ContextTurn[] = curCommitted.map((src, idx) => ({
@@ -447,10 +428,6 @@ export class LiveTranslationScheduler {
     }
 
     const toRun = this.jobQueue.shift()!;
-    if (!this.matchesLatestJob(toRun)) {
-      this.maybeSchedule();
-      return;
-    }
     this.runJob(toRun, this.epoch);
   }
 
@@ -464,7 +441,6 @@ export class LiveTranslationScheduler {
     const abortController = new AbortController();
 
     const active: ActiveTranslation = {
-      job,
       requestId,
       epoch,
       blockId,
@@ -481,11 +457,7 @@ export class LiveTranslationScheduler {
       active.timeoutId = setTimeout(() => {
         if (active.isCancelled || this.activeTranslation !== active) return;
         this.cancelInflight();
-        if (job.requestKind === 'segment' && this.recoverFinalAfterSegment(job)) {
-          this.maybeSchedule();
-          return;
-        }
-        if (this.matchesLatestJob(job)) this.onTranslationError(
+        if (this.matchesLatestSource(captionId, snapshot.text)) this.onTranslationError(
           captionId,
           blockId,
           snapshot.text,
@@ -507,7 +479,7 @@ export class LiveTranslationScheduler {
         clearTimeout(pendingDeltaTimer);
         pendingDeltaTimer = null;
       }
-      if (active.isCancelled || epoch !== this.epoch || !this.matchesLatestJob(job)) return;
+      if (active.isCancelled || epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
 
       const priorTargets = this.captionCommittedSegments.get(captionId)?.targets ?? [];
       const currentDisplay = job.requestKind === 'final'
@@ -545,7 +517,22 @@ export class LiveTranslationScheduler {
     };
 
     try {
-      const historyToPass = this.selectHistory(job);
+      let historyToPass: ContextTurn[];
+      if (job.requestKind === 'segment' || job.requestKind === 'remainder') {
+        const priorTurn = this.contextHistory
+          .filter((turn) => turn.captionId !== captionId)
+          .slice(-1)
+          .map(({ source, translation }) => ({ source, translation }));
+        const sameCaptionTurns = job.sameCaptionTurns ?? [];
+        historyToPass = [...priorTurn, ...sameCaptionTurns];
+      } else {
+        historyToPass = this.historyTurns === 0
+          ? []
+          : this.contextHistory
+              .filter((turn) => turn.captionId !== captionId)
+              .slice(-this.historyTurns)
+              .map(({ source, translation }) => ({ source, translation }));
+      }
 
       const result = await this.runner(
         job.sourceToTranslate,
@@ -586,11 +573,9 @@ export class LiveTranslationScheduler {
         clearTimeout(pendingDeltaTimer);
         pendingDeltaTimer = null;
       }
-      if (!active.isCancelled && epoch === this.epoch && this.matchesLatestJob(job)) {
+      if (!active.isCancelled && epoch === this.epoch && this.matchesLatestSource(captionId, snapshot.text)) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        if (job.requestKind === 'segment') {
-          this.recoverFinalAfterSegment(job);
-        } else {
+        if (job.requestKind !== 'segment') {
           this.onTranslationError(
             captionId,
             blockId,
@@ -625,7 +610,7 @@ export class LiveTranslationScheduler {
     const blockId = snapshot.blockId;
     const reqRevision = snapshot.revision;
 
-    if (epoch !== this.epoch || !this.matchesLatestJob(job)) return;
+    if (epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
 
     const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
     const latestSource = this.latestSources.get(captionId) || snapshot.text;
@@ -655,7 +640,6 @@ export class LiveTranslationScheduler {
 
       // Check if a final snapshot arrived while this segment was in-flight
       if (this.captionFinals.get(captionId)) {
-        this.jobQueue = this.jobQueue.filter((queued) => queued.snapshot.captionId !== captionId);
         const split = splitFinal(latestSource, committed.sources);
         if (split.kind === 'reuse') {
           this.emit({
@@ -679,7 +663,7 @@ export class LiveTranslationScheduler {
             translation: committed.targets[idx] ?? '',
           }));
           this.enqueueJob({
-            snapshot: { ...snapshot, text: latestSource, revision: latestRev, isFinal: true },
+            snapshot: { ...snapshot, text: latestSource, isFinal: true },
             sourceToTranslate: split.remainder,
             requestKind: 'remainder',
             sameCaptionTurns,
@@ -687,16 +671,11 @@ export class LiveTranslationScheduler {
         } else {
           this.captionCommittedSegments.delete(captionId);
           this.enqueueJob({
-            snapshot: { ...snapshot, text: latestSource, revision: latestRev, isFinal: true },
+            snapshot: { ...snapshot, text: latestSource, isFinal: true },
             sourceToTranslate: latestSource,
             requestKind: 'final',
           });
         }
-      } else if (this.earlySegments) {
-        // A longer ASR snapshot may have arrived while the segment was running.
-        // Recompute its uncommitted prefix rather than queueing the same words.
-        this.clearSegmentTimer(captionId);
-        this.evaluateEarlySegment({ ...snapshot, text: latestSource, revision: latestRev });
       }
       return;
     }
@@ -755,21 +734,6 @@ export class LiveTranslationScheduler {
     this.cleanupCaption(captionId);
   }
 
-  private recoverFinalAfterSegment(job: ScheduledJob): boolean {
-    const captionId = job.snapshot.captionId;
-    const source = this.latestSources.get(captionId);
-    if (!this.captionFinals.get(captionId) || !source?.trim()) return false;
-    // A final waiting on a failed/expired early request must still be translated.
-    // Fall back once to a full final; final failure does not recursively retry.
-    this.captionCommittedSegments.delete(captionId);
-    this.enqueueJob({
-      snapshot: { ...job.snapshot, text: source, revision: this.latestRevisions.get(captionId) ?? job.snapshot.revision, isFinal: true },
-      sourceToTranslate: source,
-      requestKind: 'final',
-    });
-    return true;
-  }
-
   private onTranslationError(
     captionId: number,
     blockId: number,
@@ -805,25 +769,13 @@ export class LiveTranslationScheduler {
     this.clearSegmentTimer(captionId);
   }
 
-  private selectHistory(job: ScheduledJob): ContextTurn[] {
-    if (this.historyTurns === 0) return [];
-    // Same-caption segments are most recent and consume the same pair budget.
-    const previous = this.contextHistory
-      .filter((turn) => turn.captionId !== job.snapshot.captionId)
-      .map(({ source, translation }) => ({ source, translation }));
-    return [...previous, ...(job.sameCaptionTurns ?? [])].slice(-this.historyTurns);
-  }
-
-  private matchesLatestJob(job: ScheduledJob): boolean {
-    const latestSource = this.latestSources.get(job.snapshot.captionId);
+  private matchesLatestSource(captionId: number, source: string): boolean {
+    const latestSource = this.latestSources.get(captionId);
     if (latestSource === undefined) return false;
-    if (job.requestKind !== 'segment') {
-      return LiveTranslationScheduler.isEquivalentMeaning(job.snapshot.text, latestSource);
-    }
-    const prior = job.sameCaptionTurns?.map((turn) => turn.source) ?? [];
-    const committed = this.captionCommittedSegments.get(job.snapshot.captionId)?.sources ?? [];
-    if (prior.length !== committed.length || prior.some((source, i) => source !== committed[i])) return false;
-    return splitFinal(latestSource, [...prior, job.sourceToTranslate]).kind !== 'mismatch';
+    if (LiveTranslationScheduler.isEquivalentMeaning(source, latestSource)) return true;
+    // For segment/remainder, check if latestSource contains or starts with source
+    if (latestSource.startsWith(source) || latestSource.includes(source)) return true;
+    return false;
   }
 
   private rememberTranslation(captionId: number, source: string, target: string, revision: number): void {

@@ -32,6 +32,7 @@ interface StoredRow {
   thinking_tokens: number | null;
   total_tokens: number | null;
   created_at: string;
+  prompt_version?: string;
 }
 
 function fakeUsageNeon() {
@@ -42,7 +43,7 @@ function fakeUsageNeon() {
     const statement = strings.join('?');
     statements.push(statement);
 
-    if (statement.includes('CREATE TABLE') || statement.includes('CREATE INDEX')) {
+    if (statement.includes('CREATE TABLE') || statement.includes('CREATE INDEX') || statement.includes('ALTER TABLE')) {
       return [];
     }
 
@@ -83,6 +84,7 @@ function fakeUsageNeon() {
         thinking_tokens: thinkingTokens,
         total_tokens: totalTokens,
         created_at: new Date().toISOString(),
+        prompt_version: String(values[19]),
       };
       rows.push(row);
       return [];
@@ -116,6 +118,7 @@ function fakeUsageNeon() {
         requests: number;
         unavailable: number;
         reported: number;
+        reported_input_tokens: number;
         input_tokens: number;
         output_tokens: number;
         cached_input_tokens: number;
@@ -134,16 +137,18 @@ function fakeUsageNeon() {
           requests: 0,
           unavailable: 0,
           reported: 0,
+          reported_input_tokens: 0,
           input_tokens: 0,
           output_tokens: 0,
           cached_input_tokens: 0,
           thinking_tokens: 0,
         };
         g.requests++;
-        if (r.usage_status === 'unavailable' || r.input_tokens === null) {
+        if (r.usage_status === 'unavailable' || r.input_tokens === null || r.output_tokens === null) {
           g.unavailable++;
         } else {
           g.reported++;
+          g.reported_input_tokens += r.input_tokens;
         }
         g.input_tokens += r.input_tokens ?? 0;
         g.output_tokens += r.output_tokens ?? 0;
@@ -217,6 +222,7 @@ describe('translation-usage-store', () => {
         cachedInputTokens: 0,
         thinkingTokens: 0,
         totalTokens: 120,
+        promptVersion: 'lean-fidelity-v2',
       };
 
       await insertTranslationUsage(record);
@@ -224,6 +230,8 @@ describe('translation-usage-store', () => {
       expect(fake.rows).toHaveLength(1);
       expect(fake.rows[0].request_id).toBe('req-1');
       expect(fake.rows[0].input_tokens).toBe(100);
+      expect(fake.rows[0].prompt_version).toBe('lean-fidelity-v2');
+      expect(fake.statements.filter((s) => s.includes('ADD COLUMN IF NOT EXISTS prompt_version'))).toHaveLength(1);
 
       const createTableStmts = fake.statements.filter((s) => s.includes('CREATE TABLE'));
       expect(createTableStmts).toHaveLength(1);
@@ -286,6 +294,48 @@ describe('translation-usage-store', () => {
   });
 
   describe('summarizeTranslationUsage', () => {
+    it('averages input only across requests with complete metadata', async () => {
+      const fake = fakeUsageNeon();
+      neonMock.mockReturnValue(fake.sql);
+      const base: TranslationUsageRecord = { requestId: 'full', recordingId: 'rec', captionId: 1, revision: 1,
+        modelKey: 'google:gemini-3.1-flash-lite', status: 'completed', requestKind: 'final', thinkingLevel: null,
+        durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
+        usageStatus: 'reported', inputTokens: 100, outputTokens: 10, cachedInputTokens: null, thinkingTokens: null, totalTokens: 110 };
+      await insertTranslationUsage(base);
+      await insertTranslationUsage({ ...base, requestId: 'partial', status: 'aborted', usageStatus: 'unavailable', inputTokens: 1000, outputTokens: null });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      expect(result.totals.inputTokens).toBe(1100);
+      expect(result.totals.unavailable).toBe(1);
+      expect(result.avgInputTokensPerRequest).toBe(100);
+    });
+    it.each([
+      ['google:gemini-3.1-flash-lite', 0.07],
+      ['google:gemini-3.5-flash-lite', 0.0945],
+      ['google:gemini-3.8-flash', 0.19875],
+    ])('separates cached input and bills thinking once for %s', async (modelKey, expected) => {
+      const fake = fakeUsageNeon();
+      neonMock.mockReturnValue(fake.sql);
+      await insertTranslationUsage({ requestId: 'cache', recordingId: 'rec', captionId: 1, revision: 1,
+        modelKey, status: 'completed', requestKind: 'final', thinkingLevel: 'minimal',
+        durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
+        usageStatus: 'reported', inputTokens: 1_000_000, cachedInputTokens: 900_000,
+        outputTokens: 10_000, thinkingTokens: 5_000, totalTokens: 1_015_000 });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      expect(result.totals.estimatedUsd).toBe(expected);
+    });
+
+    it('does not label an entirely unavailable request as zero cost', async () => {
+      const fake = fakeUsageNeon();
+      neonMock.mockReturnValue(fake.sql);
+      await insertTranslationUsage({ requestId: 'unknown', recordingId: 'rec', captionId: 1, revision: 1,
+        modelKey: 'google:gemini-3.1-flash-lite', status: 'aborted', requestKind: 'final', thinkingLevel: null,
+        durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
+        usageStatus: 'unavailable', inputTokens: null, cachedInputTokens: null,
+        outputTokens: null, thinkingTokens: null, totalTokens: null });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      expect(result.totals.estimatedUsd).toBeNull();
+      expect(result.totals.unavailable).toBe(1);
+    });
     it('computes summary buckets, day buckets in Asia/Ho_Chi_Minh, and estimatedUsd', async () => {
       const fake = fakeUsageNeon();
       neonMock.mockReturnValue(fake.sql);
@@ -347,8 +397,10 @@ describe('translation-usage-store', () => {
       expect(summary.totals.inputTokens).toBe(1_000_000);
       expect(summary.totals.outputTokens).toBe(200_000);
       expect(summary.totals.byStatus).toEqual({ completed: 1, failed: 0, aborted: 1 });
-      // estimatedUsd: r1 cost = 0.30 + 0.50 = 0.80. r2 has 0 tokens.
-      expect(summary.totals.estimatedUsd).toBe(0.8);
+      // .95M uncached * .30 + .05M cached * .03 + .2M output * 2.50.
+      // Aborted metadata is unknown; the total estimates only observed usage.
+      expect(summary.totals.estimatedUsd).toBe(0.7865);
+      expect(summary.byModel.find((m) => m.modelKey === 'google:gemini-3.1-flash-lite')?.estimatedUsd).toBeNull();
 
       expect(summary.byModel).toHaveLength(2);
       expect(summary.byKind).toHaveLength(2);

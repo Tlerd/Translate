@@ -161,6 +161,14 @@ describe('translation token usage diagnostics', () => {
       thinkingLevel: 'minimal',
       inputTokens: 50,
       outputTokens: 10,
+      promptVersion: 'lean-fidelity-v2',
     });
+  });
+
+  it('keeps partially reported token counts but marks metadata incomplete', () => {
+    const record = buildUsageRecord({ req: request, modelKey: request.modelKey, status: 'aborted',
+      durationMs: 10, systemChars: 10, payloadChars: 10, historyTurns: 0, thinkingLevel: null,
+      usage: { inputTokens: 100 } });
+    expect(record).toMatchObject({ usageStatus: 'unavailable', inputTokens: 100, outputTokens: null });
   });
 });

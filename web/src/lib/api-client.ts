@@ -11,7 +11,7 @@ import type {
   GenerateImageRequest,
   ApiErrorResponse,
 } from '@/shared/ai-contracts';
-import type { UsageSummary } from '@/shared/usage';
+import type { TranslationMetrics, UsageSummary } from '@/shared/usage';
 
 export async function fetchModels(): Promise<ModelsResponse> {
   const res = await fetch('/api/models', {
@@ -31,7 +31,8 @@ export async function streamTranslate(
   onDelta: (delta: string) => void,
   onDone: (fullText: string, modelKey: string) => void,
   onError: (error: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onUsage?: (usage: TranslationMetrics) => void
 ): Promise<void> {
   const res = await fetch('/api/translate', {
     method: 'POST',
@@ -84,6 +85,8 @@ export async function streamTranslate(
       if (typeof data?.fullText === 'string' && data.fullText) fullTranslatedText = data.fullText;
       if (typeof data?.modelKey === 'string' && data.modelKey) modelKeyUsed = data.modelKey;
       receivedDone = true;
+    } else if (currentEvent === 'usage' && data) {
+      onUsage?.(data as unknown as TranslationMetrics);
     } else if (currentEvent === 'error') {
       streamError = typeof data?.message === 'string' ? data.message : 'Lỗi xử lý stream dịch.';
       onError(streamError);

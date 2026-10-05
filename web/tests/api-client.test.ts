@@ -4,6 +4,18 @@ import { streamTranslate } from '@/lib/api-client';
 describe('streamTranslate', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('delivers provider usage before completion without mixing it into translation text', async () => {
+    const usage = { requestId: 'r', historyTurns: 2, promptVersion: 'lean-fidelity-v2', inputTokens: 123, outputTokens: 8, thinkingTokens: 0, cachedInputTokens: 0, usageStatus: 'complete' };
+    const events: string[] = [];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      `event: delta\ndata: {"delta":"Bản dịch"}\n\nevent: usage\ndata: ${JSON.stringify(usage)}\n\nevent: done\ndata: {"fullText":"Bản dịch"}\n\n`,
+    )));
+    await streamTranslate({ requestId: 'r', recordingId: 'rec', captionId: 1, sessionEpoch: 1, revision: 1, configRevision: 1, modelKey: 'm', sourceLanguage: 'ja', targetLanguage: 'vi', text: 'x' },
+      (delta) => events.push(delta), () => events.push('done'), () => {}, undefined,
+      (metrics) => { expect(metrics).toEqual(usage); events.push('usage'); });
+    expect(events).toEqual(['Bản dịch', 'usage', 'done']);
+  });
+
   it('parses event and UTF-8 boundaries split across arbitrary network chunks', async () => {
     const encoder = new TextEncoder();
     const bytes = encoder.encode('event: delta\ndata: {"delta":"Xin chào 日本語"}\n\nevent: done\ndata: {"fullText":"Xin chào 日本語","modelKey":"m"}\n\n');

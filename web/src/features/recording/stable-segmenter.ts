@@ -27,12 +27,8 @@ export function stablePrefixCandidate(
   committed: string[] | string,
   minChars: number = 20
 ): string | null {
-  const committedStr = Array.isArray(committed) ? committed.join('') : committed;
-  if (!text.startsWith(committedStr)) {
-    return null;
-  }
-
-  const uncommitted = text.slice(committedStr.length);
+  const uncommitted = remainingAfterCommitted(text, Array.isArray(committed) ? committed : [committed]);
+  if (uncommitted === null) return null;
   const boundaryEnd = findLastSentenceBoundary(uncommitted);
   if (boundaryEnd <= 0) {
     return null;
@@ -46,12 +42,27 @@ export function stablePrefixCandidate(
   return candidate;
 }
 
+// Segment sources are trimmed; ASR may keep whitespace between them.
+export function remainingAfterCommitted(text: string, committed: string[]): string | null {
+  let remaining = text.trimStart();
+  for (const source of committed) {
+    const part = source.trim();
+    if (!remaining.startsWith(part)) return null;
+    remaining = remaining.slice(part.length).trimStart();
+  }
+  return remaining;
+}
+
 export type SplitFinalResult =
   | { kind: 'reuse' }
   | { kind: 'remainder'; remainder: string }
   | { kind: 'mismatch' };
 
 export function splitFinal(finalText: string, committed: string[]): SplitFinalResult {
+  if (committed.length > 1) {
+    const remaining = remainingAfterCommitted(finalText, committed.slice(0, -1));
+    return remaining === null ? { kind: 'mismatch' } : splitFinal(remaining, committed.slice(-1));
+  }
   const committedTotal = committed.join('').trim();
   const trimmedFinal = finalText.trim();
 
@@ -75,6 +86,9 @@ export function splitFinal(finalText: string, committed: string[]): SplitFinalRe
   const normCommitted = normalize(committedTotal);
   if (normCommitted && trimmedFinal.startsWith(normCommitted)) {
     const rawRemainder = trimmedFinal.slice(normCommitted.length);
+    // A removed sentence mark must not turn a corrected word/negation into
+    // an apparent remainder ("can." -> "cannot", "できる。" -> "できるわけではない").
+    if (rawRemainder && !/^[\s\.,!\?、。！？]/.test(rawRemainder)) return { kind: 'mismatch' };
     const cleanRemainder = rawRemainder.replace(/^[\s\.,!\?、。！？]+/, '').trim();
     if (!cleanRemainder) {
       return { kind: 'reuse' };

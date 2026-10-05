@@ -152,7 +152,7 @@ export function UsageDashboard() {
             </div>
 
             <div className={styles.statCard}>
-              <span className={styles.statLabel}>Input Token</span>
+              <span className={styles.statLabel}>Input Token đã ghi nhận</span>
               <span className={styles.statValue}>{formatTokens(summary.totals.inputTokens)}</span>
               <span className={styles.statSub}>
                 TB: {formatTokens(summary.avgInputTokensPerRequest)} token/request
@@ -160,7 +160,7 @@ export function UsageDashboard() {
             </div>
 
             <div className={styles.statCard}>
-              <span className={styles.statLabel}>Output Token</span>
+              <span className={styles.statLabel}>Output Token đã ghi nhận</span>
               <span className={styles.statValue}>{formatTokens(summary.totals.outputTokens)}</span>
               <span className={styles.statSub}>Bản dịch trả về</span>
             </div>
@@ -182,9 +182,16 @@ export function UsageDashboard() {
               <span className={styles.statValue} style={{ color: 'var(--accent)' }}>
                 {formatUsd(summary.totals.estimatedUsd)}
               </span>
-              <span className={styles.statSub}>Chưa tính chiết khấu cache</span>
+              <span className={styles.statSub}>Theo token đã báo cáo, đã tách giá cache</span>
             </div>
           </div>
+
+          <p className={styles.subtitle}>
+            Có metadata đầy đủ: {summary.totals.requests - summary.totals.unavailable}/{summary.totals.requests} request.
+            {summary.totals.unavailable > 0 && ' Chi phí chỉ phản ánh phần token đã nhận; request thiếu metadata hoặc bị hủy vẫn có thể bị tính phí.'}
+            {' '}Đây là ước tính dịch, không phải tổng hóa đơn. Dữ liệu lưu thất bại có thể thiếu khỏi báo cáo.
+            {' '}Đơn giá kiểm tra ngày 05/10/2026; chưa gồm thuế, lưu trữ cache và dịch vụ audio.
+          </p>
 
           {/* Table by Day */}
           <section className={styles.section}>

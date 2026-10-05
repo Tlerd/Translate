@@ -23,6 +23,7 @@ export interface TranslationUsageRecord {
   cachedInputTokens: number | null;
   thinkingTokens: number | null;
   totalTokens: number | null;
+  promptVersion?: string;
 }
 
 export function usageStoreEnabled(): boolean {
@@ -65,6 +66,7 @@ async function ensureSchema(): Promise<ReturnType<typeof database>> {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_created_at ON translation_usage(created_at)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_recording_id ON translation_usage(recording_id)`;
+      await sql`ALTER TABLE translation_usage ADD COLUMN IF NOT EXISTS prompt_version text NOT NULL DEFAULT 'legacy-unknown'`;
     })().catch((err) => {
       schemaReadyPromise = null;
       throw err;
@@ -81,12 +83,12 @@ export async function insertTranslationUsage(r: TranslationUsageRecord): Promise
       request_id, recording_id, caption_id, revision, model_key, status,
       request_kind, thinking_level, duration_ms, source_chars, system_chars,
       payload_chars, history_turns, usage_status, input_tokens, output_tokens,
-      cached_input_tokens, thinking_tokens, total_tokens
+      cached_input_tokens, thinking_tokens, total_tokens, prompt_version
     ) VALUES (
       ${r.requestId}, ${r.recordingId}, ${r.captionId}, ${r.revision}, ${r.modelKey}, ${r.status},
       ${r.requestKind}, ${r.thinkingLevel}, ${r.durationMs}, ${r.sourceChars}, ${r.systemChars},
       ${r.payloadChars}, ${r.historyTurns}, ${r.usageStatus}, ${r.inputTokens}, ${r.outputTokens},
-      ${r.cachedInputTokens}, ${r.thinkingTokens}, ${r.totalTokens}
+      ${r.cachedInputTokens}, ${r.thinkingTokens}, ${r.totalTokens}, ${r.promptVersion ?? 'legacy-unknown'}
     )
     ON CONFLICT (request_id) DO NOTHING
   `;
@@ -101,6 +103,7 @@ export interface AggregatedUsageRow {
   requests: number;
   unavailable: number;
   reported: number;
+  reportedInputTokens: number;
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
@@ -119,7 +122,7 @@ function calculateBucketFromAggregatedRows(rows: AggregatedUsageRow[]): {
   let cachedInputTokens = 0;
   let thinkingTokens = 0;
 
-  const modelTokens = new Map<string, { input: number; output: number; thinking: number }>();
+  const modelTokens = new Map<string, { input: number; output: number; thinking: number; cached: number }>();
 
   for (const r of rows) {
     requests += r.requests;
@@ -130,24 +133,29 @@ function calculateBucketFromAggregatedRows(rows: AggregatedUsageRow[]): {
     cachedInputTokens += r.cachedInputTokens;
     thinkingTokens += r.thinkingTokens;
 
-    const mt = modelTokens.get(r.model_key) ?? { input: 0, output: 0, thinking: 0 };
+    if (r.inputTokens + r.outputTokens + r.thinkingTokens === 0 && r.reported === 0) continue;
+    const mt = modelTokens.get(r.model_key) ?? { input: 0, output: 0, thinking: 0, cached: 0 };
     mt.input += r.inputTokens;
     mt.output += r.outputTokens;
     mt.thinking += r.thinkingTokens;
+    mt.cached += r.cachedInputTokens;
     modelTokens.set(r.model_key, mt);
   }
 
-  let estimatedUsd: number | null = 0;
+  let estimatedUsd: number | null = requests > 0 && reported === 0 ? null : 0;
   for (const [modelKey, mt] of modelTokens.entries()) {
     const config = getModelConfig(modelKey);
-    if (!config || config.inputUsdPerM == null || config.outputUsdPerM == null) {
+    if (!config || config.inputUsdPerM == null || config.outputUsdPerM == null ||
+        (mt.cached > 0 && config.cachedInputUsdPerM == null)) {
       estimatedUsd = null;
       break;
     }
     const cost =
-      (mt.input * config.inputUsdPerM + (mt.output + mt.thinking) * config.outputUsdPerM) /
+      (Math.max(0, mt.input - mt.cached) * config.inputUsdPerM +
+        Math.min(mt.input, mt.cached) * (config.cachedInputUsdPerM ?? 0) +
+        (mt.output + mt.thinking) * config.outputUsdPerM) /
       1_000_000;
-    estimatedUsd += cost;
+    if (estimatedUsd !== null) estimatedUsd += cost;
   }
 
   if (estimatedUsd !== null) {
@@ -187,8 +195,9 @@ export async function summarizeTranslationUsage(q: {
           (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS day,
           recording_id,
           COUNT(*)::int AS requests,
-          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL)::int AS unavailable,
-          COUNT(*) FILTER (WHERE input_tokens IS NOT NULL)::int AS reported,
+          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL OR output_tokens IS NULL)::int AS unavailable,
+          COUNT(*) FILTER (WHERE usage_status = 'reported' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL)::int AS reported,
+          COALESCE(SUM(input_tokens) FILTER (WHERE usage_status = 'reported' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL), 0)::bigint AS reported_input_tokens,
           SUM(COALESCE(input_tokens, 0))::bigint AS input_tokens,
           SUM(COALESCE(output_tokens, 0))::bigint AS output_tokens,
           SUM(COALESCE(cached_input_tokens, 0))::bigint AS cached_input_tokens,
@@ -208,8 +217,9 @@ export async function summarizeTranslationUsage(q: {
           (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS day,
           recording_id,
           COUNT(*)::int AS requests,
-          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL)::int AS unavailable,
-          COUNT(*) FILTER (WHERE input_tokens IS NOT NULL)::int AS reported,
+          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL OR output_tokens IS NULL)::int AS unavailable,
+          COUNT(*) FILTER (WHERE usage_status = 'reported' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL)::int AS reported,
+          COALESCE(SUM(input_tokens) FILTER (WHERE usage_status = 'reported' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL), 0)::bigint AS reported_input_tokens,
           SUM(COALESCE(input_tokens, 0))::bigint AS input_tokens,
           SUM(COALESCE(output_tokens, 0))::bigint AS output_tokens,
           SUM(COALESCE(cached_input_tokens, 0))::bigint AS cached_input_tokens,
@@ -230,6 +240,7 @@ export async function summarizeTranslationUsage(q: {
     requests: Number(r.requests || 0),
     unavailable: Number(r.unavailable || 0),
     reported: Number(r.reported || 0),
+    reportedInputTokens: Number(r.reported_input_tokens || 0),
     inputTokens: Number(r.input_tokens || 0),
     outputTokens: Number(r.output_tokens || 0),
     cachedInputTokens: Number(r.cached_input_tokens || 0),
@@ -311,7 +322,7 @@ export async function summarizeTranslationUsage(q: {
 
   const avgInputTokensPerRequest =
     totalReported > 0
-      ? Math.round(totalsBucket.inputTokens / totalReported)
+      ? Math.round(rows.reduce((sum, row) => sum + row.reportedInputTokens, 0) / totalReported)
       : null;
 
   const toDisplayDate = q.to ?? new Date(toExclusive.getTime() - 1);

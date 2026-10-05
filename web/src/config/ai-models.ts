@@ -15,6 +15,8 @@ export interface ModelRegistryEntry {
   outputPrice?: string;
   inputUsdPerM?: number;
   outputUsdPerM?: number;
+  cachedInputUsdPerM?: number;
+  pricingAsOf?: string;
   imagePrice?: string;
   thinkingLevels?: Array<'minimal' | 'low' | 'medium' | 'high'>;
   disabledReason?: string;
@@ -35,6 +37,8 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
     outputPrice: '$2.50/1M tokens',
     inputUsdPerM: 0.30,
     outputUsdPerM: 2.50,
+    cachedInputUsdPerM: 0.03,
+    pricingAsOf: '2026-10-05',
     thinkingLevels: ['minimal', 'low', 'medium', 'high'],
   },
   'google:gemini-3.1-flash-lite': {
@@ -51,6 +55,8 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
     outputPrice: '$1.50/1M tokens',
     inputUsdPerM: 0.25,
     outputUsdPerM: 1.50,
+    cachedInputUsdPerM: 0.025,
+    pricingAsOf: '2026-10-05',
     thinkingLevels: ['minimal', 'low', 'medium', 'high'],
   },
   'openai:gpt-4o-mini': {
@@ -79,6 +85,8 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
     outputPrice: '$3.75/1M tokens',
     inputUsdPerM: 0.75,
     outputUsdPerM: 3.75,
+    cachedInputUsdPerM: 0.075,
+    pricingAsOf: '2026-10-05',
   },
   'google:gemini-3.1-flash-lite-image': {
     key: 'google:gemini-3.1-flash-lite-image',

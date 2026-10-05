@@ -574,7 +574,7 @@ export function AiSettings() {
               <option value={6}>6 câu · Tối đa (Mặc định)</option>
             </select>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Ngữ cảnh giúp AI dịch chuẩn đại từ nhân xưng và mạch câu chuyện, nhưng mỗi câu làm tăng số lượng token đầu vào (input tokens). Chọn 0 để tối ưu chi phí tối đa.
+              Giới hạn số cặp nguồn/bản dịch trong mỗi request, kể cả vế câu dịch sớm. Ngữ cảnh hỗ trợ đại từ nhưng tăng token. Chọn 0 để không gửi lịch sử; server có thể cắt thêm khi lịch sử quá dài.
             </span>
           </div>
 
@@ -616,7 +616,7 @@ export function AiSettings() {
               />
             </label>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Tự động dịch sớm các câu đơn đã hoàn chỉnh khi người nói ngừng nhẹ giữa bài. Giúp người đọc thấy bản dịch sớm hơn mà không lặp lại token cho các câu đã dịch.
+              Hiện bản dịch sớm khi một vế câu đã ổn định. Có thể tăng số request, lặp prompt/ngữ cảnh và phải dịch lại khi nhận dạng sửa nội dung. Tắt để ưu tiên ít token và bản dịch ổn định.
             </span>
           </div>
         </div>

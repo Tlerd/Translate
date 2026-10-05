@@ -3,6 +3,7 @@ import { resolveTaskConfig, AiConfigError } from '@/config/ai.server';
 import {
   buildTranslationSystemPrompt,
   buildTranslationPayloadWithStats,
+  TRANSLATION_PROMPT_VERSION,
 } from './prompts/translation';
 import { streamGoogleText, type ProviderTokenUsage } from './providers/google';
 import { streamOpenAiText } from './providers/openai';
@@ -35,12 +36,13 @@ export function buildUsageRecord(params: {
     systemChars,
     payloadChars,
     historyTurns,
-    usageStatus: usage ? 'reported' : 'unavailable',
+    usageStatus: usage?.inputTokens != null && usage.outputTokens != null ? 'reported' : 'unavailable',
     inputTokens: usage?.inputTokens ?? null,
     outputTokens: usage?.outputTokens ?? null,
     cachedInputTokens: usage?.cachedInputTokens ?? null,
     thinkingTokens: usage?.thinkingTokens ?? null,
     totalTokens: usage?.totalTokens ?? null,
+    promptVersion: TRANSLATION_PROMPT_VERSION,
   };
 }
 

@@ -53,6 +53,15 @@ describe('stable-segmenter', () => {
   });
 
   describe('splitFinal', () => {
+    it('does not reuse a positive segment after punctuation removal extends it into negation', () => {
+      expect(splitFinal('I cannot attend.', ['I can.'])).toEqual({ kind: 'mismatch' });
+      expect(splitFinal('できるわけではありません。', ['できる。'])).toEqual({ kind: 'mismatch' });
+    });
+    it('reuses multiple trimmed segments separated by ASR whitespace', () => {
+      expect(splitFinal('Câu một.  Câu hai. Câu ba.', ['Câu một.', 'Câu hai.']))
+        .toEqual({ kind: 'remainder', remainder: 'Câu ba.' });
+      expect(stablePrefixCandidate('Câu một.  Câu hai. Câu ba.', ['Câu một.', 'Câu hai.'], 1)).toBe('Câu ba.');
+    });
     it('returns reuse when final text matches committed segments', () => {
       const committed = ['Xin chào mọi người.'];
       expect(splitFinal('Xin chào mọi người.', committed)).toEqual({ kind: 'reuse' });

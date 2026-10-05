@@ -14,6 +14,7 @@ import {
 import { fetchModels, streamTranslate } from '@/lib/api-client';
 import { loadSettings } from '@/storage/recordings';
 import type { ModelsResponse } from '@/shared/ai-contracts';
+import type { TranslationMetrics } from '@/shared/usage';
 
 const PRESET_SAMPLES = [
   {
@@ -63,6 +64,9 @@ export function TranslationConnectionTest() {
   const [ttfbMs, setTtfbMs] = useState<number | null>(null);
   const [totalTimeMs, setTotalTimeMs] = useState<number | null>(null);
   const [usedModel, setUsedModel] = useState<string>('');
+  const [historyLimit, setHistoryLimit] = useState(0);
+  const [historyText, setHistoryText] = useState('');
+  const [usage, setUsage] = useState<TranslationMetrics | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -86,6 +90,14 @@ export function TranslationConnectionTest() {
 
   const handleRunTest = async () => {
     if (!inputText.trim()) return;
+    const turns: Array<{ source: string; translation: string }> = [];
+    if (historyLimit > 0) {
+      for (const line of historyText.split('\n').filter((line) => line.trim())) {
+        const match = line.match(/^(.+?)\s(?:->|→)\s(.+)$/);
+        if (!match) { setErrorMessage('Mỗi dòng ngữ cảnh cần có dạng: câu nguồn → bản dịch.'); setStatus('error'); return; }
+        turns.push({ source: match[1].trim(), translation: match[2].trim() });
+      }
+    }
 
     abortControllerRef.current?.abort();
     const abort = new AbortController();
@@ -97,6 +109,7 @@ export function TranslationConnectionTest() {
     setTtfbMs(null);
     setTotalTimeMs(null);
     setUsedModel('');
+    setUsage(null);
 
     const startTime = Date.now();
     let firstTokenTime: number | null = null;
@@ -119,6 +132,7 @@ export function TranslationConnectionTest() {
           sourceLanguage: sourceLang,
           targetLanguage: targetLang,
           text: inputText.trim(),
+          previousTurns: historyLimit === 0 ? [] : turns.slice(-historyLimit),
         },
         (delta) => {
           if (!firstTokenTime) {
@@ -138,7 +152,8 @@ export function TranslationConnectionTest() {
           setErrorMessage(err);
           setStatus('error');
         },
-        abort.signal
+        abort.signal,
+        setUsage
       );
     } catch (err: unknown) {
       if (abort.signal.aborted) {
@@ -448,6 +463,20 @@ export function TranslationConnectionTest() {
         />
       </div>
 
+      <details>
+        <summary>Thử số câu ngữ cảnh</summary>
+        <p>Chỉ áp dụng cho lượt thử này, không đổi cài đặt buổi học. Mỗi dòng là một cặp nguồn/bản dịch; ưu tiên các dòng cuối.</p>
+        <label htmlFor="test-history-limit">Số câu ngữ cảnh thử:</label>{' '}
+        <select id="test-history-limit" value={historyLimit} disabled={status === 'running'} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} câu</option>)}
+        </select>
+        <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+          <label htmlFor="test-history-text">Các câu trước (nguồn → bản dịch):</label>
+          <textarea id="test-history-text" value={historyText} rows={6} disabled={status === 'running'}
+            onChange={(e) => setHistoryText(e.target.value)} placeholder="今日は授業です。 → Hôm nay có giờ học." />
+        </div>
+      </details>
+
       {/* Action Buttons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {status === 'running' ? (
@@ -620,9 +649,15 @@ export function TranslationConnectionTest() {
             </div>
           </div>
 
+          {usage && <p data-testid="translation-test-usage" style={{ margin: 0, fontSize: '0.82rem' }}>
+            Request: {usage.requestId} · Ngữ cảnh thực gửi: {usage.historyTurns} · Prompt: {usage.promptVersion}<br />
+            Input: {usage.inputTokens ?? 'chưa rõ'} · Output: {usage.outputTokens ?? 'chưa rõ'} · Thinking: {usage.thinkingTokens ?? 'không báo cáo'} · Cache: {usage.cachedInputTokens ?? 'không báo cáo'}
+          </p>}
+
           {/* Translated text result */}
           {translatedText && (
             <div
+              data-testid="translation-test-output"
               style={{
                 fontSize: '0.96rem',
                 color: 'var(--text-primary)',

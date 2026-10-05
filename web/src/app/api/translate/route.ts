@@ -73,6 +73,7 @@ export async function POST(req: Request): Promise<Response> {
   };
 
   let resolveUsageRecord: ((record: TranslationUsageRecord | null) => void) | undefined;
+  let finalUsage: TranslationUsageRecord | null = null;
   const usageRecordPromise = new Promise<TranslationUsageRecord | null>((resolve) => {
     resolveUsageRecord = resolve;
   });
@@ -101,6 +102,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const onUsageRecord = (record: TranslationUsageRecord) => {
+    finalUsage = record;
     if (resolveUsageRecord) {
       resolveUsageRecord(record);
       resolveUsageRecord = undefined;
@@ -139,6 +141,17 @@ export async function POST(req: Request): Promise<Response> {
           }
 
           if (!stopped) {
+            const usage = finalUsage as TranslationUsageRecord | null;
+            if (usage) enqueue(`event: usage\ndata: ${JSON.stringify({
+              requestId: usage.requestId,
+              historyTurns: usage.historyTurns,
+              promptVersion: usage.promptVersion ?? 'legacy-unknown',
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              thinkingTokens: usage.thinkingTokens,
+              cachedInputTokens: usage.cachedInputTokens,
+              usageStatus: usage.usageStatus,
+            })}\n\n`);
             const doneMsg = `event: done\ndata: ${JSON.stringify({ fullText, modelKey: data.modelKey })}\n\n`;
             enqueue(doneMsg);
           }

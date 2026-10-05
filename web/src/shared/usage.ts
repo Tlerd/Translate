@@ -8,6 +8,18 @@ export interface UsageBucket {
   estimatedUsd: number | null;
 }
 
+/** Safe per-request metrics; no credentials or source/translated text. */
+export interface TranslationMetrics {
+  requestId: string;
+  historyTurns: number;
+  promptVersion: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  thinkingTokens: number | null;
+  cachedInputTokens: number | null;
+  usageStatus: 'reported' | 'unavailable';
+}
+
 export interface UsageSummary {
   range: { from: string; to: string };
   totals: UsageBucket & { byStatus: Record<'completed' | 'failed' | 'aborted', number> };

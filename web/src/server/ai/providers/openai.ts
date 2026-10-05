@@ -21,6 +21,7 @@ export async function* streamOpenAiText(params: ProviderCallParams): AsyncIterab
       model: params.modelId,
       messages,
       stream: true,
+      stream_options: { include_usage: true },
     },
     { signal: params.signal }
   );
@@ -28,6 +29,17 @@ export async function* streamOpenAiText(params: ProviderCallParams): AsyncIterab
   let receivedContent = false;
   for await (const chunk of stream) {
     if (params.signal?.aborted) break;
+    if (chunk.usage) {
+      const thinking = chunk.usage.completion_tokens_details?.reasoning_tokens ?? 0;
+      params.onUsage?.({
+        inputTokens: chunk.usage.prompt_tokens,
+        // OpenAI completion_tokens includes reasoning, unlike Gemini candidates.
+        outputTokens: Math.max(0, chunk.usage.completion_tokens - thinking),
+        thinkingTokens: thinking,
+        cachedInputTokens: chunk.usage.prompt_tokens_details?.cached_tokens,
+        totalTokens: chunk.usage.total_tokens,
+      });
+    }
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) {
       receivedContent = true;
