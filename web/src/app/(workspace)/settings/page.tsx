@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { AiSettings } from '@/features/settings/ai-settings';
 import { TranslationConnectionTest } from '@/features/settings/translation-connection-test';
 import { SpeechConnectionTest } from '@/features/settings/speech-connection-test';
-import { Settings, Zap, Mic } from 'lucide-react';
+import { Settings, Zap, Mic, BarChart3 } from 'lucide-react';
 
 export default function SettingsPage() {
   return (
@@ -106,6 +107,28 @@ export default function SettingsPage() {
             <Mic size={14} color="var(--accent)" />
             <span>Kiểm tra Nhận giọng</span>
           </a>
+
+          <Link
+            href="/usage"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+              textDecoration: 'none',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <BarChart3 size={14} color="var(--accent)" />
+            <span>Chi phí dịch</span>
+          </Link>
         </div>
       </div>
 

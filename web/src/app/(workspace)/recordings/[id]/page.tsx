@@ -6,6 +6,8 @@ import { ArrowLeft, Clock, Calendar, BookOpen, Layers } from 'lucide-react';
 import { getRecording, getCaptions, getSummary } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
+import { fetchTranslationUsage } from '@/lib/api-client';
+import { formatTokens, formatUsd, formatSaigonDate } from '@/features/usage/usage-format';
 import type { RecordingItem, CaptionItem, SummaryItem } from '@/shared/recording';
 
 export default function RecordingDetailPage({
@@ -20,6 +22,41 @@ export default function RecordingDetailPage({
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [summary, setSummary] = useState<SummaryItem | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [costText, setCostText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchCost = async () => {
+      try {
+        const today = new Date();
+        const fromDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const fromStr = formatSaigonDate(fromDate);
+        const toStr = formatSaigonDate(today);
+        const usageSummary = await fetchTranslationUsage({
+          from: fromStr,
+          to: toStr,
+          recordingId: id,
+        });
+        if (!active) return;
+        if (usageSummary.totals.requests > 0) {
+          const totalTokens =
+            usageSummary.totals.inputTokens +
+            usageSummary.totals.outputTokens +
+            usageSummary.totals.thinkingTokens;
+          const usdStr = usageSummary.totals.estimatedUsd != null ? `~${formatUsd(usageSummary.totals.estimatedUsd)}` : 'Chưa rõ';
+          setCostText(`Chi phí dịch buổi này: ${usageSummary.totals.requests} request · ${formatTokens(totalTokens)} token · ${usdStr}`);
+        } else {
+          setCostText(null);
+        }
+      } catch {
+        if (active) setCostText(null);
+      }
+    };
+    void fetchCost();
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -147,6 +184,12 @@ export default function RecordingDetailPage({
                 {recording.mode === 'lecture' ? <BookOpen size={12} /> : <Layers size={12} />}
                 {recording.mode === 'lecture' ? 'Giảng bài' : 'Luyện đọc'}
               </span>
+              {costText && (
+                <>
+                  <span>•</span>
+                  <span>{costText}</span>
+                </>
+              )}
             </div>
           </div>
         </div>

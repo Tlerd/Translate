@@ -10,6 +10,7 @@ import type {
   GenerateImageRequest,
   ApiErrorResponse,
 } from '@/shared/ai-contracts';
+import type { UsageSummary } from '@/shared/usage';
 
 export async function fetchModels(): Promise<ModelsResponse> {
   const res = await fetch('/api/models', {
@@ -162,4 +163,33 @@ export async function requestImage(req: GenerateImageRequest): Promise<{ blob: B
   const modelKey = res.headers.get('X-Model-Key') || req.modelKey;
   const blob = await res.blob();
   return { blob, modelKey };
+}
+
+export async function fetchTranslationUsage(query: {
+  from: string;
+  to: string;
+  recordingId?: string;
+}): Promise<UsageSummary> {
+  const params = new URLSearchParams({
+    from: query.from,
+    to: query.to,
+  });
+  if (query.recordingId) {
+    params.set('recordingId', query.recordingId);
+  }
+  const res = await fetch(`/api/usage/translation?${params.toString()}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => ({}))) as ApiErrorResponse;
+    const error = new Error(errorBody.error?.message || `Lỗi tải thống kê usage: HTTP ${res.status}`);
+    (error as Error & { status?: number; code?: string }).status = res.status;
+    (error as Error & { status?: number; code?: string }).code = errorBody.error?.code;
+    throw error;
+  }
+
+  return res.json();
 }

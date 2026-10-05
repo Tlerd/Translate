@@ -10,7 +10,7 @@ const store = vi.hoisted(() => ({
     void Promise.resolve().then(fn);
   }),
   usageStoreEnabled: vi.fn(() => true),
-  insertTranslationUsage: vi.fn(async (_r?: unknown) => undefined),
+  insertTranslationUsage: vi.fn(),
 }));
 
 vi.mock('@google/genai', () => ({

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, Square, Settings, Radio } from 'lucide-react';
+import { Menu, X, Square, Settings, Radio, BarChart3 } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
@@ -99,6 +99,15 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
             )}
 
             <ThemeToggle />
+
+            <Link
+              href="/usage"
+              className={styles.toggleButton}
+              title="Chi phí dịch"
+              aria-label="Chi phí dịch"
+            >
+              <BarChart3 size={18} />
+            </Link>
 
             <Link
               href="/settings"
