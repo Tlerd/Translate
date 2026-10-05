@@ -163,7 +163,7 @@ describe('POST /api/translate usage persistence', () => {
     const usageFrame = stream.split('\n\n').find((frame) => frame.startsWith('event: usage'));
     expect(usageFrame).toBeDefined();
     const metrics = JSON.parse(usageFrame!.split('data: ')[1]);
-    expect(metrics).toMatchObject({ requestId: 'req-abort', historyTurns: 0, promptVersion: 'lean-fidelity-v2', inputTokens: 10, outputTokens: 2, usageStatus: 'reported' });
+    expect(metrics).toMatchObject({ requestId: 'req-abort', historyTurns: 0, promptVersion: 'lean-fidelity-v3', inputTokens: 10, outputTokens: 2, usageStatus: 'reported' });
     expect(Object.keys(metrics).sort()).toEqual(['cachedInputTokens', 'historyTurns', 'inputTokens', 'outputTokens', 'promptVersion', 'requestId', 'thinkingTokens', 'usageStatus'].sort());
     expect(stream.indexOf('event: usage')).toBeLessThan(stream.indexOf('event: done'));
     await vi.waitFor(() => expect(store.insertTranslationUsage).toHaveBeenCalledOnce());

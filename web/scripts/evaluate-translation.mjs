@@ -32,7 +32,7 @@ const currentSource = await readFile(path.join(root, 'src/server/ai/prompts/tran
 const variants = await Promise.all([
   ['original-json', 'd16d22f^', await readFile(path.join(root, 'tests/fixtures/translation-prompt-original.txt'), 'utf8')],
   ['lean-v1', '9690936', await readFile(path.join(root, 'tests/fixtures/translation-prompt-lean-v1.txt'), 'utf8')],
-  ['lean-fidelity-v2', 'working-tree', currentSource],
+  ['lean-fidelity-v3', 'working-tree', currentSource],
 ].map(async ([name, ref, source]) => ({ name, ref, sha256: createHash('sha256').update(source).digest('hex'), builder: await loadPure(source) })));
 const registry = await loadPure(await readFile(path.join(root, 'src/config/ai-models.ts'), 'utf8'));
 const modelId = args.model ?? 'gemini-3.1-flash-lite';

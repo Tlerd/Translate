@@ -5,7 +5,7 @@ describe('streamTranslate', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('delivers provider usage before completion without mixing it into translation text', async () => {
-    const usage = { requestId: 'r', historyTurns: 2, promptVersion: 'lean-fidelity-v2', inputTokens: 123, outputTokens: 8, thinkingTokens: 0, cachedInputTokens: 0, usageStatus: 'complete' };
+    const usage = { requestId: 'r', historyTurns: 2, promptVersion: 'lean-fidelity-v3', inputTokens: 123, outputTokens: 8, thinkingTokens: 0, cachedInputTokens: 0, usageStatus: 'reported' };
     const events: string[] = [];
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       `event: delta\ndata: {"delta":"Bản dịch"}\n\nevent: usage\ndata: ${JSON.stringify(usage)}\n\nevent: done\ndata: {"fullText":"Bản dịch"}\n\n`,
