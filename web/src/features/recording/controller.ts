@@ -325,7 +325,7 @@ export class ClassroomController {
 
     // Live Translation Scheduler
     this.scheduler = new LiveTranslationScheduler({
-      runner: async (source, direction, history, signal, requestSnapshot, onDelta) => {
+      runner: async (source, direction, history, signal, requestSnapshot, onDelta, requestKind = 'final') => {
         const requestedAt = Date.now();
         return new Promise<string>((resolve, reject) => {
           let accumulated = '';
@@ -340,7 +340,7 @@ export class ClassroomController {
               revision: requestSnapshot?.revision || 1,
               configRevision: this.configRevision,
               modelKey: this.state.translationModelKey,
-              requestKind: 'final',
+              requestKind,
               thinkingLevel: this.state.translationThinkingLevel === 'auto' ? undefined : this.state.translationThinkingLevel as 'minimal' | 'low' | 'medium' | 'high',
               sourceLanguage: direction.sourceCode,
               targetLanguage: direction.targetCode,
@@ -369,6 +369,8 @@ export class ClassroomController {
       targetLanguage,
       minIntervalMs: 700,
       historyTurns: translationHistoryTurns,
+      earlySegments: earlySegmentTranslation,
+      pauseMs,
     });
 
     // Assembler -> Scheduler pipeline
@@ -1199,6 +1201,7 @@ export class ClassroomController {
     const pauseMs = ClassroomController.clampPause(ms);
     if (this.state.pauseMs === pauseMs) return;
     this.state.pauseMs = pauseMs;
+    this.scheduler?.setPauseMs(pauseMs);
     if (this.state.mode === 'lecture') (this.speechRecognizer instanceof GeminiTranscribeRecognizer ? this.speechRecognizer : null)?.updateSettings({ pauseMs });
     if (this.state.mode === 'lecture' && this.state.speechProvider === 'nemotron') this.restartRecognizer();
     if (this.state.mode === 'lecture' && this.state.state === 'recording' && this.hasPendingTranscript && this.silenceTimer) {
@@ -1241,6 +1244,7 @@ export class ClassroomController {
   public setEarlySegmentTranslation(enabled: boolean): void {
     if (this.state.earlySegmentTranslation === enabled) return;
     this.state.earlySegmentTranslation = enabled;
+    this.scheduler?.setEarlySegments(enabled);
     this.notify();
   }
 }

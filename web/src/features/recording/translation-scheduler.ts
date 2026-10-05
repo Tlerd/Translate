@@ -1,4 +1,10 @@
 import type { TranscriptSnapshot } from './utterance-assembler';
+import {
+  segmenterOptionsFor,
+  stablePrefixCandidate,
+  splitFinal,
+  joinTranslations,
+} from './stable-segmenter';
 
 export interface ContextTurn {
   source: string;
@@ -26,7 +32,8 @@ export type TranslationRunner = (
   history: ContextTurn[],
   signal: AbortSignal,
   snapshot?: TranscriptSnapshot,
-  onDelta?: (delta: string) => void
+  onDelta?: (delta: string) => void,
+  requestKind?: 'final' | 'segment' | 'remainder'
 ) => Promise<string> | AsyncIterable<string>;
 
 export interface TranslationSchedulerOptions {
@@ -36,6 +43,15 @@ export interface TranslationSchedulerOptions {
   minIntervalMs?: number;
   requestTimeoutMs?: number;
   historyTurns?: number;
+  earlySegments?: boolean;
+  pauseMs?: number;
+}
+
+interface ScheduledJob {
+  snapshot: TranscriptSnapshot;
+  sourceToTranslate: string;
+  requestKind: 'final' | 'segment' | 'remainder';
+  sameCaptionTurns?: ContextTurn[];
 }
 
 interface ActiveTranslation {
@@ -45,6 +61,7 @@ interface ActiveTranslation {
   captionId: number;
   revision: number;
   sourceText: string;
+  requestKind: 'final' | 'segment' | 'remainder';
   abortController: AbortController;
   timeoutId?: ReturnType<typeof setTimeout>;
   isCancelled: boolean;
@@ -57,6 +74,8 @@ export class LiveTranslationScheduler {
   public minIntervalMs: number;
   public requestTimeoutMs: number;
   public historyTurns: number;
+  public earlySegments: boolean;
+  public pauseMs: number;
 
   private listeners: Set<(event: ScheduledTranslationEvent) => void> = new Set();
 
@@ -65,7 +84,7 @@ export class LiveTranslationScheduler {
   private activeBlockId: number | null = null;
   private closedThroughBlock = 0;
 
-  private finalQueue: TranscriptSnapshot[] = [];
+  private jobQueue: ScheduledJob[] = [];
 
   private activeTranslation: ActiveTranslation | null = null;
   private lastRequestStartTime = 0;
@@ -80,6 +99,9 @@ export class LiveTranslationScheduler {
   private translatedRevisionByCaption: Map<number, number> = new Map();
   private completedTranslations = new Map<number, { source: string; target: string; revision: number }>();
 
+  private captionCommittedSegments = new Map<number, { sources: string[]; targets: string[] }>();
+  private segmentDebounceTimers = new Map<number, { timer: ReturnType<typeof setTimeout>; candidate: string }>();
+
   private contextHistory: Array<ContextTurn & { captionId: number }> = [];
   private closed = false;
   private idleWaiters: Array<() => void> = [];
@@ -93,6 +115,8 @@ export class LiveTranslationScheduler {
     this.historyTurns = options.historyTurns !== undefined
       ? Math.max(0, Math.min(6, Math.floor(options.historyTurns)))
       : 6;
+    this.earlySegments = options.earlySegments ?? false;
+    this.pauseMs = options.pauseMs ?? 900;
   }
 
   public subscribe(listener: (event: ScheduledTranslationEvent) => void): () => void {
@@ -118,6 +142,14 @@ export class LiveTranslationScheduler {
 
   public setHistoryTurns(turns: number): void {
     this.historyTurns = Math.max(0, Math.min(6, Math.floor(turns)));
+  }
+
+  public setEarlySegments(enabled: boolean): void {
+    this.earlySegments = enabled;
+  }
+
+  public setPauseMs(pauseMs: number): void {
+    this.pauseMs = pauseMs;
   }
 
   public setActiveBlock(blockId: number): void {
@@ -193,10 +225,69 @@ export class LiveTranslationScheduler {
       endMs: snapshot.endMs,
     });
 
-    // ASR hypotheses stay visible, but only committed utterances spend tokens.
-    // Silence/pause/stop are finalized by the assembler before reaching here.
-    if (!snapshot.isFinal || !snapshot.text.trim()) {
+    // If interim, evaluate early segment candidate when enabled
+    if (!snapshot.isFinal) {
+      if (this.earlySegments && snapshot.text.trim()) {
+        this.evaluateEarlySegment(snapshot);
+      }
       return;
+    }
+
+    // Snapshot is FINAL
+    this.clearSegmentTimer(captionId);
+    if (!snapshot.text.trim()) {
+      return;
+    }
+
+    // Early segment final handling
+    if (this.earlySegments) {
+      const committed = this.captionCommittedSegments.get(captionId);
+      if (committed && committed.sources.length > 0) {
+        const split = splitFinal(snapshot.text, committed.sources);
+        if (split.kind === 'reuse') {
+          const fullTarget = joinTranslations(committed.targets, this.targetCode);
+          this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
+          this.emit({
+            captionId,
+            blockId: snapshot.blockId,
+            sourceText: snapshot.text,
+            targetText: fullTarget,
+            sourceRevision: snapshot.revision,
+            targetSourceRevision: snapshot.revision,
+            isFinal: true,
+            isProvisional: false,
+            startMs: snapshot.startMs,
+            endMs: snapshot.endMs,
+          });
+          this.rememberTranslation(captionId, snapshot.text, fullTarget, snapshot.revision);
+          this.recordHistory(captionId, snapshot.text, fullTarget);
+          this.cleanupCaption(captionId);
+          this.resolveIdleIfReady();
+          return;
+        }
+
+        if (split.kind === 'remainder') {
+          this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
+          const sameCaptionTurns: ContextTurn[] = committed.sources.map((src, idx) => ({
+            source: src,
+            translation: committed.targets[idx] ?? '',
+          }));
+          this.enqueueJob({
+            snapshot,
+            sourceToTranslate: split.remainder,
+            requestKind: 'remainder',
+            sameCaptionTurns,
+          });
+          return;
+        }
+
+        // Mismatch: user corrected early speech. Abort in-flight segment, discard committed, translate full final.
+        if (this.activeTranslation?.captionId === captionId) {
+          this.cancelInflight();
+        }
+        this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
+        this.captionCommittedSegments.delete(captionId);
+      }
     }
 
     // A punctuation-only final correction needs no second provider request.
@@ -204,7 +295,7 @@ export class LiveTranslationScheduler {
       completed &&
       LiveTranslationScheduler.isEquivalentMeaning(completed.source, snapshot.text)
     ) {
-      this.finalQueue = this.finalQueue.filter((queued) => queued.captionId !== captionId);
+      this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
       this.emit({
         captionId,
         blockId: snapshot.blockId,
@@ -227,13 +318,72 @@ export class LiveTranslationScheduler {
     // equivalent source revision. Do not abort and restart already billed work.
     if (this.activeTranslation?.captionId === captionId &&
         LiveTranslationScheduler.isEquivalentMeaning(this.activeTranslation.sourceText, snapshot.text)) {
-      this.finalQueue = this.finalQueue.filter((queued) => queued.captionId !== captionId);
+      this.jobQueue = this.jobQueue.filter((j) => j.snapshot.captionId !== captionId);
       return;
     }
 
-    const queuedCaptionIndex = this.finalQueue.findIndex((queued) => queued.captionId === captionId);
-    if (queuedCaptionIndex >= 0) this.finalQueue[queuedCaptionIndex] = snapshot;
-    else this.finalQueue.push(snapshot);
+    this.enqueueJob({
+      snapshot,
+      sourceToTranslate: snapshot.text,
+      requestKind: 'final',
+    });
+  }
+
+  private evaluateEarlySegment(snapshot: TranscriptSnapshot): void {
+    const captionId = snapshot.captionId;
+    const committed = this.captionCommittedSegments.get(captionId)?.sources ?? [];
+    const { stableMs, minChars } = segmenterOptionsFor(this.pauseMs);
+    const candidate = stablePrefixCandidate(snapshot.text, committed, minChars);
+
+    const existingTimer = this.segmentDebounceTimers.get(captionId);
+    if (candidate) {
+      if (existingTimer && existingTimer.candidate === candidate) {
+        return;
+      }
+      if (existingTimer) {
+        clearTimeout(existingTimer.timer);
+      }
+      const timer = setTimeout(() => {
+        this.segmentDebounceTimers.delete(captionId);
+        if (this.closed || this.captionFinals.get(captionId)) return;
+        const latest = this.latestSources.get(captionId) ?? '';
+        const curCommitted = this.captionCommittedSegments.get(captionId)?.sources ?? [];
+        if (!latest.startsWith(curCommitted.join('') + candidate)) return;
+
+        const curTargets = this.captionCommittedSegments.get(captionId)?.targets ?? [];
+        const sameCaptionTurns: ContextTurn[] = curCommitted.map((src, idx) => ({
+          source: src,
+          translation: curTargets[idx] ?? '',
+        }));
+        this.enqueueJob({
+          snapshot,
+          sourceToTranslate: candidate,
+          requestKind: 'segment',
+          sameCaptionTurns,
+        });
+      }, stableMs);
+      this.segmentDebounceTimers.set(captionId, { timer, candidate });
+    } else if (existingTimer) {
+      clearTimeout(existingTimer.timer);
+      this.segmentDebounceTimers.delete(captionId);
+    }
+  }
+
+  private clearSegmentTimer(captionId: number): void {
+    const timerInfo = this.segmentDebounceTimers.get(captionId);
+    if (timerInfo) {
+      clearTimeout(timerInfo.timer);
+      this.segmentDebounceTimers.delete(captionId);
+    }
+  }
+
+  private enqueueJob(job: ScheduledJob): void {
+    const idx = this.jobQueue.findIndex((j) => j.snapshot.captionId === job.snapshot.captionId);
+    if (idx >= 0) {
+      this.jobQueue[idx] = job;
+    } else {
+      this.jobQueue.push(job);
+    }
     this.maybeSchedule();
   }
 
@@ -262,7 +412,7 @@ export class LiveTranslationScheduler {
   private maybeSchedule(): void {
     if (this.closed || this.activeTranslation !== null) return;
 
-    if (this.finalQueue.length === 0) {
+    if (this.jobQueue.length === 0) {
       this.resolveIdleIfReady();
       return;
     }
@@ -277,12 +427,13 @@ export class LiveTranslationScheduler {
       return;
     }
 
-    const toRun = this.finalQueue.shift()!;
-    this.runTranslation(toRun, this.epoch);
+    const toRun = this.jobQueue.shift()!;
+    this.runJob(toRun, this.epoch);
   }
 
-  private async runTranslation(snapshot: TranscriptSnapshot, epoch: number): Promise<void> {
+  private async runJob(job: ScheduledJob, epoch: number): Promise<void> {
     this.lastRequestStartTime = Date.now();
+    const snapshot = job.snapshot;
     const captionId = snapshot.captionId;
     const blockId = snapshot.blockId;
     const reqRevision = snapshot.revision;
@@ -295,7 +446,8 @@ export class LiveTranslationScheduler {
       blockId,
       captionId,
       revision: reqRevision,
-      sourceText: snapshot.text,
+      sourceText: job.sourceToTranslate,
+      requestKind: job.requestKind,
       abortController,
       isCancelled: false,
     };
@@ -319,7 +471,6 @@ export class LiveTranslationScheduler {
     }
 
     let targetBuffer = '';
-
     let lastDeltaEmitTime = 0;
     let pendingDeltaTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -329,7 +480,13 @@ export class LiveTranslationScheduler {
         pendingDeltaTimer = null;
       }
       if (active.isCancelled || epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
-      this.latestTargets.set(captionId, targetBuffer);
+
+      const priorTargets = this.captionCommittedSegments.get(captionId)?.targets ?? [];
+      const currentDisplay = job.requestKind === 'final'
+        ? targetBuffer
+        : joinTranslations([...priorTargets, targetBuffer], this.targetCode);
+
+      this.latestTargets.set(captionId, currentDisplay);
       const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
       this.translatedRevisionByCaption.set(captionId, latestRev);
 
@@ -337,7 +494,7 @@ export class LiveTranslationScheduler {
         captionId,
         blockId,
         sourceText: this.latestSources.get(captionId) || snapshot.text,
-        targetText: targetBuffer,
+        targetText: currentDisplay,
         sourceRevision: latestRev,
         targetSourceRevision: latestRev,
         isFinal: false,
@@ -360,15 +517,25 @@ export class LiveTranslationScheduler {
     };
 
     try {
-      const historyToPass = this.historyTurns === 0
-        ? []
-        : this.contextHistory
-            .filter((turn) => turn.captionId !== captionId)
-            .slice(-this.historyTurns)
-            .map(({ source, translation }) => ({ source, translation }));
+      let historyToPass: ContextTurn[];
+      if (job.requestKind === 'segment' || job.requestKind === 'remainder') {
+        const priorTurn = this.contextHistory
+          .filter((turn) => turn.captionId !== captionId)
+          .slice(-1)
+          .map(({ source, translation }) => ({ source, translation }));
+        const sameCaptionTurns = job.sameCaptionTurns ?? [];
+        historyToPass = [...priorTurn, ...sameCaptionTurns];
+      } else {
+        historyToPass = this.historyTurns === 0
+          ? []
+          : this.contextHistory
+              .filter((turn) => turn.captionId !== captionId)
+              .slice(-this.historyTurns)
+              .map(({ source, translation }) => ({ source, translation }));
+      }
 
       const result = await this.runner(
-        snapshot.text,
+        job.sourceToTranslate,
         { sourceCode: this.sourceCode, targetCode: this.targetCode },
         historyToPass,
         abortController.signal,
@@ -377,13 +544,13 @@ export class LiveTranslationScheduler {
           if (active.isCancelled || epoch !== this.epoch) return;
           targetBuffer += delta;
           emitThrottledDelta();
-        }
+        },
+        job.requestKind
       );
 
       if (typeof result === 'string') {
         targetBuffer = result;
       } else if (result && Symbol.asyncIterator in (result as object)) {
-        // Stream
         for await (const delta of result as AsyncIterable<string>) {
           if (active.isCancelled || epoch !== this.epoch) {
             break;
@@ -399,14 +566,7 @@ export class LiveTranslationScheduler {
       }
 
       if (!active.isCancelled && epoch === this.epoch) {
-        this.onTranslationDone(
-          captionId,
-          blockId,
-          snapshot,
-          reqRevision,
-          targetBuffer,
-          epoch
-        );
+        this.onJobDone(job, targetBuffer, epoch);
       }
     } catch (err: unknown) {
       if (pendingDeltaTimer) {
@@ -415,15 +575,17 @@ export class LiveTranslationScheduler {
       }
       if (!active.isCancelled && epoch === this.epoch && this.matchesLatestSource(captionId, snapshot.text)) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        this.onTranslationError(
-          captionId,
-          blockId,
-          snapshot.text,
-          reqRevision,
-          errorMsg,
-          snapshot.startMs,
-          snapshot.endMs
-        );
+        if (job.requestKind !== 'segment') {
+          this.onTranslationError(
+            captionId,
+            blockId,
+            snapshot.text,
+            reqRevision,
+            errorMsg,
+            snapshot.startMs,
+            snapshot.endMs
+          );
+        }
       }
     } finally {
       if (pendingDeltaTimer) {
@@ -442,21 +604,113 @@ export class LiveTranslationScheduler {
     }
   }
 
-  private onTranslationDone(
-    captionId: number,
-    blockId: number,
-    snapshot: TranscriptSnapshot,
-    reqRevision: number,
-    targetText: string,
-    epoch: number
-  ): void {
+  private onJobDone(job: ScheduledJob, targetText: string, epoch: number): void {
+    const snapshot = job.snapshot;
+    const captionId = snapshot.captionId;
+    const blockId = snapshot.blockId;
+    const reqRevision = snapshot.revision;
+
     if (epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
 
     const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
-    const isFinalCaption = this.captionFinals.get(captionId) === true;
-    const isProvisional = !isFinalCaption;
     const latestSource = this.latestSources.get(captionId) || snapshot.text;
 
+    if (job.requestKind === 'segment') {
+      const committed = this.captionCommittedSegments.get(captionId) ?? { sources: [], targets: [] };
+      committed.sources.push(job.sourceToTranslate);
+      committed.targets.push(targetText);
+      this.captionCommittedSegments.set(captionId, committed);
+
+      const fullDisplay = joinTranslations(committed.targets, this.targetCode);
+      this.latestTargets.set(captionId, fullDisplay);
+      this.translatedRevisionByCaption.set(captionId, latestRev);
+
+      this.emit({
+        captionId,
+        blockId,
+        sourceText: latestSource,
+        targetText: fullDisplay,
+        sourceRevision: latestRev,
+        targetSourceRevision: latestRev,
+        isFinal: false,
+        isProvisional: true,
+        startMs: snapshot.startMs,
+        endMs: snapshot.endMs,
+      });
+
+      // Check if a final snapshot arrived while this segment was in-flight
+      if (this.captionFinals.get(captionId)) {
+        const split = splitFinal(latestSource, committed.sources);
+        if (split.kind === 'reuse') {
+          this.emit({
+            captionId,
+            blockId,
+            sourceText: latestSource,
+            targetText: fullDisplay,
+            sourceRevision: latestRev,
+            targetSourceRevision: latestRev,
+            isFinal: true,
+            isProvisional: false,
+            startMs: snapshot.startMs,
+            endMs: snapshot.endMs,
+          });
+          this.rememberTranslation(captionId, latestSource, fullDisplay, latestRev);
+          this.recordHistory(captionId, latestSource, fullDisplay);
+          this.cleanupCaption(captionId);
+        } else if (split.kind === 'remainder') {
+          const sameCaptionTurns: ContextTurn[] = committed.sources.map((src, idx) => ({
+            source: src,
+            translation: committed.targets[idx] ?? '',
+          }));
+          this.enqueueJob({
+            snapshot: { ...snapshot, text: latestSource, isFinal: true },
+            sourceToTranslate: split.remainder,
+            requestKind: 'remainder',
+            sameCaptionTurns,
+          });
+        } else {
+          this.captionCommittedSegments.delete(captionId);
+          this.enqueueJob({
+            snapshot: { ...snapshot, text: latestSource, isFinal: true },
+            sourceToTranslate: latestSource,
+            requestKind: 'final',
+          });
+        }
+      }
+      return;
+    }
+
+    if (job.requestKind === 'remainder') {
+      const committed = this.captionCommittedSegments.get(captionId) ?? { sources: [], targets: [] };
+      committed.sources.push(job.sourceToTranslate);
+      committed.targets.push(targetText);
+      const fullDisplay = joinTranslations(committed.targets, this.targetCode);
+
+      this.latestTargets.set(captionId, fullDisplay);
+      this.translatedRevisionByCaption.set(captionId, latestRev);
+
+      this.emit({
+        captionId,
+        blockId,
+        sourceText: latestSource,
+        targetText: fullDisplay,
+        sourceRevision: latestRev,
+        targetSourceRevision: latestRev,
+        isFinal: true,
+        isProvisional: false,
+        startMs: snapshot.startMs,
+        endMs: snapshot.endMs,
+      });
+
+      if (fullDisplay) {
+        this.rememberTranslation(captionId, latestSource, fullDisplay, latestRev);
+        this.recordHistory(captionId, latestSource, fullDisplay);
+      }
+      this.cleanupCaption(captionId);
+      return;
+    }
+
+    // Final job
     this.latestTargets.set(captionId, targetText);
     this.translatedRevisionByCaption.set(captionId, latestRev);
 
@@ -467,17 +721,17 @@ export class LiveTranslationScheduler {
       targetText,
       sourceRevision: latestRev,
       targetSourceRevision: latestRev,
-      isFinal: !isProvisional,
-      isProvisional,
+      isFinal: true,
+      isProvisional: false,
       startMs: snapshot.startMs,
       endMs: snapshot.endMs,
     });
 
-    if (!isProvisional && targetText) {
+    if (targetText) {
       this.rememberTranslation(captionId, latestSource, targetText, latestRev);
       this.recordHistory(captionId, latestSource, targetText);
     }
-    if (!isProvisional) this.cleanupCaption(captionId);
+    this.cleanupCaption(captionId);
   }
 
   private onTranslationError(
@@ -511,11 +765,17 @@ export class LiveTranslationScheduler {
     this.latestTargets.delete(captionId);
     this.captionFinals.delete(captionId);
     this.translatedRevisionByCaption.delete(captionId);
+    this.captionCommittedSegments.delete(captionId);
+    this.clearSegmentTimer(captionId);
   }
 
   private matchesLatestSource(captionId: number, source: string): boolean {
     const latestSource = this.latestSources.get(captionId);
-    return latestSource !== undefined && LiveTranslationScheduler.isEquivalentMeaning(source, latestSource);
+    if (latestSource === undefined) return false;
+    if (LiveTranslationScheduler.isEquivalentMeaning(source, latestSource)) return true;
+    // For segment/remainder, check if latestSource contains or starts with source
+    if (latestSource.startsWith(source) || latestSource.includes(source)) return true;
+    return false;
   }
 
   private rememberTranslation(captionId: number, source: string, target: string, revision: number): void {
@@ -533,20 +793,18 @@ export class LiveTranslationScheduler {
     const index = this.contextHistory.findIndex((previous) => previous.captionId === captionId);
     if (index >= 0) this.contextHistory[index] = turn;
     else this.contextHistory.push(turn);
-    // A late correction keeps its place in the conversation, including when
-    // it is older than the retained context window.
     this.contextHistory.sort((a, b) => a.captionId - b.captionId);
     this.contextHistory = this.contextHistory.slice(-6);
   }
 
   public async drain(): Promise<void> {
     this.maybeSchedule();
-    if (!this.activeTranslation && this.finalQueue.length === 0) return;
+    if (!this.activeTranslation && this.jobQueue.length === 0) return;
     await new Promise<void>((resolve) => this.idleWaiters.push(resolve));
   }
 
   private resolveIdleIfReady(): void {
-    if (this.activeTranslation || this.finalQueue.length > 0) return;
+    if (this.activeTranslation || this.jobQueue.length > 0) return;
     const waiters = this.idleWaiters.splice(0);
     for (const resolve of waiters) resolve();
   }
@@ -557,8 +815,12 @@ export class LiveTranslationScheduler {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    for (const { timer } of this.segmentDebounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.segmentDebounceTimers.clear();
     this.cancelInflight();
-    this.finalQueue = [];
+    this.jobQueue = [];
     this.resolveIdleIfReady();
     this.listeners.clear();
   }

@@ -578,6 +578,48 @@ export function AiSettings() {
               Ngữ cảnh giúp AI dịch chuẩn đại từ nhân xưng và mạch câu chuyện, nhưng mỗi câu làm tăng số lượng token đầu vào (input tokens). Chọn 0 để tối ưu chi phí tối đa.
             </span>
           </div>
+
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <label
+              htmlFor="early-segment-toggle"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+              }}
+            >
+              <span>Dịch sớm từng vế câu ổn định (Cost-aware Early Segments)</span>
+              <input
+                id="early-segment-toggle"
+                type="checkbox"
+                checked={settings.earlySegmentTranslation ?? false}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    earlySegmentTranslation: e.target.checked,
+                  })
+                }
+                style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }}
+              />
+            </label>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Tự động dịch sớm các câu đơn đã hoàn chỉnh khi người nói ngừng nhẹ giữa bài. Giúp người đọc thấy bản dịch sớm hơn mà không lặp lại token cho các câu đã dịch.
+            </span>
+          </div>
         </div>
 
         {/* 3. Khoảng Nghỉ Để Chốt Câu (Pause Duration) */}
