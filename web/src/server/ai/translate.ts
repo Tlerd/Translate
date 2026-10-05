@@ -59,8 +59,6 @@ export async function* executeTranslation(
   const { payload: userPayload, historyTurns } = buildTranslationPayloadWithStats({
     sourceLanguage: req.sourceLanguage,
     targetLanguage: req.targetLanguage,
-    situation: req.context,
-    glossary: req.glossary,
     previousTurns: req.previousTurns,
     currentUtterance: req.text,
   });

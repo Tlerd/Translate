@@ -71,8 +71,6 @@ export interface StartOptions {
   sourceLanguage?: string;
   targetLanguage?: string;
   translationModelKey?: string;
-  context?: string;
-  glossary?: string;
   pauseMs?: number;
   readingPauseMs?: number;
   translationHistoryTurns?: number;
@@ -254,8 +252,6 @@ export class ClassroomController {
       sourceLanguage,
       targetLanguage,
       translationModelKey,
-      context: options.context,
-      glossary: options.glossary,
       transcriptionMode,
       speakerCount,
     });
@@ -345,8 +341,6 @@ export class ClassroomController {
               sourceLanguage: direction.sourceCode,
               targetLanguage: direction.targetCode,
               text: source,
-              context: options.context,
-              glossary: options.glossary,
               previousTurns: history,
             },
             (delta) => {

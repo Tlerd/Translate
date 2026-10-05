@@ -316,7 +316,6 @@ describe('Storage Layer', () => {
 
     await saveSettings({
       translationModel: 'openai:gpt-4o-mini',
-      glossary: 'AI=Trí tuệ nhân tạo',
       pauseMs: 1400,
       readingPauseMs: 7600,
       translationHistoryTurns: 3,
@@ -325,7 +324,6 @@ describe('Storage Layer', () => {
 
     const updated = await loadSettings();
     expect(updated.translationModel).toBe('openai:gpt-4o-mini');
-    expect(updated.glossary).toBe('AI=Trí tuệ nhân tạo');
     expect(updated.pauseMs).toBe(1400);
     expect(updated.readingPauseMs).toBe(7600);
     expect(updated.translationHistoryTurns).toBe(3);

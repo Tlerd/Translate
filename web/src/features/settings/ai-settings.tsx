@@ -10,7 +10,6 @@ import {
   Clock,
   Sparkles,
   Languages,
-  BookOpen,
   CheckCircle2,
   ExternalLink,
 } from 'lucide-react';
@@ -858,89 +857,7 @@ export function AiSettings() {
           </div>
         </div>
 
-        {/* 5. Glossary & Context */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <BookOpen size={17} color="var(--accent)" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                5. Thuật ngữ & Ngữ cảnh riêng (Context & Glossary)
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Tăng độ chính xác khi dịch các từ ngữ chuyên ngành
-              </span>
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="settings-glossary" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Thuật ngữ chuyên ngành (Glossary):
-            </label>
-            <textarea
-              id="settings-glossary"
-              rows={3}
-              value={settings.glossary}
-              onChange={(e) => setSettings({ ...settings, glossary: e.target.value })}
-              placeholder="Ví dụ:&#10;AI=Trí tuệ nhân tạo&#10;LLM=Mô hình ngôn ngữ lớn&#10;機械学習=Học máy"
-              style={{
-                padding: '10px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.86rem',
-                lineHeight: 1.5,
-                resize: 'vertical',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="settings-context" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Ngữ cảnh bài học / cuộc hội thoại (Context):
-            </label>
-            <textarea
-              id="settings-context"
-              rows={2}
-              value={settings.context}
-              onChange={(e) => setSettings({ ...settings, context: e.target.value })}
-              placeholder="Ví dụ: Tiết học tiếng Nhật N2 chủ đề Kinh tế và Đàm phán thương mại."
-              style={{
-                padding: '10px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.86rem',
-                lineHeight: 1.5,
-                resize: 'vertical',
-              }}
-            />
-          </div>
-        </div>
 
         {/* Action Button Bar */}
         <div

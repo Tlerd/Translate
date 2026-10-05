@@ -128,8 +128,6 @@ export interface AppSettings {
   sourceLanguage: string;
   targetLanguage: string;
   mode: ClassroomMode;
-  context: string;
-  glossary: string;
   pauseMs: number;
   readingPauseMs: number;
   translationHistoryTurns: number;
@@ -148,8 +146,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sourceLanguage: 'ja-JP',
   targetLanguage: 'vi',
   mode: 'lecture',
-  context: '',
-  glossary: '',
   pauseMs: 900,
   readingPauseMs: 900,
   translationHistoryTurns: 6,

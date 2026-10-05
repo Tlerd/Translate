@@ -433,8 +433,6 @@ export async function loadSettings(): Promise<AppSettings> {
       sourceLanguage: map.get('sourceLanguage') || DEFAULT_SETTINGS.sourceLanguage,
       targetLanguage: map.get('targetLanguage') || DEFAULT_SETTINGS.targetLanguage,
       mode: (map.get('mode') as ClassroomMode) || DEFAULT_SETTINGS.mode,
-      context: map.get('context') || DEFAULT_SETTINGS.context,
-      glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
       translationHistoryTurns: normalizeTranslationHistoryTurns(
