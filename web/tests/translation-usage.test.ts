@@ -161,7 +161,7 @@ describe('translation token usage diagnostics', () => {
       thinkingLevel: 'minimal',
       inputTokens: 50,
       outputTokens: 10,
-      promptVersion: 'lean-fidelity-v3',
+      promptVersion: 'lean-fidelity-v4',
     });
   });
 
