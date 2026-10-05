@@ -2,15 +2,52 @@ import 'server-only';
 import { resolveTaskConfig, AiConfigError } from '@/config/ai.server';
 import {
   buildTranslationSystemPrompt,
-  buildTranslationPayload,
+  buildTranslationPayloadWithStats,
 } from './prompts/translation';
 import { streamGoogleText, type ProviderTokenUsage } from './providers/google';
 import { streamOpenAiText } from './providers/openai';
 import type { TranslateRequest } from '@/shared/ai-contracts';
+import type { TranslationUsageRecord } from '@/server/cloud/translation-usage-store';
+
+export function buildUsageRecord(params: {
+  req: TranslateRequest;
+  modelKey: string;
+  status: 'completed' | 'failed' | 'aborted';
+  durationMs: number;
+  systemChars: number;
+  payloadChars: number;
+  historyTurns: number;
+  thinkingLevel: string | null;
+  usage?: ProviderTokenUsage;
+}): TranslationUsageRecord {
+  const { req, modelKey, status, durationMs, systemChars, payloadChars, historyTurns, thinkingLevel, usage } = params;
+  return {
+    requestId: req.requestId,
+    recordingId: req.recordingId,
+    captionId: req.captionId,
+    revision: req.revision,
+    modelKey,
+    status,
+    requestKind: req.requestKind ?? 'final',
+    thinkingLevel,
+    durationMs,
+    sourceChars: req.text.length,
+    systemChars,
+    payloadChars,
+    historyTurns,
+    usageStatus: usage ? 'reported' : 'unavailable',
+    inputTokens: usage?.inputTokens ?? null,
+    outputTokens: usage?.outputTokens ?? null,
+    cachedInputTokens: usage?.cachedInputTokens ?? null,
+    thinkingTokens: usage?.thinkingTokens ?? null,
+    totalTokens: usage?.totalTokens ?? null,
+  };
+}
 
 export async function* executeTranslation(
   req: TranslateRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onUsageRecord?: (record: TranslationUsageRecord) => void
 ): AsyncIterable<string> {
   const resolved = resolveTaskConfig('translate', req.modelKey);
 
@@ -19,7 +56,7 @@ export async function* executeTranslation(
     req.targetLanguage
   );
 
-  const userPayload = buildTranslationPayload({
+  const { payload: userPayload, historyTurns } = buildTranslationPayloadWithStats({
     sourceLanguage: req.sourceLanguage,
     targetLanguage: req.targetLanguage,
     situation: req.context,
@@ -27,6 +64,12 @@ export async function* executeTranslation(
     previousTurns: req.previousTurns,
     currentUtterance: req.text,
   });
+
+  const effectiveThinkingLevel =
+    req.thinkingLevel ??
+    (req.requestKind && req.requestKind !== 'final' && resolved.model.thinkingLevels?.includes('minimal')
+      ? 'minimal'
+      : undefined);
 
   const startedAt = Date.now();
   let usage: ProviderTokenUsage | undefined;
@@ -37,7 +80,7 @@ export async function* executeTranslation(
     systemInstruction,
     userPrompt: userPayload,
     signal,
-    thinkingLevel: req.thinkingLevel,
+    thinkingLevel: effectiveThinkingLevel,
     onUsage: (reported: ProviderTokenUsage) => {
       usage = {
         inputTokens: reported.inputTokens ?? usage?.inputTokens,
@@ -51,8 +94,8 @@ export async function* executeTranslation(
 
   try {
     if (resolved.model.provider === 'google') {
-      if (req.thinkingLevel && !resolved.model.thinkingLevels?.includes(req.thinkingLevel)) {
-        throw new AiConfigError('UNSUPPORTED_MODEL', `Mức suy luận ${req.thinkingLevel} không được model ${resolved.model.modelId} hỗ trợ.`);
+      if (effectiveThinkingLevel && !resolved.model.thinkingLevels?.includes(effectiveThinkingLevel)) {
+        throw new AiConfigError('UNSUPPORTED_MODEL', `Mức suy luận ${effectiveThinkingLevel} không được model ${resolved.model.modelId} hỗ trợ.`);
       }
       yield* streamGoogleText(params);
     } else {
@@ -65,23 +108,24 @@ export async function* executeTranslation(
   } finally {
     // Correlate provider usage with a caption without logging speech, glossary,
     // translations or keys. Missing/aborted metadata is unknown, never free.
-    console.info('[translation-usage]', {
-      requestId: req.requestId,
-      recordingId: req.recordingId,
-      captionId: req.captionId,
-      revision: req.revision,
+    const record = buildUsageRecord({
+      req,
       modelKey: resolved.model.key,
       status,
       durationMs: Date.now() - startedAt,
-      sourceChars: req.text.length,
       systemChars: systemInstruction.length,
       payloadChars: userPayload.length,
-      usageStatus: usage ? 'reported' : 'unavailable',
-      inputTokens: usage?.inputTokens ?? null,
-      outputTokens: usage?.outputTokens ?? null,
-      cachedInputTokens: usage?.cachedInputTokens ?? null,
-      thinkingTokens: usage?.thinkingTokens ?? null,
-      totalTokens: usage?.totalTokens ?? null,
+      historyTurns,
+      thinkingLevel: effectiveThinkingLevel ?? null,
+      usage,
     });
+    console.info('[translation-usage]', record);
+    if (onUsageRecord) {
+      try {
+        onUsageRecord(record);
+      } catch {
+        // Best-effort callback
+      }
+    }
   }
 }

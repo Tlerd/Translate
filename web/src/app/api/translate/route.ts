@@ -1,5 +1,11 @@
+import { after } from 'next/server';
 import { TranslateRequestSchema } from '@/shared/ai-contracts';
 import { executeTranslation } from '@/server/ai/translate';
+import {
+  usageStoreEnabled,
+  insertTranslationUsage,
+  type TranslationUsageRecord,
+} from '@/server/cloud/translation-usage-store';
 import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
 import { checkRateLimit } from '@/server/http/rate-limit';
 
@@ -88,9 +94,25 @@ export async function POST(req: Request): Promise<Response> {
         }
       };
 
+      const onUsageRecord = (record: TranslationUsageRecord) => {
+        if (usageStoreEnabled()) {
+          try {
+            after(async () => {
+              try {
+                await insertTranslationUsage(record);
+              } catch (err) {
+                console.warn('[translation-usage] Failed to persist usage:', err);
+              }
+            });
+          } catch (err) {
+            console.warn('[translation-usage] Failed to schedule after():', err);
+          }
+        }
+      };
+
       void (async () => {
         try {
-          for await (const delta of executeTranslation(data, abortController.signal)) {
+          for await (const delta of executeTranslation(data, abortController.signal, onUsageRecord)) {
             if (stopped || abortController.signal.aborted) break;
             fullText += delta;
             const deltaMsg = `event: delta\ndata: ${JSON.stringify({ delta })}\n\n`;

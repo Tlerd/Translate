@@ -28,13 +28,16 @@ Proper names: ${properNameRule}
 If source contains [không nghe rõ], retain that uncertainty marker instead of guessing. Never complete unfinished source sentences with invented details.`;
 }
 
-export function buildTranslationPayload(options: TranslationPromptOptions): string {
+export function buildTranslationPayloadWithStats(
+  options: TranslationPromptOptions,
+  maxTurns: number = 6
+): { payload: string; historyTurns: number } {
   const history = options.previousTurns || [];
   const bounded: Array<{ sourceLanguage: string; targetLanguage: string; source: string; translation: string }> = [];
   let remainingChars = 6000;
 
-  // Take up to 6 turns from recent history within 6000 chars limit
-  for (let i = history.length - 1; i >= 0 && bounded.length < 6; i--) {
+  // Take up to maxTurns from recent history within 6000 chars limit
+  for (let i = history.length - 1; i >= 0 && bounded.length < maxTurns; i--) {
     const turn = history[i];
     const size = turn.source.length + turn.translation.length;
     if (size > remainingChars) break;
@@ -47,10 +50,17 @@ export function buildTranslationPayload(options: TranslationPromptOptions): stri
     remainingChars -= size;
   }
 
-  return JSON.stringify({
-    situation: options.situation || '',
-    glossary: options.glossary || '',
-    previous_turns: bounded,
-    current_utterance: options.currentUtterance,
-  });
+  return {
+    payload: JSON.stringify({
+      situation: options.situation || '',
+      glossary: options.glossary || '',
+      previous_turns: bounded,
+      current_utterance: options.currentUtterance,
+    }),
+    historyTurns: bounded.length,
+  };
+}
+
+export function buildTranslationPayload(options: TranslationPromptOptions): string {
+  return buildTranslationPayloadWithStats(options).payload;
 }

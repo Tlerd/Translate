@@ -1,13 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { executeTranslation } from '@/server/ai/translate';
+import { executeTranslation, buildUsageRecord } from '@/server/ai/translate';
 import type { TranslateRequest } from '@/shared/ai-contracts';
+import type { TranslationUsageRecord } from '@/server/cloud/translation-usage-store';
 
-const sdk = vi.hoisted(() => ({ generateContentStream: vi.fn() }));
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: class {
-    models = { generateContentStream: sdk.generateContentStream };
-  },
+const sdk = vi.hoisted(() => ({
+  generateContentStream: vi.fn(),
+  lastConfig: undefined as unknown,
 }));
+vi.mock('@google/genai', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    GoogleGenAI: class {
+      models = {
+        generateContentStream: (params: unknown) => {
+          sdk.lastConfig = params;
+          return sdk.generateContentStream(params);
+        },
+      };
+    },
+  };
+});
 
 const request: TranslateRequest = {
   requestId: 'usage-request', recordingId: 'usage-recording', captionId: 7,
@@ -20,6 +33,7 @@ describe('translation token usage diagnostics', () => {
   beforeEach(() => {
     vi.stubEnv('GOOGLE_API_KEY', 'private-test-key');
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    sdk.lastConfig = undefined;
   });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
@@ -35,6 +49,7 @@ describe('translation token usage diagnostics', () => {
     expect(console.info).toHaveBeenCalledWith('[translation-usage]', expect.objectContaining({
       requestId: request.requestId, captionId: 7, revision: 3, modelKey: request.modelKey,
       status: 'completed', usageStatus: 'reported', inputTokens: 100, outputTokens: 2, cachedInputTokens: 0, thinkingTokens: 0, totalTokens: 102,
+      requestKind: 'final', historyTurns: 0, thinkingLevel: null,
     }));
     const logged = JSON.stringify(vi.mocked(console.info).mock.calls);
     for (const content of ['private source', 'private situation', 'private glossary', 'private-test-key', 'Xin chào']) expect(logged).not.toContain(content);
@@ -77,5 +92,75 @@ describe('translation token usage diagnostics', () => {
     expect(console.info).toHaveBeenCalledOnce();
     expect(console.info).toHaveBeenCalledWith('[translation-usage]', expect.objectContaining({ status: 'failed', inputTokens: null }));
     expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain('private upstream error');
+  });
+
+  it('uses minimal thinking level for segment requests when unspecified, and invokes onUsageRecord callback', async () => {
+    sdk.generateContentStream.mockResolvedValue((async function* () {
+      yield { text: 'Đoạn dịch', usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 5, totalTokenCount: 55 } };
+    })());
+
+    let receivedRecord: TranslationUsageRecord | undefined;
+    const segmentRequest: TranslateRequest = {
+      ...request,
+      requestKind: 'segment',
+      previousTurns: [
+        { source: 'turn 1 source', translation: 'turn 1 trans' },
+      ],
+    };
+
+    for await (const part of executeTranslation(segmentRequest, undefined, (r) => { receivedRecord = r; })) {
+      void part;
+    }
+
+    expect(receivedRecord).toBeDefined();
+    expect(receivedRecord?.requestKind).toBe('segment');
+    expect(receivedRecord?.thinkingLevel).toBe('minimal');
+    expect(receivedRecord?.historyTurns).toBe(1);
+    expect((sdk.lastConfig as { config?: { thinkingConfig?: { thinkingLevel?: unknown } } })?.config?.thinkingConfig?.thinkingLevel).toBeDefined();
+  });
+
+  it('leaves thinking level undefined for final requests with auto thinking', async () => {
+    sdk.generateContentStream.mockResolvedValue((async function* () {
+      yield { text: 'Toàn câu', usageMetadata: { promptTokenCount: 80, candidatesTokenCount: 10, totalTokenCount: 90 } };
+    })());
+
+    let receivedRecord: TranslationUsageRecord | undefined;
+    const finalRequest: TranslateRequest = {
+      ...request,
+      requestKind: 'final',
+      thinkingLevel: undefined,
+    };
+
+    for await (const part of executeTranslation(finalRequest, undefined, (r) => { receivedRecord = r; })) {
+      void part;
+    }
+
+    expect(receivedRecord).toBeDefined();
+    expect(receivedRecord?.requestKind).toBe('final');
+    expect(receivedRecord?.thinkingLevel).toBeNull();
+    expect((sdk.lastConfig as { config?: { thinkingConfig?: unknown } })?.config?.thinkingConfig).toBeUndefined();
+  });
+
+  it('builds usage record accurately from parameters', () => {
+    const record = buildUsageRecord({
+      req: request,
+      modelKey: request.modelKey,
+      status: 'completed',
+      durationMs: 150,
+      systemChars: 500,
+      payloadChars: 100,
+      historyTurns: 2,
+      thinkingLevel: 'minimal',
+      usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+    });
+    expect(record).toMatchObject({
+      requestId: request.requestId,
+      status: 'completed',
+      requestKind: 'final',
+      historyTurns: 2,
+      thinkingLevel: 'minimal',
+      inputTokens: 50,
+      outputTokens: 10,
+    });
   });
 });
