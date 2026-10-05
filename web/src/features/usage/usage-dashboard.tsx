@@ -60,7 +60,8 @@ export function UsageDashboard() {
   ) || 1;
 
   return (
-    <div className={styles.container}>
+    <div className={styles.pageWrapper}>
+      <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.titleArea}>
           <h1 className={styles.title}>Chi Phí & Token Dịch</h1>
@@ -389,6 +390,7 @@ export function UsageDashboard() {
           </section>
         </>
       ) : null}
+      </div>
     </div>
   );
 }
