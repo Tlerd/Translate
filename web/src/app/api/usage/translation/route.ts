@@ -55,11 +55,14 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const fromDate = new Date(`${parsed.data.from}T00:00:00.000+07:00`);
-    const toDate = new Date(`${parsed.data.to}T23:59:59.999+07:00`);
+    const [toYear, toMonth, toDay] = parsed.data.to.split('-').map(Number);
+    const nextDayUtc = new Date(Date.UTC(toYear, toMonth - 1, toDay + 1));
+    const nextDayStr = `${nextDayUtc.getUTCFullYear()}-${String(nextDayUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(nextDayUtc.getUTCDate()).padStart(2, '0')}`;
+    const toDateExclusive = new Date(`${nextDayStr}T00:00:00.000+07:00`);
 
     const summary = await summarizeTranslationUsage({
       from: fromDate,
-      to: toDate,
+      toExclusive: toDateExclusive,
       recordingId: parsed.data.recordingId,
       tz: 'Asia/Ho_Chi_Minh',
     });

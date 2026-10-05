@@ -140,7 +140,7 @@ describe('POST /api/translate usage persistence', () => {
     store.insertTranslationUsage.mockClear();
   });
 
-  it('calls after() exactly once per request when store is enabled', async () => {
+  it('registers after() synchronously before returning Response and inserts record upon completion', async () => {
     sdk.generateContentStream.mockImplementation(async () => ({
       async *[Symbol.asyncIterator]() {
         yield { text: 'Xin chào', usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 } };
@@ -148,6 +148,8 @@ describe('POST /api/translate usage persistence', () => {
     }));
 
     const response = await POST(translateRequest());
+    expect(store.afterFn).toHaveBeenCalledOnce();
+
     const reader = response.body!.getReader();
     const chunks: string[] = [];
     while (true) {
@@ -157,7 +159,6 @@ describe('POST /api/translate usage persistence', () => {
     }
 
     expect(chunks.join('')).toContain('event: done');
-    expect(store.afterFn).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(store.insertTranslationUsage).toHaveBeenCalledOnce());
     expect(store.insertTranslationUsage).toHaveBeenCalledWith(expect.objectContaining({
       requestId: 'req-abort',
@@ -166,8 +167,8 @@ describe('POST /api/translate usage persistence', () => {
     }));
   });
 
-  it('does not break SSE stream when insertTranslationUsage fails', async () => {
-    store.insertTranslationUsage.mockRejectedValue(new Error('db connection error'));
+  it('does not break SSE stream when insertTranslationUsage fails and logs message only', async () => {
+    store.insertTranslationUsage.mockRejectedValue(new Error('private db connection error'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     sdk.generateContentStream.mockImplementation(async () => ({
@@ -188,6 +189,10 @@ describe('POST /api/translate usage persistence', () => {
     expect(chunks.join('')).toContain('event: done');
     expect(store.afterFn).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(warnSpy).toHaveBeenCalled());
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[translation-usage] persist failed',
+      'private db connection error'
+    );
     warnSpy.mockRestore();
   });
 });

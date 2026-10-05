@@ -31,37 +31,51 @@ export function usageStoreEnabled(): boolean {
   return hasDb && storeSetting !== 'off';
 }
 
-async function ready() {
+let schemaReadyPromise: Promise<void> | null = null;
+
+export function resetSchemaReadyForTest(): void {
+  schemaReadyPromise = null;
+}
+
+async function ensureSchema(): Promise<ReturnType<typeof database>> {
   const sql = database();
-  await sql`CREATE TABLE IF NOT EXISTS translation_usage (
-    request_id text PRIMARY KEY,
-    recording_id text NOT NULL,
-    caption_id integer NOT NULL,
-    revision integer NOT NULL,
-    model_key text NOT NULL,
-    status text NOT NULL,
-    request_kind text NOT NULL,
-    thinking_level text,
-    duration_ms integer NOT NULL,
-    source_chars integer NOT NULL,
-    system_chars integer NOT NULL,
-    payload_chars integer NOT NULL,
-    history_turns integer NOT NULL,
-    usage_status text NOT NULL,
-    input_tokens integer,
-    output_tokens integer,
-    cached_input_tokens integer,
-    thinking_tokens integer,
-    total_tokens integer,
-    created_at timestamptz NOT NULL DEFAULT now()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_created_at ON translation_usage(created_at)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_recording_id ON translation_usage(recording_id)`;
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = (async () => {
+      await sql`CREATE TABLE IF NOT EXISTS translation_usage (
+        request_id text PRIMARY KEY,
+        recording_id text NOT NULL,
+        caption_id integer NOT NULL,
+        revision integer NOT NULL,
+        model_key text NOT NULL,
+        status text NOT NULL,
+        request_kind text NOT NULL,
+        thinking_level text,
+        duration_ms integer NOT NULL,
+        source_chars integer NOT NULL,
+        system_chars integer NOT NULL,
+        payload_chars integer NOT NULL,
+        history_turns integer NOT NULL,
+        usage_status text NOT NULL,
+        input_tokens integer,
+        output_tokens integer,
+        cached_input_tokens integer,
+        thinking_tokens integer,
+        total_tokens integer,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_created_at ON translation_usage(created_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_recording_id ON translation_usage(recording_id)`;
+    })().catch((err) => {
+      schemaReadyPromise = null;
+      throw err;
+    });
+  }
+  await schemaReadyPromise;
   return sql;
 }
 
 export async function insertTranslationUsage(r: TranslationUsageRecord): Promise<void> {
-  const sql = await ready();
+  const sql = await ensureSchema();
   await sql`
     INSERT INTO translation_usage (
       request_id, recording_id, caption_id, revision, model_key, status,
@@ -78,32 +92,28 @@ export async function insertTranslationUsage(r: TranslationUsageRecord): Promise
   `;
 }
 
-interface DbUsageRow {
-  request_id: string;
-  recording_id: string;
-  caption_id: number;
-  revision: number;
+export interface AggregatedUsageRow {
   model_key: string;
-  status: 'completed' | 'failed' | 'aborted';
   request_kind: 'final' | 'segment' | 'remainder';
-  thinking_level: string | null;
-  duration_ms: number;
-  source_chars: number;
-  system_chars: number;
-  payload_chars: number;
-  history_turns: number;
-  usage_status: 'reported' | 'unavailable';
-  input_tokens: number | null;
-  output_tokens: number | null;
-  cached_input_tokens: number | null;
-  thinking_tokens: number | null;
-  total_tokens: number | null;
-  created_at: string | Date;
+  status: 'completed' | 'failed' | 'aborted';
+  day: string;
+  recording_id: string;
+  requests: number;
+  unavailable: number;
+  reported: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  thinkingTokens: number;
 }
 
-function calculateBucket(rows: DbUsageRow[]): UsageBucket {
-  const requests = rows.length;
+function calculateBucketFromAggregatedRows(rows: AggregatedUsageRow[]): {
+  bucket: UsageBucket;
+  reported: number;
+} {
+  let requests = 0;
   let unavailable = 0;
+  let reported = 0;
   let inputTokens = 0;
   let outputTokens = 0;
   let cachedInputTokens = 0;
@@ -112,23 +122,18 @@ function calculateBucket(rows: DbUsageRow[]): UsageBucket {
   const modelTokens = new Map<string, { input: number; output: number; thinking: number }>();
 
   for (const r of rows) {
-    if (r.usage_status === 'unavailable' || r.input_tokens === null) {
-      unavailable++;
-    }
-    const inp = r.input_tokens ?? 0;
-    const out = r.output_tokens ?? 0;
-    const cached = r.cached_input_tokens ?? 0;
-    const think = r.thinking_tokens ?? 0;
-
-    inputTokens += inp;
-    outputTokens += out;
-    cachedInputTokens += cached;
-    thinkingTokens += think;
+    requests += r.requests;
+    unavailable += r.unavailable;
+    reported += r.reported;
+    inputTokens += r.inputTokens;
+    outputTokens += r.outputTokens;
+    cachedInputTokens += r.cachedInputTokens;
+    thinkingTokens += r.thinkingTokens;
 
     const mt = modelTokens.get(r.model_key) ?? { input: 0, output: 0, thinking: 0 };
-    mt.input += inp;
-    mt.output += out;
-    mt.thinking += think;
+    mt.input += r.inputTokens;
+    mt.output += r.outputTokens;
+    mt.thinking += r.thinkingTokens;
     modelTokens.set(r.model_key, mt);
   }
 
@@ -139,7 +144,9 @@ function calculateBucket(rows: DbUsageRow[]): UsageBucket {
       estimatedUsd = null;
       break;
     }
-    const cost = (mt.input * config.inputUsdPerM + (mt.output + mt.thinking) * config.outputUsdPerM) / 1_000_000;
+    const cost =
+      (mt.input * config.inputUsdPerM + (mt.output + mt.thinking) * config.outputUsdPerM) /
+      1_000_000;
     estimatedUsd += cost;
   }
 
@@ -148,59 +155,97 @@ function calculateBucket(rows: DbUsageRow[]): UsageBucket {
   }
 
   return {
-    requests,
-    unavailable,
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    thinkingTokens,
-    estimatedUsd,
+    bucket: {
+      requests,
+      unavailable,
+      inputTokens,
+      outputTokens,
+      cachedInputTokens,
+      thinkingTokens,
+      estimatedUsd,
+    },
+    reported,
   };
 }
 
 export async function summarizeTranslationUsage(q: {
   from: Date;
-  to: Date;
+  to?: Date;
+  toExclusive?: Date;
   recordingId?: string;
   tz?: 'Asia/Ho_Chi_Minh';
 }): Promise<UsageSummary> {
-  const sql = await ready();
+  const sql = await ensureSchema();
+  const toExclusive = q.toExclusive ?? q.to ?? new Date();
+
   const rawRows = q.recordingId
     ? await sql`
         SELECT
-          request_id, recording_id, caption_id, revision, model_key, status,
-          request_kind, thinking_level, duration_ms, source_chars, system_chars,
-          payload_chars, history_turns, usage_status, input_tokens, output_tokens,
-          cached_input_tokens, thinking_tokens, total_tokens, created_at
+          model_key,
+          request_kind,
+          status,
+          (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS day,
+          recording_id,
+          COUNT(*)::int AS requests,
+          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL)::int AS unavailable,
+          COUNT(*) FILTER (WHERE input_tokens IS NOT NULL)::int AS reported,
+          SUM(COALESCE(input_tokens, 0))::bigint AS input_tokens,
+          SUM(COALESCE(output_tokens, 0))::bigint AS output_tokens,
+          SUM(COALESCE(cached_input_tokens, 0))::bigint AS cached_input_tokens,
+          SUM(COALESCE(thinking_tokens, 0))::bigint AS thinking_tokens
         FROM translation_usage
         WHERE created_at >= ${q.from.toISOString()}
-          AND created_at <= ${q.to.toISOString()}
+          AND created_at < ${toExclusive.toISOString()}
           AND recording_id = ${q.recordingId}
-        ORDER BY created_at ASC
+        GROUP BY model_key, request_kind, status, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, recording_id
+        ORDER BY day ASC
       `
     : await sql`
         SELECT
-          request_id, recording_id, caption_id, revision, model_key, status,
-          request_kind, thinking_level, duration_ms, source_chars, system_chars,
-          payload_chars, history_turns, usage_status, input_tokens, output_tokens,
-          cached_input_tokens, thinking_tokens, total_tokens, created_at
+          model_key,
+          request_kind,
+          status,
+          (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS day,
+          recording_id,
+          COUNT(*)::int AS requests,
+          COUNT(*) FILTER (WHERE usage_status = 'unavailable' OR input_tokens IS NULL)::int AS unavailable,
+          COUNT(*) FILTER (WHERE input_tokens IS NOT NULL)::int AS reported,
+          SUM(COALESCE(input_tokens, 0))::bigint AS input_tokens,
+          SUM(COALESCE(output_tokens, 0))::bigint AS output_tokens,
+          SUM(COALESCE(cached_input_tokens, 0))::bigint AS cached_input_tokens,
+          SUM(COALESCE(thinking_tokens, 0))::bigint AS thinking_tokens
         FROM translation_usage
         WHERE created_at >= ${q.from.toISOString()}
-          AND created_at <= ${q.to.toISOString()}
-        ORDER BY created_at ASC
+          AND created_at < ${toExclusive.toISOString()}
+        GROUP BY model_key, request_kind, status, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, recording_id
+        ORDER BY day ASC
       `;
 
-  const rows = rawRows as unknown as DbUsageRow[];
+  const rows: AggregatedUsageRow[] = (rawRows as Array<Record<string, unknown>>).map((r) => ({
+    model_key: String(r.model_key),
+    request_kind: (String(r.request_kind) || 'final') as 'final' | 'segment' | 'remainder',
+    status: String(r.status) as 'completed' | 'failed' | 'aborted',
+    day: String(r.day),
+    recording_id: String(r.recording_id),
+    requests: Number(r.requests || 0),
+    unavailable: Number(r.unavailable || 0),
+    reported: Number(r.reported || 0),
+    inputTokens: Number(r.input_tokens || 0),
+    outputTokens: Number(r.output_tokens || 0),
+    cachedInputTokens: Number(r.cached_input_tokens || 0),
+    thinkingTokens: Number(r.thinking_tokens || 0),
+  }));
 
-  const totalsBucket = calculateBucket(rows);
+  const { bucket: totalsBucket, reported: totalReported } = calculateBucketFromAggregatedRows(rows);
+
   const byStatus = {
-    completed: rows.filter((r) => r.status === 'completed').length,
-    failed: rows.filter((r) => r.status === 'failed').length,
-    aborted: rows.filter((r) => r.status === 'aborted').length,
+    completed: rows.filter((r) => r.status === 'completed').reduce((sum, r) => sum + r.requests, 0),
+    failed: rows.filter((r) => r.status === 'failed').reduce((sum, r) => sum + r.requests, 0),
+    aborted: rows.filter((r) => r.status === 'aborted').reduce((sum, r) => sum + r.requests, 0),
   };
 
   // Group by model
-  const modelMap = new Map<string, DbUsageRow[]>();
+  const modelMap = new Map<string, AggregatedUsageRow[]>();
   for (const r of rows) {
     const list = modelMap.get(r.model_key) ?? [];
     list.push(r);
@@ -208,15 +253,15 @@ export async function summarizeTranslationUsage(q: {
   }
   const byModel = [...modelMap.entries()]
     .map(([modelKey, group]) => ({
-      ...calculateBucket(group),
+      ...calculateBucketFromAggregatedRows(group).bucket,
       modelKey,
     }))
     .sort((a, b) => (b.inputTokens + b.outputTokens + b.thinkingTokens) - (a.inputTokens + a.outputTokens + a.thinkingTokens));
 
   // Group by kind
-  const kindMap = new Map<'final' | 'segment' | 'remainder', DbUsageRow[]>();
+  const kindMap = new Map<'final' | 'segment' | 'remainder', AggregatedUsageRow[]>();
   for (const r of rows) {
-    const kind = (r.request_kind || 'final') as 'final' | 'segment' | 'remainder';
+    const kind = r.request_kind;
     const list = kindMap.get(kind) ?? [];
     list.push(r);
     kindMap.set(kind, list);
@@ -224,34 +269,26 @@ export async function summarizeTranslationUsage(q: {
   const byKind = (['final', 'segment', 'remainder'] as const)
     .filter((k) => kindMap.has(k))
     .map((requestKind) => ({
-      ...calculateBucket(kindMap.get(requestKind)!),
+      ...calculateBucketFromAggregatedRows(kindMap.get(requestKind)!).bucket,
       requestKind,
     }));
 
-  // Group by day (Asia/Ho_Chi_Minh)
-  const dayFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const dayMap = new Map<string, DbUsageRow[]>();
+  // Group by day
+  const dayMap = new Map<string, AggregatedUsageRow[]>();
   for (const r of rows) {
-    const d = new Date(r.created_at);
-    const dayStr = dayFormatter.format(d);
-    const list = dayMap.get(dayStr) ?? [];
+    const list = dayMap.get(r.day) ?? [];
     list.push(r);
-    dayMap.set(dayStr, list);
+    dayMap.set(r.day, list);
   }
   const byDay = [...dayMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([day, group]) => ({
-      ...calculateBucket(group),
+      ...calculateBucketFromAggregatedRows(group).bucket,
       day,
     }));
 
   // Group by recording
-  const recMap = new Map<string, DbUsageRow[]>();
+  const recMap = new Map<string, AggregatedUsageRow[]>();
   for (const r of rows) {
     const list = recMap.get(r.recording_id) ?? [];
     list.push(r);
@@ -259,21 +296,30 @@ export async function summarizeTranslationUsage(q: {
   }
   const byRecording = [...recMap.entries()]
     .map(([recordingId, group]) => ({
-      ...calculateBucket(group),
+      ...calculateBucketFromAggregatedRows(group).bucket,
       recordingId,
     }))
     .sort((a, b) => (b.inputTokens + b.outputTokens + b.thinkingTokens) - (a.inputTokens + a.outputTokens + a.thinkingTokens))
     .slice(0, 50);
 
+  const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
   const avgInputTokensPerRequest =
-    totalsBucket.requests > 0
-      ? Math.round(totalsBucket.inputTokens / totalsBucket.requests)
+    totalReported > 0
+      ? Math.round(totalsBucket.inputTokens / totalReported)
       : null;
+
+  const toDisplayDate = q.to ?? new Date(toExclusive.getTime() - 1);
 
   return {
     range: {
       from: dayFormatter.format(q.from),
-      to: dayFormatter.format(q.to),
+      to: dayFormatter.format(toDisplayDate),
     },
     totals: {
       ...totalsBucket,

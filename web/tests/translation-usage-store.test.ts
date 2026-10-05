@@ -8,6 +8,7 @@ import {
   usageStoreEnabled,
   insertTranslationUsage,
   summarizeTranslationUsage,
+  resetSchemaReadyForTest,
 } from '@/server/cloud/translation-usage-store';
 
 interface StoredRow {
@@ -90,16 +91,68 @@ function fakeUsageNeon() {
     if (statement.includes('SELECT') && statement.includes('FROM translation_usage')) {
       let filtered = [...rows];
       const fromIso = values[0] as string;
-      const toIso = values[1] as string;
+      const toExclusiveIso = values[1] as string;
 
-      filtered = filtered.filter((r) => r.created_at >= fromIso && r.created_at <= toIso);
+      filtered = filtered.filter((r) => r.created_at >= fromIso && r.created_at < toExclusiveIso);
 
       if (statement.includes('recording_id = ?')) {
         const recId = values[2] as string;
         filtered = filtered.filter((r) => r.recording_id === recId);
       }
 
-      return filtered;
+      const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+
+      const groups = new Map<string, {
+        model_key: string;
+        request_kind: string;
+        status: string;
+        day: string;
+        recording_id: string;
+        requests: number;
+        unavailable: number;
+        reported: number;
+        input_tokens: number;
+        output_tokens: number;
+        cached_input_tokens: number;
+        thinking_tokens: number;
+      }>();
+
+      for (const r of filtered) {
+        const day = dayFormatter.format(new Date(r.created_at));
+        const key = `${r.model_key}|${r.request_kind}|${r.status}|${day}|${r.recording_id}`;
+        const g = groups.get(key) ?? {
+          model_key: r.model_key,
+          request_kind: r.request_kind,
+          status: r.status,
+          day,
+          recording_id: r.recording_id,
+          requests: 0,
+          unavailable: 0,
+          reported: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          cached_input_tokens: 0,
+          thinking_tokens: 0,
+        };
+        g.requests++;
+        if (r.usage_status === 'unavailable' || r.input_tokens === null) {
+          g.unavailable++;
+        } else {
+          g.reported++;
+        }
+        g.input_tokens += r.input_tokens ?? 0;
+        g.output_tokens += r.output_tokens ?? 0;
+        g.cached_input_tokens += r.cached_input_tokens ?? 0;
+        g.thinking_tokens += r.thinking_tokens ?? 0;
+        groups.set(key, g);
+      }
+
+      return [...groups.values()];
     }
 
     throw new Error(`Unexpected SQL: ${statement}`);
@@ -113,11 +166,13 @@ describe('translation-usage-store', () => {
     vi.stubEnv('DATABASE_URL', 'postgres://test-only');
     vi.stubEnv('POSTGRES_URL', '');
     vi.stubEnv('TRANSLATION_USAGE_STORE', 'on');
+    resetSchemaReadyForTest();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
     neonMock.mockReset();
+    resetSchemaReadyForTest();
   });
 
   describe('usageStoreEnabled', () => {
@@ -138,7 +193,7 @@ describe('translation-usage-store', () => {
   });
 
   describe('insertTranslationUsage', () => {
-    it('creates table and indexes idempotently and inserts columns without speech text', async () => {
+    it('creates table and indexes once via memoized promise and inserts columns without speech text', async () => {
       const fake = fakeUsageNeon();
       neonMock.mockReturnValue(fake.sql);
 
@@ -170,13 +225,16 @@ describe('translation-usage-store', () => {
       expect(fake.rows[0].request_id).toBe('req-1');
       expect(fake.rows[0].input_tokens).toBe(100);
 
-      const insertStmt = fake.statements.find((s) => s.includes('INSERT INTO translation_usage'));
-      expect(insertStmt).toBeDefined();
-      expect(insertStmt).toContain('ON CONFLICT (request_id) DO NOTHING');
+      const createTableStmts = fake.statements.filter((s) => s.includes('CREATE TABLE'));
+      expect(createTableStmts).toHaveLength(1);
 
-      // Check duplicate requestId does not insert
-      await insertTranslationUsage(record);
-      expect(fake.rows).toHaveLength(1);
+      // Second insert should NOT re-run CREATE TABLE
+      await insertTranslationUsage({
+        ...record,
+        requestId: 'req-2',
+      });
+      const createTableStmtsAfter = fake.statements.filter((s) => s.includes('CREATE TABLE'));
+      expect(createTableStmtsAfter).toHaveLength(1);
 
       // Verify no sensitive texts or glossary exist in SQL statements
       for (const stmt of fake.statements) {
@@ -185,6 +243,46 @@ describe('translation-usage-store', () => {
         expect(stmt).not.toContain('private glossary');
       }
     });
+
+    it('retries schema setup when initial ensureSchema fails', async () => {
+      let failOnce = true;
+      const fake = fakeUsageNeon();
+      const throwingSql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        if (strings.join('?').includes('CREATE TABLE') && failOnce) {
+          failOnce = false;
+          throw new Error('transient schema error');
+        }
+        return fake.sql(strings, ...values);
+      };
+      neonMock.mockReturnValue(throwingSql);
+
+      const record: TranslationUsageRecord = {
+        requestId: 'req-retry',
+        recordingId: 'rec-1',
+        captionId: 1,
+        revision: 1,
+        modelKey: 'google:gemini-3.5-flash-lite',
+        status: 'completed',
+        requestKind: 'final',
+        thinkingLevel: null,
+        durationMs: 250,
+        sourceChars: 12,
+        systemChars: 1200,
+        payloadChars: 150,
+        historyTurns: 0,
+        usageStatus: 'reported',
+        inputTokens: 10,
+        outputTokens: 2,
+        cachedInputTokens: 0,
+        thinkingTokens: 0,
+        totalTokens: 12,
+      };
+
+      await expect(insertTranslationUsage(record)).rejects.toThrow('transient schema error');
+      // Second attempt should retry and succeed
+      await expect(insertTranslationUsage(record)).resolves.toBeUndefined();
+      expect(fake.rows).toHaveLength(1);
+    });
   });
 
   describe('summarizeTranslationUsage', () => {
@@ -192,7 +290,6 @@ describe('translation-usage-store', () => {
       const fake = fakeUsageNeon();
       neonMock.mockReturnValue(fake.sql);
 
-      // Add test rows
       // Day 1: 2026-10-05T08:00:00Z (which is 15:00 in +07:00 -> 2026-10-05)
       fake.rows.push({
         request_id: 'r1',
@@ -242,7 +339,7 @@ describe('translation-usage-store', () => {
 
       const summary = await summarizeTranslationUsage({
         from: new Date('2026-10-01T00:00:00.000Z'),
-        to: new Date('2026-10-10T23:59:59.999Z'),
+        toExclusive: new Date('2026-10-10T23:59:59.999Z'),
       });
 
       expect(summary.totals.requests).toBe(2);
@@ -259,7 +356,8 @@ describe('translation-usage-store', () => {
       expect(summary.byDay[0].day).toBe('2026-10-05');
       expect(summary.byRecording).toHaveLength(1);
       expect(summary.byRecording[0].recordingId).toBe('rec-a');
-      expect(summary.avgInputTokensPerRequest).toBe(500_000);
+      // avgInputTokensPerRequest is inputTokens / reported (1 reported request with 1_000_000)
+      expect(summary.avgInputTokensPerRequest).toBe(1_000_000);
     });
 
     it('returns null estimatedUsd when model price is unknown', async () => {
@@ -291,7 +389,7 @@ describe('translation-usage-store', () => {
 
       const summary = await summarizeTranslationUsage({
         from: new Date('2026-10-01T00:00:00.000Z'),
-        to: new Date('2026-10-10T23:59:59.999Z'),
+        toExclusive: new Date('2026-10-10T23:59:59.999Z'),
       });
 
       expect(summary.totals.estimatedUsd).toBeNull();

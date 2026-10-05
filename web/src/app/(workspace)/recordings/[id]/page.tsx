@@ -26,10 +26,20 @@ export default function RecordingDetailPage({
 
   useEffect(() => {
     let active = true;
+    const abortController = new AbortController();
     const fetchCost = async () => {
       try {
         const today = new Date();
-        const fromDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+        let fromDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+        if (recording?.createdAt) {
+          const recDate = new Date(recording.createdAt);
+          if (!isNaN(recDate.getTime())) {
+            const startFrom = new Date(recDate.getTime() - 24 * 60 * 60 * 1000);
+            if (startFrom.getTime() > fromDate.getTime()) {
+              fromDate = startFrom;
+            }
+          }
+        }
         const fromStr = formatSaigonDate(fromDate);
         const toStr = formatSaigonDate(today);
         const usageSummary = await fetchTranslationUsage({
@@ -37,7 +47,7 @@ export default function RecordingDetailPage({
           to: toStr,
           recordingId: id,
         });
-        if (!active) return;
+        if (!active || abortController.signal.aborted) return;
         if (usageSummary.totals.requests > 0) {
           const totalTokens =
             usageSummary.totals.inputTokens +
@@ -55,8 +65,9 @@ export default function RecordingDetailPage({
     void fetchCost();
     return () => {
       active = false;
+      abortController.abort();
     };
-  }, [id]);
+  }, [id, recording?.createdAt]);
 
   useEffect(() => {
     let isMounted = true;

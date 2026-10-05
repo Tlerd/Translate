@@ -72,6 +72,41 @@ export async function POST(req: Request): Promise<Response> {
     }
   };
 
+  let resolveUsageRecord: ((record: TranslationUsageRecord | null) => void) | undefined;
+  const usageRecordPromise = new Promise<TranslationUsageRecord | null>((resolve) => {
+    resolveUsageRecord = resolve;
+  });
+
+  if (usageStoreEnabled()) {
+    try {
+      after(async () => {
+        const rec = await usageRecordPromise;
+        if (rec) {
+          try {
+            await insertTranslationUsage(rec);
+          } catch (e: unknown) {
+            console.warn(
+              '[translation-usage] persist failed',
+              e instanceof Error ? e.message : String(e)
+            );
+          }
+        }
+      });
+    } catch (e: unknown) {
+      console.warn(
+        '[translation-usage] schedule after failed',
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+  }
+
+  const onUsageRecord = (record: TranslationUsageRecord) => {
+    if (resolveUsageRecord) {
+      resolveUsageRecord(record);
+      resolveUsageRecord = undefined;
+    }
+  };
+
   const stream = new ReadableStream({
     start(controller) {
       streamController = controller;
@@ -91,22 +126,6 @@ export async function POST(req: Request): Promise<Response> {
           // A cancellation can race with an enqueue after a provider yields.
           abortWork();
           return false;
-        }
-      };
-
-      const onUsageRecord = (record: TranslationUsageRecord) => {
-        if (usageStoreEnabled()) {
-          try {
-            after(async () => {
-              try {
-                await insertTranslationUsage(record);
-              } catch (err) {
-                console.warn('[translation-usage] Failed to persist usage:', err);
-              }
-            });
-          } catch (err) {
-            console.warn('[translation-usage] Failed to schedule after():', err);
-          }
         }
       };
 
@@ -132,6 +151,10 @@ export async function POST(req: Request): Promise<Response> {
         } finally {
           finished = true;
           cleanup();
+          if (resolveUsageRecord) {
+            resolveUsageRecord(null);
+            resolveUsageRecord = undefined;
+          }
           if (!stopped) {
             try {
               controller.close();
