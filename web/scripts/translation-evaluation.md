@@ -10,7 +10,7 @@ npm test -- tests/translation-replay.test.ts
 Remove-Item Env:TRANSLATION_REPLAY_REPORT
 ```
 
-Replay so cùng snapshot với scheduler gốc `9690936` và hiện tại, N=0/2/6, dịch sớm tắt/bật. Cả hai dùng prompt v2 để cô lập thay đổi scheduler. Số đo chỉ gồm request và ký tự. Bản nguồn gốc được lưu trong fixture để chạy được với checkout nông/không có lịch sử Git.
+Replay so cùng snapshot với scheduler gốc `9690936` và hiện tại, N=0/2/6, dịch sớm tắt/bật. Cả hai dùng cùng prompt trong mã hiện tại để cô lập thay đổi scheduler (lượt đo ban đầu 05/10 dùng v2). Số đo chỉ gồm request và ký tự. Bản nguồn gốc được lưu trong fixture để chạy được với checkout nông/không có lịch sử Git.
 
 ## So ba prompt
 
@@ -24,7 +24,13 @@ node scripts/evaluate-translation.mjs --mode=quality --limit=48 --history=2 --ma
 
 `--history=0,2,6` so ba cấu hình; khi tăng phạm vi phải chủ động tăng giới hạn request/ngân sách tương ứng. Mỗi ca/phiên bản/cấu hình gọi count một lần và quality gọi generate thêm một lần. Không tự thử lại khi provider lỗi. Giới hạn USD là hàng rào **ước tính** trước generate, không phải spend cap phía provider; lỗi/hủy vẫn có thể bị tính phí. Khi thiếu usage sau generate, dừng lượt đo tiếp theo và đánh dấu chi phí chưa biết.
 
-Prompt gốc JSON và prompt lean-v1 lưu từ `d16d22f^` và `9690936`; prompt v2 đọc từ mã hiện tại. Báo cáo lưu hash từng nguồn để đối chiếu. Đây là so prompt/payload; replay scheduler được đo riêng.
+Prompt gốc JSON và prompt lean-v1 lưu từ `d16d22f^` và `9690936`; prompt hiện tại (v6) đọc từ mã nguồn. Báo cáo lưu hash từng nguồn để đối chiếu. Đây là so prompt/payload; replay scheduler được đo riêng.
+
+## Đo qua website production khi key chỉ có trên server
+
+Trong `/settings` → Thử nghiệm Dịch, mở “Thử số câu ngữ cảnh”. Chọn cùng model/thinking và cặp ngôn ngữ; điền cùng sáu cặp lịch sử, rồi thử lần lượt 0/2/6. Dòng kết quả hiển thị request ID, phiên bản prompt, số cặp thực gửi và token provider báo cáo. Các tùy chọn thử không thay đổi cài đặt buổi học. Đối chiếu tổng ở `/usage` → nhóm `test_connection`; dùng khoảng ngày bao trùm phép đo nếu chạy qua nửa đêm Việt Nam. Không cần xuất hoặc sao chép API key.
+
+Prompt v6 bao câu hiện tại trong khối `Text:` trích dẫn kể cả khi N=0; nhãn/dấu trích dẫn có overhead. Việc bỏ JSON không đồng nghĩa mọi request có 0 token cú pháp. Kiểm tra mệnh lệnh trong lời nói bằng provider thật; kiểm thử builder không chứng minh model luôn tuân thủ.
 
 Đọc `finishReason` để phát hiện bản dịch bị cắt. `durationMs` là thời gian hoàn tất generate, không phải độ trễ token đầu. Chấm `humanVerdict`/`humanNotes` theo tiêu chí nghĩa, kiểm tra đặc biệt phủ định, số/đơn vị, tên, phần thiếu và mệnh lệnh. Không dùng một chuỗi dịch cố định hoặc model tự chấm làm chứng cứ duy nhất.
 
