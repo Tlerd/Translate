@@ -169,4 +169,37 @@ describe('live translation cost and committed output', () => {
     scheduler.close();
     expect(histories.at(-1)?.map((turn) => turn.source)).toEqual([4, 5, 6, 7, 8, 9].map((captionId) => `sentence ${captionId}`));
   });
+
+  it('respects configurable historyTurns (0, 2, and runtime update)', async () => {
+    const histories: Array<Array<{ source: string; translation: string }>> = [];
+    const scheduler = new LiveTranslationScheduler({
+      minIntervalMs: 0,
+      historyTurns: 0,
+      runner: async (source, _direction, history) => {
+        histories.push(history);
+        return `Dịch: ${source}`;
+      },
+    });
+
+    scheduler.onSnapshot({ ...snapshot('turn 1', 1, true), captionId: 1, providerItemId: 'u-1' });
+    await scheduler.drain();
+    expect(histories[0]).toEqual([]);
+
+    scheduler.onSnapshot({ ...snapshot('turn 2', 1, true), captionId: 2, providerItemId: 'u-2' });
+    await scheduler.drain();
+    expect(histories[1]).toEqual([]); // 0 history turns configured
+
+    // Dynamically increase to 2 turns
+    scheduler.setHistoryTurns(2);
+    scheduler.onSnapshot({ ...snapshot('turn 3', 1, true), captionId: 3, providerItemId: 'u-3' });
+    await scheduler.drain();
+    expect(histories[2].map((t) => t.source)).toEqual(['turn 1', 'turn 2']);
+
+    // Add turn 4: should only retain last 2 turns
+    scheduler.onSnapshot({ ...snapshot('turn 4', 1, true), captionId: 4, providerItemId: 'u-4' });
+    await scheduler.drain();
+    expect(histories[3].map((t) => t.source)).toEqual(['turn 2', 'turn 3']);
+
+    scheduler.close();
+  });
 });

@@ -35,6 +35,7 @@ export interface TranslationSchedulerOptions {
   targetLanguage?: string;
   minIntervalMs?: number;
   requestTimeoutMs?: number;
+  historyTurns?: number;
 }
 
 interface ActiveTranslation {
@@ -55,6 +56,7 @@ export class LiveTranslationScheduler {
   public targetCode: string;
   public minIntervalMs: number;
   public requestTimeoutMs: number;
+  public historyTurns: number;
 
   private listeners: Set<(event: ScheduledTranslationEvent) => void> = new Set();
 
@@ -88,6 +90,9 @@ export class LiveTranslationScheduler {
     this.targetCode = options.targetLanguage || 'vi';
     this.minIntervalMs = options.minIntervalMs ?? 700;
     this.requestTimeoutMs = options.requestTimeoutMs ?? 12000;
+    this.historyTurns = options.historyTurns !== undefined
+      ? Math.max(0, Math.min(6, Math.floor(options.historyTurns)))
+      : 6;
   }
 
   public subscribe(listener: (event: ScheduledTranslationEvent) => void): () => void {
@@ -109,6 +114,10 @@ export class LiveTranslationScheduler {
   public setLanguages(source: string, target: string): void {
     this.sourceCode = source;
     this.targetCode = target;
+  }
+
+  public setHistoryTurns(turns: number): void {
+    this.historyTurns = Math.max(0, Math.min(6, Math.floor(turns)));
   }
 
   public setActiveBlock(blockId: number): void {
@@ -351,10 +360,17 @@ export class LiveTranslationScheduler {
     };
 
     try {
+      const historyToPass = this.historyTurns === 0
+        ? []
+        : this.contextHistory
+            .filter((turn) => turn.captionId !== captionId)
+            .slice(-this.historyTurns)
+            .map(({ source, translation }) => ({ source, translation }));
+
       const result = await this.runner(
         snapshot.text,
         { sourceCode: this.sourceCode, targetCode: this.targetCode },
-        this.contextHistory.filter((turn) => turn.captionId !== captionId).map(({ source, translation }) => ({ source, translation })),
+        historyToPass,
         abortController.signal,
         snapshot,
         (delta) => {

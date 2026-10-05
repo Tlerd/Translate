@@ -5,6 +5,7 @@
 import type {
   ModelsResponse,
   TranslateRequest,
+  TranslateRequestInput,
   SummarizeRequest,
   SummarizeResponse,
   GenerateImageRequest,
@@ -26,7 +27,7 @@ export async function fetchModels(): Promise<ModelsResponse> {
 }
 
 export async function streamTranslate(
-  req: TranslateRequest,
+  req: TranslateRequestInput | TranslateRequest,
   onDelta: (delta: string) => void,
   onDone: (fullText: string, modelKey: string) => void,
   onError: (error: string) => void,

@@ -132,6 +132,8 @@ export interface AppSettings {
   glossary: string;
   pauseMs: number;
   readingPauseMs: number;
+  translationHistoryTurns: number;
+  earlySegmentTranslation: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -150,6 +152,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   glossary: '',
   pauseMs: 900,
   readingPauseMs: 900,
+  translationHistoryTurns: 6,
+  earlySegmentTranslation: false,
 };
 
 export interface WebExportBundle {

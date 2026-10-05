@@ -406,6 +406,19 @@ function normalizePauseMs(value: unknown, fallback: number): number {
   return Math.max(600, Math.min(10_000, Math.round(parsed)));
 }
 
+function normalizeTranslationHistoryTurns(value: unknown, fallback: number = DEFAULT_SETTINGS.translationHistoryTurns): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(6, Math.floor(parsed)));
+}
+
+function normalizeEarlySegmentTranslation(value: unknown, fallback: boolean = DEFAULT_SETTINGS.earlySegmentTranslation): boolean {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return fallback;
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   const db = getDb();
   try {
@@ -424,6 +437,14 @@ export async function loadSettings(): Promise<AppSettings> {
       glossary: map.get('glossary') || DEFAULT_SETTINGS.glossary,
       pauseMs: normalizePauseMs(map.get('pauseMs'), DEFAULT_SETTINGS.pauseMs),
       readingPauseMs: normalizePauseMs(map.get('readingPauseMs'), DEFAULT_SETTINGS.readingPauseMs),
+      translationHistoryTurns: normalizeTranslationHistoryTurns(
+        map.get('translationHistoryTurns'),
+        DEFAULT_SETTINGS.translationHistoryTurns
+      ),
+      earlySegmentTranslation: normalizeEarlySegmentTranslation(
+        map.get('earlySegmentTranslation'),
+        DEFAULT_SETTINGS.earlySegmentTranslation
+      ),
       // Preserve supported providers; migrate the removed browser provider to Transcribe.
       speechProvider: normalizeSpeechProvider(map.get('speechProvider')),
       transcriptionMode: normalizeTranscriptionMode(map.get('transcriptionMode')),
@@ -444,6 +465,18 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
   if (settings.speakerCount !== undefined) normalized.speakerCount = normalizeSpeakerCount(settings.speakerCount);
   if (settings.pauseMs !== undefined) normalized.pauseMs = normalizePauseMs(settings.pauseMs, DEFAULT_SETTINGS.pauseMs);
   if (settings.readingPauseMs !== undefined) normalized.readingPauseMs = normalizePauseMs(settings.readingPauseMs, DEFAULT_SETTINGS.readingPauseMs);
+  if (settings.translationHistoryTurns !== undefined) {
+    normalized.translationHistoryTurns = normalizeTranslationHistoryTurns(
+      settings.translationHistoryTurns,
+      DEFAULT_SETTINGS.translationHistoryTurns
+    );
+  }
+  if (settings.earlySegmentTranslation !== undefined) {
+    normalized.earlySegmentTranslation = normalizeEarlySegmentTranslation(
+      settings.earlySegmentTranslation,
+      DEFAULT_SETTINGS.earlySegmentTranslation
+    );
+  }
   await db.transaction('rw', db.settings, async () => {
     for (const [key, value] of Object.entries(normalized)) {
       if (value !== undefined) {

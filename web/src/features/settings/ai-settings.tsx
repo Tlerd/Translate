@@ -539,6 +539,45 @@ export function AiSettings() {
               </select>
             </div>
           )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label
+              htmlFor="translation-history-turns"
+              style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
+            >
+              Số câu ngữ cảnh trước đó (Translation History Turns):
+            </label>
+            <select
+              id="translation-history-turns"
+              aria-label="Số câu ngữ cảnh trước đó:"
+              value={settings.translationHistoryTurns ?? 6}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  translationHistoryTurns: Number(e.target.value),
+                })
+              }
+              style={{
+                padding: '9px 14px',
+                backgroundColor: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                fontSize: '0.86rem',
+              }}
+            >
+              <option value={0}>0 câu · Từng câu độc lập (Tiết kiệm token & chi phí nhất)</option>
+              <option value={1}>1 câu · Ngữ cảnh ngắn</option>
+              <option value={2}>2 câu · Ngữ cảnh vừa</option>
+              <option value={3}>3 câu</option>
+              <option value={4}>4 câu</option>
+              <option value={5}>5 câu</option>
+              <option value={6}>6 câu · Tối đa (Mặc định)</option>
+            </select>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              Ngữ cảnh giúp AI dịch chuẩn đại từ nhân xưng và mạch câu chuyện, nhưng mỗi câu làm tăng số lượng token đầu vào (input tokens). Chọn 0 để tối ưu chi phí tối đa.
+            </span>
+          </div>
         </div>
 
         {/* 3. Khoảng Nghỉ Để Chốt Câu (Pause Duration) */}

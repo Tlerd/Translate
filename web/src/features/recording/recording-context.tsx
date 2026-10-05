@@ -57,6 +57,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         const source = inputLanguage(settings.sourceLanguage ?? current.sourceLanguage, current.speechProvider) ?? current.sourceLanguage;
         controller.setLanguages(source, settings.targetLanguage ?? current.targetLanguage);
       }
+      if (settings.translationHistoryTurns !== undefined) controller.setTranslationHistoryTurns(settings.translationHistoryTurns);
+      if (settings.earlySegmentTranslation !== undefined) controller.setEarlySegmentTranslation(settings.earlySegmentTranslation);
       controller.setTranscriptionSettings({ transcriptionMode: settings.transcriptionMode, speakerCount: settings.speakerCount });
     };
 

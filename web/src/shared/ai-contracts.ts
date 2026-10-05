@@ -36,7 +36,7 @@ export const TranslateRequestSchema = z.object({
   revision: z.number(),
   configRevision: z.number().default(1),
   modelKey: z.string(),
-  requestKind: z.enum(['final', 'segment', 'remainder']).optional(),
+  requestKind: z.enum(['final', 'segment', 'remainder']).default('final'),
   thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   sourceLanguage: z.string().default('ja'),
   targetLanguage: z.string().default('vi'),
@@ -50,10 +50,12 @@ export const TranslateRequestSchema = z.object({
         translation: z.string(),
       })
     )
+    .max(6)
     .optional(),
 });
 
 export type TranslateRequest = z.infer<typeof TranslateRequestSchema>;
+export type TranslateRequestInput = z.input<typeof TranslateRequestSchema>;
 
 export const CaptionInputSchema = z.object({
   id: z.number(),

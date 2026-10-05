@@ -311,12 +311,16 @@ describe('Storage Layer', () => {
     expect(initial.translationModel).toBe('google:gemini-3.1-flash-lite');
     expect(initial.pauseMs).toBe(900);
     expect(initial.readingPauseMs).toBe(900);
+    expect(initial.translationHistoryTurns).toBe(6);
+    expect(initial.earlySegmentTranslation).toBe(false);
 
     await saveSettings({
       translationModel: 'openai:gpt-4o-mini',
       glossary: 'AI=Trí tuệ nhân tạo',
       pauseMs: 1400,
       readingPauseMs: 7600,
+      translationHistoryTurns: 3,
+      earlySegmentTranslation: true,
     });
 
     const updated = await loadSettings();
@@ -324,6 +328,8 @@ describe('Storage Layer', () => {
     expect(updated.glossary).toBe('AI=Trí tuệ nhân tạo');
     expect(updated.pauseMs).toBe(1400);
     expect(updated.readingPauseMs).toBe(7600);
+    expect(updated.translationHistoryTurns).toBe(3);
+    expect(updated.earlySegmentTranslation).toBe(true);
   });
 
   it('clamps saved pause settings to the supported range', async () => {
@@ -332,6 +338,18 @@ describe('Storage Layer', () => {
     const updated = await loadSettings();
     expect(updated.pauseMs).toBe(600);
     expect(updated.readingPauseMs).toBe(10000);
+  });
+
+  it('clamps translationHistoryTurns and normalizes earlySegmentTranslation', async () => {
+    await saveSettings({ translationHistoryTurns: -5, earlySegmentTranslation: true });
+    let updated = await loadSettings();
+    expect(updated.translationHistoryTurns).toBe(0);
+    expect(updated.earlySegmentTranslation).toBe(true);
+
+    await saveSettings({ translationHistoryTurns: 10, earlySegmentTranslation: false });
+    updated = await loadSettings();
+    expect(updated.translationHistoryTurns).toBe(6);
+    expect(updated.earlySegmentTranslation).toBe(false);
   });
 
   it('manages audio segments and retrieves per-segment blobs independently', async () => {

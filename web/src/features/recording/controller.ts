@@ -48,6 +48,8 @@ export interface ControllerState {
   epoch: number;
   pauseMs: number;
   readingPauseMs: number;
+  translationHistoryTurns: number;
+  earlySegmentTranslation: boolean;
   speechProvider: SpeechProvider;
   transcriptionMode: TranscriptionMode;
   speakerCount: SpeakerCount;
@@ -73,6 +75,8 @@ export interface StartOptions {
   glossary?: string;
   pauseMs?: number;
   readingPauseMs?: number;
+  translationHistoryTurns?: number;
+  earlySegmentTranslation?: boolean;
 }
 
 interface CapturedPcm { samples: Float32Array; rate: number; startMs: number }
@@ -97,6 +101,8 @@ export class ClassroomController {
     epoch: 0,
     pauseMs: 900,
     readingPauseMs: 900,
+    translationHistoryTurns: 6,
+    earlySegmentTranslation: false,
     speechProvider: 'google-transcribe', transcriptionMode: 'verbatim', speakerCount: 1,
     micState: 'idle', receivedAudioMs: 0,
     lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
@@ -238,6 +244,10 @@ export class ClassroomController {
     const translationModelKey = options.translationModelKey || this.state.translationModelKey;
     const pauseMs = ClassroomController.clampPause(options.pauseMs ?? this.state.pauseMs);
     const readingPauseMs = ClassroomController.clampPause(options.readingPauseMs ?? this.state.readingPauseMs);
+    const translationHistoryTurns = options.translationHistoryTurns !== undefined
+      ? Math.max(0, Math.min(6, Math.floor(options.translationHistoryTurns)))
+      : this.state.translationHistoryTurns;
+    const earlySegmentTranslation = options.earlySegmentTranslation ?? this.state.earlySegmentTranslation;
 
     const recording = await createRecording({
       mode,
@@ -293,6 +303,8 @@ export class ClassroomController {
       epoch: currentEpoch,
       pauseMs,
       readingPauseMs,
+      translationHistoryTurns,
+      earlySegmentTranslation,
       speechProvider, transcriptionMode, speakerCount,
       micState: 'idle', receivedAudioMs: 0,
       lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
@@ -328,6 +340,7 @@ export class ClassroomController {
               revision: requestSnapshot?.revision || 1,
               configRevision: this.configRevision,
               modelKey: this.state.translationModelKey,
+              requestKind: 'final',
               thinkingLevel: this.state.translationThinkingLevel === 'auto' ? undefined : this.state.translationThinkingLevel as 'minimal' | 'low' | 'medium' | 'high',
               sourceLanguage: direction.sourceCode,
               targetLanguage: direction.targetCode,
@@ -355,6 +368,7 @@ export class ClassroomController {
       sourceLanguage,
       targetLanguage,
       minIntervalMs: 700,
+      historyTurns: translationHistoryTurns,
     });
 
     // Assembler -> Scheduler pipeline
@@ -1213,6 +1227,20 @@ export class ClassroomController {
     (this.speechRecognizer instanceof GeminiTranscribeRecognizer ? this.speechRecognizer : null)?.updateSettings({ pauseMs: mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs });
     if (this.state.speechProvider === 'nemotron') this.restartRecognizer();
     this.assembler?.switchMode(mode);
+    this.notify();
+  }
+
+  public setTranslationHistoryTurns(turns: number): void {
+    const clamped = Math.max(0, Math.min(6, Math.floor(turns)));
+    if (this.state.translationHistoryTurns === clamped) return;
+    this.state.translationHistoryTurns = clamped;
+    this.scheduler?.setHistoryTurns(clamped);
+    this.notify();
+  }
+
+  public setEarlySegmentTranslation(enabled: boolean): void {
+    if (this.state.earlySegmentTranslation === enabled) return;
+    this.state.earlySegmentTranslation = enabled;
     this.notify();
   }
 }
