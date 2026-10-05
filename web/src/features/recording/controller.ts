@@ -880,7 +880,9 @@ export class ClassroomController {
     this.clearSilenceTimer();
     this.clearSpeechTimers();
 
-    if (this.state.speechProvider === 'soniox' && this.state.mode === 'readingPractice' && this.hasPendingTranscript) {
+    // Pause is an explicit utterance boundary, even if the provider never
+    // supplies its last final. Late finals still correct this same caption.
+    if (this.hasPendingTranscript) {
       this.assembler?.handleBlockClosed(this.activeBlockId);
       this.scheduler?.onBlockClosed(this.activeBlockId++);
       this.hasPendingTranscript = false;

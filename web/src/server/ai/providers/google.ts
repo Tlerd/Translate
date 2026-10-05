@@ -3,6 +3,14 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import type { ThinkingConfig } from '@google/genai';
 import { AiConfigError } from '@/config/ai.server';
 
+export interface ProviderTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  thinkingTokens?: number;
+  totalTokens?: number;
+}
+
 export interface ProviderCallParams {
   apiKey?: string;
   modelId: string;
@@ -10,6 +18,7 @@ export interface ProviderCallParams {
   userPrompt: string;
   signal?: AbortSignal;
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  onUsage?: (usage: ProviderTokenUsage) => void;
 }
 
 export async function* streamGoogleText(params: ProviderCallParams): AsyncIterable<string> {
@@ -33,6 +42,18 @@ export async function* streamGoogleText(params: ProviderCallParams): AsyncIterab
   try {
     for await (const chunk of responseStream) {
       if (params.signal?.aborted) break;
+      const usage = chunk.usageMetadata;
+      if (usage && [usage.promptTokenCount, usage.candidatesTokenCount, usage.cachedContentTokenCount, usage.thoughtsTokenCount, usage.totalTokenCount].some((count) => typeof count === 'number')) {
+        // Streaming usage is cumulative. Keep the latest report, never add it
+        // once per text chunk or count a missing field as zero.
+        params.onUsage?.({
+          inputTokens: usage.promptTokenCount,
+          outputTokens: usage.candidatesTokenCount,
+          cachedInputTokens: usage.cachedContentTokenCount,
+          thinkingTokens: usage.thoughtsTokenCount,
+          totalTokens: usage.totalTokenCount,
+        });
+      }
       const text = chunk.text;
       if (text) {
         receivedText = true;

@@ -119,7 +119,7 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
               {isStreaming && (
                 <span className={styles.streamingBadge}>
                   <span className={styles.streamingDot} />
-                  Đang dịch...
+                  {cap.isFinal ? 'Đang dịch...' : 'Đang nghe...'}
                 </span>
               )}
             </div>
@@ -149,7 +149,7 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
               data-testid="caption-translation"
             >
               {cap.translation || (isStreaming ? '...' : '')}
-              {!isStreaming && cap.translation && cap.targetSourceRevision !== cap.revision && (
+              {cap.translation && cap.targetSourceRevision !== cap.revision && (
                 <span style={{ display: 'block', marginTop: 5, color: 'var(--warning)', fontSize: '0.78rem' }}>
                   Bản dịch cũ — lời gốc đã được chỉnh sửa
                 </span>

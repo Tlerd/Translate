@@ -104,7 +104,7 @@ describe('ClassroomController stop boundary', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps streamed targets live and drains the final transcript revision before stopping', async () => {
+  it('shows interim source without requests, then streams and drains its translation on stop', async () => {
     const track = { stop: vi.fn() };
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
     vi.stubGlobal('window', { SpeechRecognition: FakeSpeechRecognition });
@@ -122,16 +122,15 @@ describe('ClassroomController stop boundary', () => {
     const controller = new ClassroomController();
     await controller.start({ pauseMs: 10_000 });
     FakeSpeechRecognition.instances[0].interim('unfinished source');
-    await vi.waitFor(() => expect(controller.snapshot().captions.some((caption) => caption.translation === 'target-1')).toBe(true));
-    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'unfinished source', state: 'streaming' });
+    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'unfinished source', translation: '', state: 'streaming', isFinal: false });
+    expect(requests).toHaveLength(0);
 
     const stopping = controller.stop();
-    await vi.waitFor(() => expect(controller.snapshot().captions.some((caption) => caption.isFinal)).toBe(true));
+    await vi.waitFor(() => expect(controller.snapshot().captions[0]?.translation).toBe('target-1'));
     expect(controller.snapshot().captions[0]).toMatchObject({ state: 'streaming', isFinal: true });
-    streams[0].finish('complete interim translation');
-    await vi.waitFor(() => expect(requests).toHaveLength(2));
-    expect(requests[1]).toMatchObject({ captionId: 1, revision: 2 });
-    streams[1].finish('final translation');
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ captionId: 1, revision: 2, text: 'unfinished source' });
+    streams[0].finish('final translation');
     await stopping;
 
     expect(controller.snapshot()).toMatchObject({ state: 'stopped' });

@@ -34,7 +34,6 @@ export interface TranslationSchedulerOptions {
   sourceLanguage?: string;
   targetLanguage?: string;
   minIntervalMs?: number;
-  maxAgeMs?: number;
   requestTimeoutMs?: number;
 }
 
@@ -44,6 +43,7 @@ interface ActiveTranslation {
   blockId: number;
   captionId: number;
   revision: number;
+  sourceText: string;
   abortController: AbortController;
   timeoutId?: ReturnType<typeof setTimeout>;
   isCancelled: boolean;
@@ -54,7 +54,6 @@ export class LiveTranslationScheduler {
   public sourceCode: string;
   public targetCode: string;
   public minIntervalMs: number;
-  public maxAgeMs: number;
   public requestTimeoutMs: number;
 
   private listeners: Set<(event: ScheduledTranslationEvent) => void> = new Set();
@@ -64,8 +63,6 @@ export class LiveTranslationScheduler {
   private activeBlockId: number | null = null;
   private closedThroughBlock = 0;
 
-  private pendingSnapshot: TranscriptSnapshot | null = null;
-  private pendingSnapshotTime: number | null = null;
   private finalQueue: TranscriptSnapshot[] = [];
 
   private activeTranslation: ActiveTranslation | null = null;
@@ -78,10 +75,10 @@ export class LiveTranslationScheduler {
   private captionFinals: Map<number, boolean> = new Map();
   private acceptedCaptionVersions = new Map<number, { revision: number; isFinal: boolean }>();
 
-  private translatedSourceByCaption: Map<number, string> = new Map();
   private translatedRevisionByCaption: Map<number, number> = new Map();
+  private completedTranslations = new Map<number, { source: string; target: string; revision: number }>();
 
-  private contextHistory: ContextTurn[] = [];
+  private contextHistory: Array<ContextTurn & { captionId: number }> = [];
   private closed = false;
   private idleWaiters: Array<() => void> = [];
 
@@ -90,7 +87,6 @@ export class LiveTranslationScheduler {
     this.sourceCode = options.sourceLanguage || 'ja';
     this.targetCode = options.targetLanguage || 'vi';
     this.minIntervalMs = options.minIntervalMs ?? 700;
-    this.maxAgeMs = options.maxAgeMs ?? 3000;
     this.requestTimeoutMs = options.requestTimeoutMs ?? 12000;
   }
 
@@ -148,6 +144,11 @@ export class LiveTranslationScheduler {
     if (snapshot.isFinal) {
       this.captionFinals.set(captionId, true);
     }
+    const completed = this.completedTranslations.get(captionId);
+    if (completed && !this.latestTargets.has(captionId)) {
+      this.latestTargets.set(captionId, completed.target);
+      this.translatedRevisionByCaption.set(captionId, completed.revision);
+    }
 
     // Check if block was already closed
     if (snapshot.blockId <= this.closedThroughBlock && !snapshot.isFinal) {
@@ -183,30 +184,23 @@ export class LiveTranslationScheduler {
       endMs: snapshot.endMs,
     });
 
-    if (!snapshot.text.trim()) {
-      if (this.pendingSnapshot?.captionId === captionId) {
-        this.pendingSnapshot = null;
-        this.pendingSnapshotTime = null;
-      }
-      this.maybeSchedule();
-      this.resolveIdleIfReady();
+    // ASR hypotheses stay visible, but only committed utterances spend tokens.
+    // Silence/pause/stop are finalized by the assembler before reaching here.
+    if (!snapshot.isFinal || !snapshot.text.trim()) {
       return;
     }
 
-    // If final transcript meaning matches already translated text, reuse result
-    const translatedSource = this.translatedSourceByCaption.get(captionId);
-    const latestTarget = this.latestTargets.get(captionId);
+    // A punctuation-only final correction needs no second provider request.
     if (
-      snapshot.isFinal &&
-      translatedSource &&
-      LiveTranslationScheduler.isEquivalentMeaning(translatedSource, snapshot.text) &&
-      latestTarget
+      completed &&
+      LiveTranslationScheduler.isEquivalentMeaning(completed.source, snapshot.text)
     ) {
+      this.finalQueue = this.finalQueue.filter((queued) => queued.captionId !== captionId);
       this.emit({
         captionId,
         blockId: snapshot.blockId,
         sourceText: snapshot.text,
-        targetText: latestTarget,
+        targetText: completed.target,
         sourceRevision: snapshot.revision,
         targetSourceRevision: snapshot.revision,
         isFinal: true,
@@ -214,36 +208,29 @@ export class LiveTranslationScheduler {
         startMs: snapshot.startMs,
         endMs: snapshot.endMs,
       });
-      this.translatedRevisionByCaption.set(captionId, snapshot.revision);
-      this.recordHistory(snapshot.text, latestTarget);
+      this.rememberTranslation(captionId, snapshot.text, completed.target, snapshot.revision);
+      this.recordHistory(captionId, snapshot.text, completed.target);
       this.cleanupCaption(captionId);
       return;
     }
 
-    if (snapshot.isFinal) {
-      if (this.pendingSnapshot?.captionId === captionId) {
-        this.pendingSnapshot = null;
-        this.pendingSnapshotTime = null;
-      }
-      const queuedCaptionIndex = this.finalQueue.findIndex((queued) => queued.captionId === captionId);
-      if (queuedCaptionIndex >= 0) this.finalQueue[queuedCaptionIndex] = snapshot;
-      else this.finalQueue.push(snapshot);
-    } else {
-      // Interim hypotheses are replaceable; final sentences are never replaced.
-      this.pendingSnapshot = snapshot;
-      this.pendingSnapshotTime = Date.now();
+    // Reuse the active stream too; completion will promote it to the latest
+    // equivalent source revision. Do not abort and restart already billed work.
+    if (this.activeTranslation?.captionId === captionId &&
+        LiveTranslationScheduler.isEquivalentMeaning(this.activeTranslation.sourceText, snapshot.text)) {
+      this.finalQueue = this.finalQueue.filter((queued) => queued.captionId !== captionId);
+      return;
     }
 
+    const queuedCaptionIndex = this.finalQueue.findIndex((queued) => queued.captionId === captionId);
+    if (queuedCaptionIndex >= 0) this.finalQueue[queuedCaptionIndex] = snapshot;
+    else this.finalQueue.push(snapshot);
     this.maybeSchedule();
   }
 
   public onBlockClosed(blockId: number): void {
     if (this.closed) return;
     this.closedThroughBlock = Math.max(this.closedThroughBlock, blockId);
-    if (this.pendingSnapshot?.blockId === blockId) {
-      this.pendingSnapshot = null;
-      this.pendingSnapshotTime = null;
-    }
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -266,36 +253,12 @@ export class LiveTranslationScheduler {
   private maybeSchedule(): void {
     if (this.closed || this.activeTranslation !== null) return;
 
-    const nextFinal = this.finalQueue[0];
-    if (!nextFinal && !this.pendingSnapshot) {
+    if (this.finalQueue.length === 0) {
       this.resolveIdleIfReady();
       return;
     }
 
-    const now = Date.now();
-    const age = this.pendingSnapshot ? now - (this.pendingSnapshotTime || now) : 0;
-    if (!nextFinal && this.pendingSnapshot && age > this.maxAgeMs) {
-      // Snapshot expired before translator was free; supersede it
-      this.emit({
-        captionId: this.pendingSnapshot!.captionId,
-        blockId: this.pendingSnapshot!.blockId,
-        sourceText: this.pendingSnapshot!.text,
-        targetText: this.latestTargets.get(this.pendingSnapshot!.captionId) || '',
-        sourceRevision: this.pendingSnapshot!.revision,
-        targetSourceRevision: 0,
-        isFinal: false,
-        isProvisional: true,
-        startMs: this.pendingSnapshot!.startMs,
-        endMs: this.pendingSnapshot!.endMs,
-        skipReason: 'stale',
-      });
-      this.pendingSnapshot = null;
-      this.pendingSnapshotTime = null;
-      this.resolveIdleIfReady();
-      return;
-    }
-
-    const elapsedSinceLast = now - this.lastRequestStartTime;
+    const elapsedSinceLast = Date.now() - this.lastRequestStartTime;
     if (elapsedSinceLast < this.minIntervalMs) {
       const waitMs = this.minIntervalMs - elapsedSinceLast;
       if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -305,11 +268,7 @@ export class LiveTranslationScheduler {
       return;
     }
 
-    const toRun = this.finalQueue.shift() || this.pendingSnapshot!;
-    if (toRun === this.pendingSnapshot) {
-      this.pendingSnapshot = null;
-      this.pendingSnapshotTime = null;
-    }
+    const toRun = this.finalQueue.shift()!;
     this.runTranslation(toRun, this.epoch);
   }
 
@@ -327,6 +286,7 @@ export class LiveTranslationScheduler {
       blockId,
       captionId,
       revision: reqRevision,
+      sourceText: snapshot.text,
       abortController,
       isCancelled: false,
     };
@@ -336,7 +296,7 @@ export class LiveTranslationScheduler {
       active.timeoutId = setTimeout(() => {
         if (active.isCancelled || this.activeTranslation !== active) return;
         this.cancelInflight();
-        this.onTranslationError(
+        if (this.matchesLatestSource(captionId, snapshot.text)) this.onTranslationError(
           captionId,
           blockId,
           snapshot.text,
@@ -359,10 +319,10 @@ export class LiveTranslationScheduler {
         clearTimeout(pendingDeltaTimer);
         pendingDeltaTimer = null;
       }
-      if (active.isCancelled || epoch !== this.epoch) return;
+      if (active.isCancelled || epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
       this.latestTargets.set(captionId, targetBuffer);
       const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
-      const isProvisional = latestRev > reqRevision || !this.captionFinals.get(captionId);
+      this.translatedRevisionByCaption.set(captionId, latestRev);
 
       this.emit({
         captionId,
@@ -370,9 +330,9 @@ export class LiveTranslationScheduler {
         sourceText: this.latestSources.get(captionId) || snapshot.text,
         targetText: targetBuffer,
         sourceRevision: latestRev,
-        targetSourceRevision: reqRevision,
-        isFinal: !isProvisional,
-        isProvisional,
+        targetSourceRevision: latestRev,
+        isFinal: false,
+        isProvisional: true,
         startMs: snapshot.startMs,
         endMs: snapshot.endMs,
       });
@@ -394,7 +354,7 @@ export class LiveTranslationScheduler {
       const result = await this.runner(
         snapshot.text,
         { sourceCode: this.sourceCode, targetCode: this.targetCode },
-        [...this.contextHistory],
+        this.contextHistory.filter((turn) => turn.captionId !== captionId).map(({ source, translation }) => ({ source, translation })),
         abortController.signal,
         snapshot,
         (delta) => {
@@ -437,7 +397,7 @@ export class LiveTranslationScheduler {
         clearTimeout(pendingDeltaTimer);
         pendingDeltaTimer = null;
       }
-      if (!active.isCancelled && epoch === this.epoch) {
+      if (!active.isCancelled && epoch === this.epoch && this.matchesLatestSource(captionId, snapshot.text)) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         this.onTranslationError(
           captionId,
@@ -474,23 +434,23 @@ export class LiveTranslationScheduler {
     targetText: string,
     epoch: number
   ): void {
-    if (epoch !== this.epoch) return;
+    if (epoch !== this.epoch || !this.matchesLatestSource(captionId, snapshot.text)) return;
 
     const latestRev = this.latestRevisions.get(captionId) ?? reqRevision;
     const isFinalCaption = this.captionFinals.get(captionId) === true;
-    const isProvisional = latestRev > reqRevision || !isFinalCaption;
+    const isProvisional = !isFinalCaption;
+    const latestSource = this.latestSources.get(captionId) || snapshot.text;
 
     this.latestTargets.set(captionId, targetText);
-    this.translatedSourceByCaption.set(captionId, snapshot.text);
-    this.translatedRevisionByCaption.set(captionId, reqRevision);
+    this.translatedRevisionByCaption.set(captionId, latestRev);
 
     this.emit({
       captionId,
       blockId,
-      sourceText: this.latestSources.get(captionId) || snapshot.text,
+      sourceText: latestSource,
       targetText,
       sourceRevision: latestRev,
-      targetSourceRevision: reqRevision,
+      targetSourceRevision: latestRev,
       isFinal: !isProvisional,
       isProvisional,
       startMs: snapshot.startMs,
@@ -498,7 +458,8 @@ export class LiveTranslationScheduler {
     });
 
     if (!isProvisional && targetText) {
-      this.recordHistory(snapshot.text, targetText);
+      this.rememberTranslation(captionId, latestSource, targetText, latestRev);
+      this.recordHistory(captionId, latestSource, targetText);
     }
     if (!isProvisional) this.cleanupCaption(captionId);
   }
@@ -533,26 +494,43 @@ export class LiveTranslationScheduler {
     this.latestSources.delete(captionId);
     this.latestTargets.delete(captionId);
     this.captionFinals.delete(captionId);
-    this.translatedSourceByCaption.delete(captionId);
     this.translatedRevisionByCaption.delete(captionId);
   }
 
-  private recordHistory(source: string, target: string): void {
-    this.contextHistory.push({ source, translation: target });
-    // Keep max 6 turns
-    if (this.contextHistory.length > 6) {
-      this.contextHistory.shift();
+  private matchesLatestSource(captionId: number, source: string): boolean {
+    const latestSource = this.latestSources.get(captionId);
+    return latestSource !== undefined && LiveTranslationScheduler.isEquivalentMeaning(source, latestSource);
+  }
+
+  private rememberTranslation(captionId: number, source: string, target: string, revision: number): void {
+    this.completedTranslations.delete(captionId);
+    this.completedTranslations.set(captionId, { source, target, revision });
+    while (this.completedTranslations.size > 128) {
+      const oldestCaptionId = this.completedTranslations.keys().next().value;
+      if (oldestCaptionId === undefined) break;
+      this.completedTranslations.delete(oldestCaptionId);
     }
+  }
+
+  private recordHistory(captionId: number, source: string, target: string): void {
+    const turn = { captionId, source, translation: target };
+    const index = this.contextHistory.findIndex((previous) => previous.captionId === captionId);
+    if (index >= 0) this.contextHistory[index] = turn;
+    else this.contextHistory.push(turn);
+    // A late correction keeps its place in the conversation, including when
+    // it is older than the retained context window.
+    this.contextHistory.sort((a, b) => a.captionId - b.captionId);
+    this.contextHistory = this.contextHistory.slice(-6);
   }
 
   public async drain(): Promise<void> {
     this.maybeSchedule();
-    if (!this.activeTranslation && this.finalQueue.length === 0 && !this.pendingSnapshot) return;
+    if (!this.activeTranslation && this.finalQueue.length === 0) return;
     await new Promise<void>((resolve) => this.idleWaiters.push(resolve));
   }
 
   private resolveIdleIfReady(): void {
-    if (this.activeTranslation || this.finalQueue.length > 0 || this.pendingSnapshot) return;
+    if (this.activeTranslation || this.finalQueue.length > 0) return;
     const waiters = this.idleWaiters.splice(0);
     for (const resolve of waiters) resolve();
   }
@@ -564,8 +542,6 @@ export class LiveTranslationScheduler {
       this.debounceTimer = null;
     }
     this.cancelInflight();
-    this.pendingSnapshot = null;
-    this.pendingSnapshotTime = null;
     this.finalQueue = [];
     this.resolveIdleIfReady();
     this.listeners.clear();

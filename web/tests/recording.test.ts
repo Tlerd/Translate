@@ -168,7 +168,6 @@ describe('LiveTranslationScheduler', () => {
         return new Promise<string>((resolve) => releases.push(resolve));
       },
       minIntervalMs: 0,
-      maxAgeMs: 10_000,
     });
     const events: ScheduledTranslationEvent[] = [];
     scheduler.subscribe((event) => events.push(event));
@@ -242,9 +241,10 @@ describe('LiveTranslationScheduler', () => {
     scheduler.close();
   });
 
-  it('promotes a reused interim translation to the final source revision', async () => {
+  it('waits for the final source revision before translating its punctuation', async () => {
+    const runner = vi.fn(async (source) => `Dịch: ${source}`);
     const scheduler = new LiveTranslationScheduler({
-      runner: async (source) => `Dịch: ${source}`,
+      runner,
       minIntervalMs: 0,
     });
     const events: ScheduledTranslationEvent[] = [];
@@ -255,9 +255,11 @@ describe('LiveTranslationScheduler', () => {
     };
     scheduler.onSnapshot(base);
     await scheduler.drain();
+    expect(runner).not.toHaveBeenCalled();
     scheduler.onSnapshot({ ...base, revision: 2, text: 'こんにちは。', isFinal: true });
+    await scheduler.drain();
     expect(events.at(-1)).toMatchObject({
-      targetText: 'Dịch: こんにちは', sourceRevision: 2, targetSourceRevision: 2,
+      targetText: 'Dịch: こんにちは。', sourceRevision: 2, targetSourceRevision: 2,
       isFinal: true, isProvisional: false,
     });
     scheduler.close();
@@ -283,10 +285,10 @@ describe('LiveTranslationScheduler', () => {
     scheduler.close();
   });
 
-  it('resolves drain after the only pending interim expires while the active request finishes', async () => {
+  it('drains committed translations without waiting for an uncommitted interim', async () => {
     let release!: (value: string) => void;
     const runner = vi.fn(() => new Promise<string>((resolve) => { release = resolve; }));
-    const scheduler = new LiveTranslationScheduler({ runner, minIntervalMs: 0, maxAgeMs: 10 });
+    const scheduler = new LiveTranslationScheduler({ runner, minIntervalMs: 0 });
     const events: ScheduledTranslationEvent[] = [];
     scheduler.subscribe((event) => events.push(event));
     scheduler.onSnapshot({
@@ -295,14 +297,15 @@ describe('LiveTranslationScheduler', () => {
     });
     scheduler.onSnapshot({
       connectionEpoch: 1, providerItemId: 'p-2', blockId: 1, captionId: 2,
-      revision: 1, text: 'expired interim', isFinal: false, startMs: 100, endMs: 200,
+      revision: 1, text: 'unfinished interim', isFinal: false, startMs: 100, endMs: 200,
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
     const drained = scheduler.drain();
     release('active translation');
     await expect(drained).resolves.toBeUndefined();
     expect(runner).toHaveBeenCalledOnce();
-    expect(events.some((event) => event.captionId === 2 && event.skipReason === 'stale')).toBe(true);
+    expect(events.filter((event) => event.captionId === 2)).toEqual([
+      expect.objectContaining({ sourceText: 'unfinished interim', targetText: '', isFinal: false }),
+    ]);
     scheduler.close();
   });
 

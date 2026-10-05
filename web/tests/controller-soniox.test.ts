@@ -57,6 +57,33 @@ describe('Soniox whole-lesson controller', () => {
     if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(6000);
     await stopping; resetDbInstance(); await db.delete(); vi.useRealTimers(); vi.unstubAllGlobals();
   });
+  it.each(['lecture', 'readingPractice'] as const)('in %s shows eight changing ASR hypotheses and spends one translation request after commitment', async (mode) => {
+    await controller.start({ speechProvider: 'soniox', mode, sourceLanguage: 'ja-JP', targetLanguage: 'vi', translationModelKey: 'fixture' });
+    const socket = Socket.instances[0];
+    for (let revision = 1; revision <= 8; revision++) {
+      socket.message({ tokens: [{ text: `unfinished ${revision}` }] });
+      expect(controller.snapshot().captions[0]).toMatchObject({ source: `unfinished ${revision}`, translation: '', isFinal: false });
+      await vi.advanceTimersByTimeAsync(800);
+    }
+    expect(fixture.translate).not.toHaveBeenCalled();
+    socket.message({ tokens: [{ text: 'finished sentence', is_final: true, start_ms: 0, end_ms: 6500 }, { text: '<fin>' }] });
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(fixture.translate).toHaveBeenCalledOnce();
+    expect(fixture.translate.mock.calls[0][0]).toMatchObject({ captionId: 1, text: 'finished sentence' });
+    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'finished sentence', state: 'done', isFinal: true });
+  });
+  it('pause commits and translates remaining words while the microphone recorder continues', async () => {
+    await controller.start({ speechProvider: 'soniox' });
+    const socket = Socket.instances[0];
+    socket.message({ tokens: [{ text: 'last unfinished words' }] });
+    expect(fixture.translate).not.toHaveBeenCalled();
+    await controller.pauseApi();
+    socket.message({ finished: true });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(fixture.translate).toHaveBeenCalledOnce();
+    expect(controller.snapshot().captions[0]).toMatchObject({ source: 'last unfinished words', state: 'done', isFinal: true });
+    expect(Recorder.instances[0].state).toBe('recording');
+  });
   it.each(['lecture', 'readingPractice'] as const)('uses one mic/recorder in %s; quick resume preserves old finals and timestamps', async (mode) => {
     await controller.start({ speechProvider: 'soniox', mode, sourceLanguage: 'ja-JP', targetLanguage: 'vi', translationModelKey: 'fixture' });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
