@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Calendar, BookOpen, Layers } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, BookOpen, MessageSquare } from 'lucide-react';
 import { getRecording, getCaptions, getSummary } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
@@ -192,8 +192,8 @@ export default function RecordingDetailPage({
               </span>
               <span>•</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {recording.mode === 'lecture' ? <BookOpen size={12} /> : <Layers size={12} />}
-                {recording.mode === 'lecture' ? 'Giảng bài' : 'Luyện đọc'}
+                {recording.mode === 'lecture' ? <BookOpen size={12} /> : <MessageSquare size={12} />}
+                {recording.mode === 'lecture' ? 'Giảng bài' : 'Hội thoại'}
               </span>
               {costText && (
                 <>

@@ -709,7 +709,7 @@ export function AiSettings() {
               </span>
             </div>
 
-            {/* Chế độ Luyện đọc */}
+            {/* Chế độ Hội thoại */}
             <div
               style={{
                 padding: '14px 16px',
@@ -726,7 +726,7 @@ export function AiSettings() {
                   htmlFor="pause-reading"
                   style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
                 >
-                  Chế độ Luyện đọc:
+                  Chế độ Hội thoại:
                 </label>
                 <span
                   style={{
@@ -751,11 +751,11 @@ export function AiSettings() {
                 onChange={(e) =>
                   setSettings({ ...settings, readingPauseMs: Number(e.target.value) })
                 }
-                aria-label="Khoảng nghỉ để chốt câu khi luyện đọc, giây"
+                aria-label="Khoảng nghỉ để chốt câu khi hội thoại, giây"
                 style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
               />
               <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Thời gian chờ ngắt câu dài hơn cho người đang đọc chậm (0.6s - 10.0s)
+                Thời gian chờ ngắt câu phù hợp cho giao tiếp và hội thoại (0.6s - 10.0s)
               </span>
             </div>
           </div>

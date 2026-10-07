@@ -1,0 +1,2228 @@
+{
+  "promptVersion": "lean-fidelity-v2",
+  "model": "google:gemini-3.1-flash-lite",
+  "thinking": "minimal",
+  "source": "production UI; synthetic 48-case fixture; run stopped at 60 requests after name/gender defects",
+  "results": [
+    {
+      "id": "negation-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日は参加できません。",
+      "criteria": "Không thể tham gia ngày mai; không đảo thành có thể.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai tôi không tham gia được.",
+      "metrics": "Request: test_1791219169718 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 97 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日は参加できません。",
+      "criteria": "Không thể tham gia ngày mai; không đảo thành có thể.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai tôi không thể tham gia.",
+      "metrics": "Request: test_1791219171022 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 132 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日は参加できません。",
+      "criteria": "Không thể tham gia ngày mai; không đảo thành có thể.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai tôi không thể tham gia.",
+      "metrics": "Request: test_1791219172251 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 182 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "全員が合格したわけではありません。",
+      "criteria": "Không phải tất cả đều đỗ; không nói tất cả đều trượt.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không phải tất cả mọi người đều đã đỗ.",
+      "metrics": "Request: test_1791219173459 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 99 · Output: 11 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "全員が合格したわけではありません。",
+      "criteria": "Không phải tất cả đều đỗ; không nói tất cả đều trượt.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không phải tất cả mọi người đều đỗ.",
+      "metrics": "Request: test_1791219174849 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 134 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "全員が合格したわけではありません。",
+      "criteria": "Không phải tất cả đều đỗ; không nói tất cả đều trượt.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không phải tất cả mọi người đều đỗ.",
+      "metrics": "Request: test_1791219175939 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 184 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "行かないとは言っていません。",
+      "criteria": "Không nói rằng sẽ không đi; giữ phạm vi phủ định.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi không nói là tôi không đi.",
+      "metrics": "Request: test_1791219177513 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 99 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "行かないとは言っていません。",
+      "criteria": "Không nói rằng sẽ không đi; giữ phạm vi phủ định.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi không nói là tôi không đi.",
+      "metrics": "Request: test_1791219178707 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 134 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "行かないとは言っていません。",
+      "criteria": "Không nói rằng sẽ không đi; giữ phạm vi phủ định.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi không nói là sẽ không đi.",
+      "metrics": "Request: test_1791219179701 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 184 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "薬を飲んではいけません。",
+      "criteria": "Cấm uống thuốc; không đổi thành lời khuyên nên uống.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Bạn không được uống thuốc.",
+      "metrics": "Request: test_1791219181020 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 101 · Output: 6 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "薬を飲んではいけません。",
+      "criteria": "Cấm uống thuốc; không đổi thành lời khuyên nên uống.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không được uống thuốc.",
+      "metrics": "Request: test_1791219182311 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 136 · Output: 5 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "薬を飲んではいけません。",
+      "criteria": "Cấm uống thuốc; không đổi thành lời khuyên nên uống.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không được uống thuốc.",
+      "metrics": "Request: test_1791219183721 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 186 · Output: 5 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "彼が来るとは限らない。",
+      "criteria": "Không chắc anh ấy sẽ đến; không khẳng định không đến.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không chắc là anh ấy sẽ đến.",
+      "metrics": "Request: test_1791219187117 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 100 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "彼が来るとは限らない。",
+      "criteria": "Không chắc anh ấy sẽ đến; không khẳng định không đến.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Chưa chắc anh ấy sẽ đến.",
+      "metrics": "Request: test_1791219188088 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 135 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "彼が来るとは限らない。",
+      "criteria": "Không chắc anh ấy sẽ đến; không khẳng định không đến.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Không chắc là anh ấy sẽ đến.",
+      "metrics": "Request: test_1791219189373 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 185 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "宿題をしなくてもいいです。",
+      "criteria": "Không bắt buộc làm bài; không biến thành cấm làm.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Bạn không cần phải làm bài tập về nhà.",
+      "metrics": "Request: test_1791219190487 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 99 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "宿題をしなくてもいいです。",
+      "criteria": "Không bắt buộc làm bài; không biến thành cấm làm.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Bạn không cần phải làm bài tập về nhà.",
+      "metrics": "Request: test_1791219191939 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 134 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "negation-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "宿題をしなくてもいいです。",
+      "criteria": "Không bắt buộc làm bài; không biến thành cấm làm.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Bạn không cần phải làm bài tập về nhà.",
+      "metrics": "Request: test_1791219193134 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 184 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "水を二百五十ミリリットル入れてください。",
+      "criteria": "250 ml nước; giữ đơn vị và lời yêu cầu.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hãy cho 250 mililit nước vào.",
+      "metrics": "Request: test_1791219194542 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 101 · Output: 11 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "水を二百五十ミリリットル入れてください。",
+      "criteria": "250 ml nước; giữ đơn vị và lời yêu cầu.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hãy cho hai trăm năm mươi mililít nước vào.",
+      "metrics": "Request: test_1791219195521 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 136 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "水を二百五十ミリリットル入れてください。",
+      "criteria": "250 ml nước; giữ đơn vị và lời yêu cầu.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hãy cho vào hai trăm năm mươi mililít nước.",
+      "metrics": "Request: test_1791219196827 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 186 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "締め切りは十月五日の午後四時です。",
+      "criteria": "Hạn chót 5/10 lúc 16h; không thành 4h sáng.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hạn chót là 4 giờ chiều ngày 5 tháng 10.",
+      "metrics": "Request: test_1791219197875 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 104 · Output: 17 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "締め切りは十月五日の午後四時です。",
+      "criteria": "Hạn chót 5/10 lúc 16h; không thành 4h sáng.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hạn chót là bốn giờ chiều ngày năm tháng mười.",
+      "metrics": "Request: test_1791219198743 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 139 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "締め切りは十月五日の午後四時です。",
+      "criteria": "Hạn chót 5/10 lúc 16h; không thành 4h sáng.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hạn chót là bốn giờ chiều ngày năm tháng mười.",
+      "metrics": "Request: test_1791219199937 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 189 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "一人につき三枚、合計十二枚です。",
+      "criteria": "3 tờ mỗi người, tổng 12; không gộp sai số.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Mỗi người ba tờ, tổng cộng là mười hai tờ.",
+      "metrics": "Request: test_1791219201339 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 102 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "一人につき三枚、合計十二枚です。",
+      "criteria": "3 tờ mỗi người, tổng 12; không gộp sai số.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Mỗi người ba tấm, tổng cộng là mười hai tấm.",
+      "metrics": "Request: test_1791219202333 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 137 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "一人につき三枚、合計十二枚です。",
+      "criteria": "3 tờ mỗi người, tổng 12; không gộp sai số.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Mỗi người ba tờ, tổng cộng là mười hai tờ.",
+      "metrics": "Request: test_1791219203096 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 187 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "料金は三万八千円から六万八千円になりました。",
+      "criteria": "38.000 yên lên 68.000 yên; không tự quy đổi sang đồng.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Giá tiền đã thay đổi từ ba mươi tám nghìn yên thành sáu mươi tám nghìn yên.",
+      "metrics": "Request: test_1791219204530 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 107 · Output: 23 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "料金は三万八千円から六万八千円になりました。",
+      "criteria": "38.000 yên lên 68.000 yên; không tự quy đổi sang đồng.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Phí đã thay đổi từ ba mươi tám nghìn yên thành sáu mươi tám nghìn yên.",
+      "metrics": "Request: test_1791219205854 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 142 · Output: 23 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "料金は三万八千円から六万八千円になりました。",
+      "criteria": "38.000 yên lên 68.000 yên; không tự quy đổi sang đồng.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Giá tiền đã thay đổi từ ba mươi tám nghìn yên lên sáu mươi tám nghìn yên.",
+      "metrics": "Request: test_1791219207277 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 192 · Output: 23 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "温度はマイナス五度、長さは〇・五メートルです。",
+      "criteria": "Âm 5 độ và 0,5 mét; giữ dấu âm và thập phân.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nhiệt độ là âm năm độ, chiều dài là 0,5 mét.",
+      "metrics": "Request: test_1791219212804 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 107 · Output: 18 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "温度はマイナス五度、長さは〇・五メートルです。",
+      "criteria": "Âm 5 độ và 0,5 mét; giữ dấu âm và thập phân.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nhiệt độ là âm năm độ, chiều dài là 0,5 mét.",
+      "metrics": "Request: test_1791219214096 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 142 · Output: 18 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "温度はマイナス五度、長さは〇・五メートルです。",
+      "criteria": "Âm 5 độ và 0,5 mét; giữ dấu âm và thập phân.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nhiệt độ là âm năm độ, chiều dài là 0,5 mét.",
+      "metrics": "Request: test_1791219215575 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 192 · Output: 18 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "三回ではなく、二回だけ繰り返してください。",
+      "criteria": "Lặp 2 lần chứ không phải 3; giữ cả đính chính.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Đừng lặp lại ba lần, chỉ lặp lại hai lần thôi.",
+      "metrics": "Request: test_1791219216637 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 102 · Output: 16 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "三回ではなく、二回だけ繰り返してください。",
+      "criteria": "Lặp 2 lần chứ không phải 3; giữ cả đính chính.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Xin hãy lặp lại hai lần thôi, không phải ba lần.",
+      "metrics": "Request: test_1791219217715 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 137 · Output: 14 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "numbers-units-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "三回ではなく、二回だけ繰り返してください。",
+      "criteria": "Lặp 2 lần chứ không phải 3; giữ cả đính chính.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Hãy lặp lại hai lần thôi, không phải ba lần.",
+      "metrics": "Request: test_1791219218664 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 187 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "小鳥遊さんが担当します。",
+      "criteria": "Giữ 小鳥遊 nếu không biết cách đọc; không bịa tên Việt.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Takanashi-san sẽ đảm nhiệm việc này.",
+      "metrics": "Request: test_1791219219874 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 99 · Output: 11 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "小鳥遊さんが担当します。",
+      "criteria": "Giữ 小鳥遊 nếu không biết cách đọc; không bịa tên Việt.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Cô Takanashi sẽ phụ trách.",
+      "metrics": "Request: test_1791219221081 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 134 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "小鳥遊さんが担当します。",
+      "criteria": "Giữ 小鳥遊 nếu không biết cách đọc; không bịa tên Việt.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Anh Takanashi sẽ phụ trách.",
+      "metrics": "Request: test_1791219222283 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 184 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日、東海林さんに確認します。",
+      "criteria": "Giữ tên 東海林 khi cách đọc chưa rõ; ngày mai xác nhận.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai, tôi sẽ xác nhận lại với anh Shoji.",
+      "metrics": "Request: test_1791219224386 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 100 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日、東海林さんに確認します。",
+      "criteria": "Giữ tên 東海林 khi cách đọc chưa rõ; ngày mai xác nhận.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai, tôi sẽ xác nhận lại với anh/chị Shoji.",
+      "metrics": "Request: test_1791219225469 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 135 · Output: 16 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "明日、東海林さんに確認します。",
+      "criteria": "Giữ tên 東海林 khi cách đọc chưa rõ; ngày mai xác nhận.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Ngày mai, tôi sẽ xác nhận lại với anh Shoji.",
+      "metrics": "Request: test_1791219226685 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 185 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "この製品の名前はQZ-17です。",
+      "criteria": "Giữ nguyên QZ-17.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tên của sản phẩm này là QZ-17.",
+      "metrics": "Request: test_1791219229082 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 103 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "この製品の名前はQZ-17です。",
+      "criteria": "Giữ nguyên QZ-17.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tên của sản phẩm này là QZ-17.",
+      "metrics": "Request: test_1791219230373 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 138 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-3",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "この製品の名前はQZ-17です。",
+      "criteria": "Giữ nguyên QZ-17.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tên của sản phẩm này là QZ-17.",
+      "metrics": "Request: test_1791219231539 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 188 · Output: 13 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "FPT大学の学生が二人います。",
+      "criteria": "Hai sinh viên Đại học FPT; giữ tên và số 2.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Có hai sinh viên Đại học FPT.",
+      "metrics": "Request: test_1791219232615 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 101 · Output: 9 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "FPT大学の学生が二人います。",
+      "criteria": "Hai sinh viên Đại học FPT; giữ tên và số 2.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Có hai sinh viên Đại học FPT.",
+      "metrics": "Request: test_1791219233926 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 136 · Output: 9 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-4",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "FPT大学の学生が二人います。",
+      "criteria": "Hai sinh viên Đại học FPT; giữ tên và số 2.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Có hai sinh viên trường đại học FPT.",
+      "metrics": "Request: test_1791219235106 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 186 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "Nguyễn Anさんにメールしました。",
+      "criteria": "Giữ Nguyễn An, không đổi sang tên khác.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi đã gửi email cho Nguyễn An.",
+      "metrics": "Request: test_1791219240884 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 99 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "Nguyễn Anさんにメールしました。",
+      "criteria": "Giữ Nguyễn An, không đổi sang tên khác.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi đã gửi email cho bạn Nguyễn An.",
+      "metrics": "Request: test_1791219241869 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 134 · Output: 9 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-5",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "Nguyễn Anさんにメールしました。",
+      "criteria": "Giữ Nguyễn An, không đổi sang tên khác.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Tôi đã gửi email cho Nguyễn An.",
+      "metrics": "Request: test_1791219242953 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 184 · Output: 8 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "地名は生田です。読み方はまだ確認していません。",
+      "criteria": "Giữ 生田 và việc chưa xác nhận cách đọc; không tự chọn một cách đọc.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Địa danh là Ikuta. Cách đọc thì tôi vẫn chưa xác nhận.",
+      "metrics": "Request: test_1791219244022 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 105 · Output: 15 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "地名は生田です。読み方はまだ確認していません。",
+      "criteria": "Giữ 生田 và việc chưa xác nhận cách đọc; không tự chọn một cách đọc.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Địa danh là Ikuta. Cách đọc thì tôi vẫn chưa xác nhận.",
+      "metrics": "Request: test_1791219245355 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 140 · Output: 15 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "names-6",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "地名は生田です。読み方はまだ確認していません。",
+      "criteria": "Giữ 生田 và việc chưa xác nhận cách đọc; không tự chọn một cách đọc.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Địa danh là Ikuta. Cách đọc thì tôi vẫn chưa xác nhận.",
+      "metrics": "Request: test_1791219246496 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 190 · Output: 15 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "もし明日、先生が…",
+      "criteria": "Giữ câu dang dở; không bịa việc giáo viên sẽ làm.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nếu ngày mai, thầy/cô mà...",
+      "metrics": "Request: test_1791219247674 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 98 · Output: 10 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "もし明日、先生が…",
+      "criteria": "Giữ câu dang dở; không bịa việc giáo viên sẽ làm.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nếu ngày mai, thầy/cô...",
+      "metrics": "Request: test_1791219248855 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 133 · Output: 9 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-1",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "もし明日、先生が…",
+      "criteria": "Giữ câu dang dở; không bịa việc giáo viên sẽ làm.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Nếu ngày mai, thầy/cô...",
+      "metrics": "Request: test_1791219249930 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 183 · Output: 9 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "それはちょっと…",
+      "criteria": "Giữ sự ngập ngừng/ý chưa nói hết; không bịa lý do.",
+      "history": [],
+      "n": 0,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Điều đó thì hơi…",
+      "metrics": "Request: test_1791219251202 · Ngữ cảnh thực gửi: 0 · Prompt: lean-fidelity-v2\nInput: 95 · Output: 5 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "それはちょっと…",
+      "criteria": "Giữ sự ngập ngừng/ý chưa nói hết; không bịa lý do.",
+      "history": [],
+      "n": 2,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Điều đó thì hơi…",
+      "metrics": "Request: test_1791219252173 · Ngữ cảnh thực gửi: 2 · Prompt: lean-fidelity-v2\nInput: 130 · Output: 5 · Thinking: không báo cáo · Cache: không báo cáo"
+    },
+    {
+      "id": "ambiguity-fragments-2",
+      "sourceLanguage": "ja",
+      "targetLanguage": "vi",
+      "source": "それはちょっと…",
+      "criteria": "Giữ sự ngập ngừng/ý chưa nói hết; không bịa lý do.",
+      "history": [],
+      "n": 6,
+      "fullHistory": [
+        [
+          "今日は授業です。",
+          "Hôm nay có giờ học."
+        ],
+        [
+          "窓を開けます。",
+          "Tôi mở cửa sổ."
+        ],
+        [
+          "資料を配ります。",
+          "Tôi phát tài liệu."
+        ],
+        [
+          "休憩は十分です。",
+          "Giờ nghỉ là mười phút."
+        ],
+        [
+          "黒板を見てください。",
+          "Hãy nhìn lên bảng."
+        ],
+        [
+          "質問は最後にお願いします。",
+          "Xin đặt câu hỏi ở cuối buổi."
+        ]
+      ],
+      "output": "Điều đó thì hơi…",
+      "metrics": "Request: test_1791219253472 · Ngữ cảnh thực gửi: 6 · Prompt: lean-fidelity-v2\nInput: 180 · Output: 5 · Thinking: không báo cáo · Cache: không báo cáo"
+    }
+  ]
+}

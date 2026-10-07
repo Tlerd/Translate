@@ -1,0 +1,230 @@
+Current month, Group by Product (edited)
+Reset filters
+Save as new
+See all reports
+Generate query
+ Share
+Learn
+To view and manage your Gemini API balance, go to AI Studio .
+Dismiss
+Ask Gemini Cloud Assist to create a report Preview
+Current month, Group by Product
+Services – this month
+Last invoice by service
+Projects – this month
+SKUs – this month
+Services – daily costs this month
+Projects – daily costs this month
+SKUs – daily costs this month
+Services – daily costs L7D
+Last invoice by project
+Last invoice by SKU
+Products – this month
+Gemini Enterprise costs by SKU
+See all reports
+Group by (SKU)
+Time range by charge period (Current month)
+ Show more
+Summary provided by Gemini Cloud Assist Preview
+You spent ₫53,476 between Oct 1 – 4, 2026. This was a 1,492% increase from Sep 27 – 30, 2026.
+SKU Generate content input token count gemini 3.1 flash lite preview text had the largest percentage change in costs of ₫21,414 (1,159%) compared to the previous period. This was driven by:
+Increases in Project Total Project (+₫21,414; +1,159%)
+Increases in Region global (+₫21,414; +1,159%)
+This period, you had 2 new charges including:
+SKU Bidi_generate_content audio input token count for gemini_3.5_transcribe_live at ₫18,639 driven by ₫18,639 from Project Total Project and ₫18,639 from Region global
+SKU Bidi_generate_content text output token count for gemini_3.5_transcribe_live at ₫6,330 driven by ₫6,330 from Project Total Project and ₫6,330 from Region global
+October 1 – 4, 2026
+₫53,476
+ 1,492.02%
+
+includes ₫0 in savings
+
+₫50,117 over September 27 – 30, 2026
+
+October 1 – 31, 2026 (forecasted) 
+
+Not enough historical data to project cost
+
+Show cumulative
+
+Untitled
+
+This chart is described by one or more grids. A grid row represents a time series. A grid column corresponds to a timestamp. By default, charts hide most columns. To display the hidden columns next to the activated column, use the Read previous item (up arrow) key until you access the column header, and then use the Activate button (enter) key.
+
+Data values on this chart range from a minimum of 0 to a maximum of 27,022.26VND.
+
+Data in this chart spans a time range from Thursday, October 1, 2026 at 12:00:00 AM UTC+7 to Sunday, November 1, 2026 at 12:00:00 AM UTC+7.
+
+Unpinning the X axis cursor allows the cursor to follow the mouse while hovering over the chart. The X axis cursor will always be pinned while using keyboard navigation to indicate that the values reflected in the tooltip or the legend are associated with the position of the X axis cursor.
+
+Populate data for table, "Bar", on chart, "Untitled"
+Grid for data, "Bar", on chart, "Untitled". Navigate this grid using arrow keys. Page Up and Page Down moves focus up and down by 10 rows. Home and End moves focus to the first and last cell in the current row. Ctrl+Home and Ctrl+End moves focus to the first and last cell of the grid.
+Audio
+
+
+To save memory, this table is inactive by default. To populate this table, click the "Populate data for table, "Bar", on chart, "Untitled"" button just prior to this table.
+
+If subsequent columns are omitted, activating a column header will reveal all subsequent columns up to the next revealed column.
+
+If subsequent rows are omitted, activating a row header will reveal all subsequent rows up to the next revealed row.
+
+Activating a grid cell will open the tooltip at this data point.
+
+ Download CSV 
+	
+SKU
+	
+Service
+	
+SKU ID
+	
+Usage
+	
+Usage cost
+	
+Negotiated savings
+	
+Savings programs
+	
+Other savings
+	
+Subtotal
+	
+% Change 
+
+
+	
+Generate content input token count gemini 3.1 flash lite preview text
+	
+Gemini API
+	54F8-C433-9340	3,582,781 count	₫23,262	₫0	—	—	₫23,262	
+ 1159%
+
+
+	
+Bidi_generate_content audio input token count for gemini_3.5_transcribe_live
+	
+Gemini API
+	DCAD-DF59-FB57	205,055 count	₫18,639	₫0	—	—	₫18,639	
+New
+
+
+	
+Bidi_generate_content text output token count for gemini_3.5_transcribe_live
+	
+Gemini API
+	8645-1B43-E2A6	11,607 count	₫6,330	₫0	—	—	₫6,330	
+New
+
+
+	
+Generate content output token count gemini 3.1 flash lite preview text
+	
+Gemini API
+	5882-9C22-CC57	97,643 count	₫3,804	₫0	—	—	₫3,804	
+ 1144%
+
+
+	
+Generate_content image output token count for Gemini 3.1 Flash Lite Image
+	
+Gemini API
+	6FD2-2844-9ABA	1,120 count	₫873	₫0	—	—	₫873	
+—
+
+
+	
+Bidi generate content input token count gemini 3 flash live audio
+	
+Gemini API
+	DE3A-8758-88D3	2,157 count	₫168	₫0	—	—	₫168	
+New
+
+
+	
+Bidi generate content output token count gemini 3 flash live audio
+	
+Gemini API
+	A87D-4DC8-9112	347 count	₫108	₫0	—	—	₫108	
+New
+
+
+	
+Generate_content audio input token count for gemini_3.5_transcribe
+	
+Gemini API
+	F30F-7ECD-D049	2,023 count	₫105	₫0	—	—	₫105	
+New
+
+
+	
+Generate content output token count gemini 3.8 flash text
+	
+Gemini API
+	C5EE-B267-EE7E	640 count	₫62	₫0	—	—	₫62	
+ 16%
+
+
+	
+Generate_content text input token count for gemini 3 flash
+	
+Gemini API
+	F2C1-F842-5D84	2,958 count	₫38	₫0	—	—	₫38	
+New
+
+
+	
+Generate_content text output token count for gemini 3 flash
+	
+Gemini API
+	ACA6-865B-F153	321 count	₫25	₫0	—	—	₫25	
+New
+
+
+	
+Generate_content audio input token count for gemini 3 flash
+	
+Gemini API
+	28F5-1549-1CA9	804 count	₫21	₫0	—	—	₫21	
+New
+
+
+	
+Generate_content text output token count for Gemini 3.1 Flash Lite Image
+	
+Gemini API
+	70CA-D03F-58C9	423 count	₫16	₫0	—	—	₫16	
+ 6%
+
+
+	
+Bidi generate content input token count gemini 3 flash live text
+	
+Gemini API
+	6C67-D319-EB0B	693 count	₫13	₫0	—	—	₫13	
+New
+
+
+	
+Generate content input token count gemini 3.8 flash text
+	
+Gemini API
+	4F40-96C8-648E	564 count	₫11	₫0	—	—	₫11	
+ 105%
+
+
+	
+Generate_content text input token count for Gemini 3.1 Flash Lite Image
+	
+Gemini API
+	CF99-DF77-2BBA	7 count	₫0	₫0	—	—	₫0	
+ 95%
+Rows per page:
+30
+1 – 16 of 16
+Subtotal
+₫53,476
+Tax 
+—
+Total 
+₫53,476

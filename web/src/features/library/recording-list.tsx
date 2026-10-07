@@ -12,17 +12,20 @@ import {
   MoreVertical,
   Check,
   X,
+  Folder,
 } from 'lucide-react';
 import type { RecordingItem } from '@/shared/recording';
 import {
   renameRecording,
   deleteRecording,
   deleteAudioOnly,
+  updateRecordingFolder,
 } from '@/storage/recordings';
 import { exportRecordingData } from '@/storage/export-import';
 
 interface RecordingListProps {
   recordings: RecordingItem[];
+  customFolders?: string[];
   selectedId: string | null;
   activeRecordingId: string | null;
   onRefresh: () => void;
@@ -31,6 +34,7 @@ interface RecordingListProps {
 
 export function RecordingList({
   recordings,
+  customFolders = [],
   selectedId,
   activeRecordingId,
   onRefresh,
@@ -40,6 +44,7 @@ export function RecordingList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [folderPickerRecId, setFolderPickerRecId] = useState<string | null>(null);
 
   const handleStartRename = (rec: RecordingItem, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -292,6 +297,27 @@ export function RecordingList({
                 ) : (
                   <span title="Âm thanh đã xóa hoặc thiếu"><VolumeX size={13} /></span>
                 )}
+                {rec.folder && (
+                  <>
+                    <span>•</span>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '1px 6px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(56, 189, 248, 0.15)',
+                        color: isSelected ? '#fff' : 'var(--accent)',
+                        fontSize: '0.72rem',
+                      }}
+                      title={`Thư mục: ${rec.folder}`}
+                    >
+                      <Folder size={11} />
+                      <span>{rec.folder}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </Link>
 
@@ -314,6 +340,28 @@ export function RecordingList({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFolderPickerRecId(rec.id);
+                    setOpenMenuId(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                    borderRadius: 4,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <Folder size={14} />
+                  <span>Chuyển vào thư mục</span>
+                </button>
+
                 <button
                   onClick={(e) => handleStartRename(rec, e)}
                   style={{
@@ -385,6 +433,92 @@ export function RecordingList({
                     <span>Xóa cả buổi</span>
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Folder Picker Popover */}
+            {folderPickerRecId === rec.id && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 8,
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--accent)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  zIndex: 110,
+                  minWidth: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '6px',
+                  gap: 4,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', padding: '2px 8px' }}>
+                  Chuyển vào thư mục:
+                </div>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await updateRecordingFolder(rec.id, null);
+                    onRefresh();
+                    setFolderPickerRecId(null);
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    textAlign: 'left',
+                    fontSize: '0.8rem',
+                    borderRadius: 4,
+                    background: !rec.folder ? 'var(--bg-hover)' : 'transparent',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  (Không có thư mục)
+                </button>
+                {customFolders.map((f) => (
+                  <button
+                    key={f}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await updateRecordingFolder(rec.id, f);
+                      onRefresh();
+                      setFolderPickerRecId(null);
+                    }}
+                    style={{
+                      padding: '6px 10px',
+                      textAlign: 'left',
+                      fontSize: '0.8rem',
+                      borderRadius: 4,
+                      background: rec.folder === f ? 'var(--bg-hover)' : 'transparent',
+                      color: rec.folder === f ? 'var(--accent)' : 'var(--text-primary)',
+                      fontWeight: rec.folder === f ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📁 {f}
+                  </button>
+                ))}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFolderPickerRecId(null);
+                  }}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '0.74rem',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    marginTop: 4,
+                    cursor: 'pointer',
+                    background: 'none',
+                    border: 'none',
+                  }}
+                >
+                  Đóng
+                </button>
               </div>
             )}
           </div>

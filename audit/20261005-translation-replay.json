@@ -1,0 +1,924 @@
+{
+  "measurement": "mock requests and characters; synthetic text; same v2 prompt for both schedulers",
+  "rows": [
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 0,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 1780,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 33,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 22,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "次は来週です",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 6,
+          "actualHistoryTurns": 0
+        }
+      ]
+    },
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 0,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2898,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 73,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。"
+            }
+          ],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 22,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "次は来週です",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 6,
+          "actualHistoryTurns": 0
+        }
+      ]
+    },
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 2,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2099,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 86,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 148,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 146,
+          "actualHistoryTurns": 2
+        }
+      ]
+    },
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 2,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 3170,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 73,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。"
+            }
+          ],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 151,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 149,
+          "actualHistoryTurns": 2
+        }
+      ]
+    },
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 6,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2136,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 86,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 148,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 183,
+          "actualHistoryTurns": 3
+        }
+      ]
+    },
+    {
+      "version": "baseline",
+      "baselineCommit": "9690936",
+      "historyLimit": 6,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 3207,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 73,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。"
+            }
+          ],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 151,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 186,
+          "actualHistoryTurns": 3
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 0,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 1780,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 33,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 22,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "次は来週です",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 6,
+          "actualHistoryTurns": 0
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 0,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2653,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 20,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 13,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 21,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 22,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "次は来週です",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 6,
+          "actualHistoryTurns": 0
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 2,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2099,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 86,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 148,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 146,
+          "actualHistoryTurns": 2
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 2,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 3207,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 73,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。"
+            }
+          ],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 150,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 151,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 149,
+          "actualHistoryTurns": 2
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 6,
+      "early": false,
+      "requests": 4,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 2136,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 86,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 148,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 183,
+          "actualHistoryTurns": 3
+        }
+      ]
+    },
+    {
+      "version": "current",
+      "baselineCommit": "9690936",
+      "historyLimit": 6,
+      "early": true,
+      "requests": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "estimatedUsd": null,
+      "inputCharacters": 3244,
+      "calls": [
+        {
+          "source": "今日の授業について説明します。",
+          "history": [],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 15,
+          "actualHistoryTurns": 0
+        },
+        {
+          "source": "こんにちは、本日はよろしくお願いします。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 73,
+          "actualHistoryTurns": 1
+        },
+        {
+          "source": "午後から雨が降るそうです。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。"
+            }
+          ],
+          "kind": "remainder",
+          "systemChars": 426,
+          "payloadChars": 113,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができます。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "segment",
+          "systemChars": 426,
+          "payloadChars": 150,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "明日は全員が授業に参加することができません。",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 151,
+          "actualHistoryTurns": 2
+        },
+        {
+          "source": "次は来週です",
+          "history": [
+            {
+              "source": "今日の授業について説明します。",
+              "translation": "D:今日の授業について説明します。"
+            },
+            {
+              "source": "こんにちは、本日はよろしくお願いします。午後から雨が降るそうです。",
+              "translation": "D:こんにちは、本日はよろしくお願いします。 D:午後から雨が降るそうです。"
+            },
+            {
+              "source": "明日は全員が授業に参加することができません。",
+              "translation": "D:明日は全員が授業に参加することができません。"
+            }
+          ],
+          "kind": "final",
+          "systemChars": 426,
+          "payloadChars": 186,
+          "actualHistoryTurns": 3
+        }
+      ]
+    }
+  ]
+}

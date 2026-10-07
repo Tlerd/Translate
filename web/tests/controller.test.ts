@@ -188,4 +188,35 @@ describe('ClassroomController stop boundary', () => {
     expect(controller.snapshot().captions).toHaveLength(1);
     await controller.stop();
   });
+
+  it('swaps source and target languages smoothly and skips translation when target is none', async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
+    vi.stubGlobal('window', { SpeechRecognition: FakeSpeechRecognition });
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const request = JSON.parse(String(init.body)) as { text: string };
+      return completedResponse(`Dịch: ${request.text}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const controller = new ClassroomController();
+    await controller.start({ sourceLanguage: 'ja-JP', targetLanguage: 'vi' });
+    expect(controller.snapshot().sourceLanguage).toBe('ja-JP');
+    expect(controller.snapshot().targetLanguage).toBe('vi');
+
+    await controller.swapLanguages();
+    expect(controller.snapshot().sourceLanguage).toBe('vi-VN');
+    expect(controller.snapshot().targetLanguage).toBe('ja');
+
+    controller.setLanguages(controller.snapshot().sourceLanguage, 'none');
+    expect(controller.snapshot().targetLanguage).toBe('none');
+
+    fetchMock.mockClear();
+    FakeSpeechRecognition.instances.at(-1)?.final('Không cần dịch');
+    await vi.waitFor(() => expect(controller.snapshot().captions[0]?.state).toBe('done'));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await controller.stop();
+  });
 });

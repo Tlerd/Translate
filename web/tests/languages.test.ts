@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalLanguage, inputLanguage, inputLanguages, LIVE_LANGUAGES, NEMOTRON_LANGUAGES, searchLanguages, TRANSCRIBE_LANGUAGES } from '@/shared/languages';
+import { canonicalLanguage, inputLanguage, inputLanguages, languageName, LIVE_LANGUAGES, NEMOTRON_LANGUAGES, OUTPUT_LANGUAGES, searchLanguages, TRANSCRIBE_LANGUAGES } from '@/shared/languages';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
@@ -43,5 +43,10 @@ describe('model language catalogues', () => {
   it('sends the selected language in both Live model configurations', () => {
     expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'yue-Hant-HK').inputAudioTranscription?.languageCodes).toEqual(['yue-Hant-HK']);
     expect(JSON.stringify(liveSpeechConfig(FLASH_LIVE_MODEL, 'verbatim', 'ja'))).toContain('selected input language is ja');
+  });
+  it('supports none option for turning off translation in output languages', () => {
+    expect(canonicalLanguage('none')).toBe('none');
+    expect(languageName('none')).toBe('Không dịch');
+    expect(OUTPUT_LANGUAGES.some(l => l.code === 'none')).toBe(true);
   });
 });

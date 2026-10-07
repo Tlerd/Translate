@@ -148,6 +148,7 @@ export function RecordingWorkspace({
             captions={workspaceCaptions}
             highlightCaptionId={highlightCaptionId}
             speakerCount={speakerCount}
+            targetLanguage={recording.targetLanguage}
             onSpeakerChange={!recordingInProgress && !speakerAssignmentBusy ? handleSpeakerChange : undefined}
           />
         ) : (

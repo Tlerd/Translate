@@ -453,7 +453,7 @@ async function run() {
     await page.locator('#speaker-count').selectOption('8');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
-    await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    await page.getByRole('button', { name: /Hội thoại|Luyện đọc/ }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByRole('button', { name: 'Kết thúc buổi', exact: true }).waitFor();
     const meter = page.getByRole('progressbar', { name: 'Mức âm lượng micro' });
@@ -585,7 +585,7 @@ async function run() {
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Flash settings fit mobile screen');
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
-    await page.getByRole('button', { name: 'Luyện đọc', exact: true }).click();
+    await page.getByRole('button', { name: /Hội thoại|Luyện đọc/ }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
     await page.getByText('Nhận giọng: Gemini 3 Flash Live', { exact: true }).waitFor();
     await waitUntil(() => page.evaluate(() => window.__liveSockets.at(-1)?.setup?.model === 'models/gemini-3.1-flash-live-preview'), 'Flash Live socket setup');

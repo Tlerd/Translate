@@ -1,0 +1,41 @@
+Payments
+Transactions
+Detailed transaction view
+ 
+All transactions
+ 
+Last 3 months
+ 
+Oct 1 – 5, 2026
+Ending balance: ₫717,922
+
+
+Date
+	
+	
+Description
+	
+Amount (VND)
+
+
+Oct 1 – 31, 2026
+	
+Google Cloud
+	
+−₫70,511
+
+
+Oct 1 – 31, 2026
+	Remaining amount available for future use	
+	
+₫796,268
+
+
+Oct 1, 2026
+	
+VAT
+	
+−₫7,835
+
+
+Starting balance: ₫0

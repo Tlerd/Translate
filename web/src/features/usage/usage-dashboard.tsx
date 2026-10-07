@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Database, AlertCircle, RefreshCw } from 'lucide-react';
+import { Database, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchTranslationUsage } from '@/lib/api-client';
 import type { UsageSummary } from '@/shared/usage';
 import {
@@ -13,12 +13,16 @@ import {
 } from './usage-format';
 import styles from './usage-dashboard.module.css';
 
+const PAGE_SIZE = 10;
+
 export function UsageDashboard() {
   const [preset, setPreset] = useState<UsagePreset | 'custom'>('7days');
   const [dateRange, setDateRange] = useState(() => rangePreset('7days'));
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; is503: boolean } | null>(null);
+  const [pageByDay, setPageByDay] = useState(1);
+  const [pageByRecording, setPageByRecording] = useState(1);
 
   const loadUsage = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -45,12 +49,16 @@ export function UsageDashboard() {
 
   const selectPreset = (newPreset: UsagePreset) => {
     setPreset(newPreset);
+    setPageByDay(1);
+    setPageByRecording(1);
     const range = rangePreset(newPreset);
     setDateRange(range);
   };
 
   const onCustomDateChange = (from: string, to: string) => {
     setPreset('custom');
+    setPageByDay(1);
+    setPageByRecording(1);
     setDateRange({ from, to });
   };
 
@@ -58,6 +66,12 @@ export function UsageDashboard() {
     (max, d) => Math.max(max, d.inputTokens + d.outputTokens + d.thinkingTokens),
     0
   ) || 1;
+
+  const totalDayPages = Math.max(1, Math.ceil((summary?.byDay.length ?? 0) / PAGE_SIZE));
+  const pagedByDay = summary?.byDay.slice((pageByDay - 1) * PAGE_SIZE, pageByDay * PAGE_SIZE) ?? [];
+
+  const totalRecordingPages = Math.max(1, Math.ceil((summary?.byRecording.length ?? 0) / PAGE_SIZE));
+  const pagedByRecording = summary?.byRecording.slice((pageByRecording - 1) * PAGE_SIZE, pageByRecording * PAGE_SIZE) ?? [];
 
   return (
     <div className={styles.pageWrapper}>
@@ -203,43 +217,71 @@ export function UsageDashboard() {
             {summary.byDay.length === 0 ? (
               <div className={styles.empty}>Không có yêu cầu dịch nào trong khoảng thời gian này.</div>
             ) : (
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th className={styles.th}>Ngày</th>
-                      <th className={styles.thRight}>Request</th>
-                      <th className={styles.thRight}>Input</th>
-                      <th className={styles.thRight}>Output</th>
-                      <th className={styles.thRight}>Thinking</th>
-                      <th className={styles.thRight}>Tổng Token</th>
-                      <th className={styles.thRight}>Ước tính USD</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.byDay.map((d) => {
-                      const totalTokens = d.inputTokens + d.outputTokens + d.thinkingTokens;
-                      const percent = Math.min(100, Math.round((totalTokens / maxDayTokens) * 100));
-                      return (
-                        <tr key={d.day}>
-                          <td className={styles.td}>
-                            <div>{d.day}</div>
-                            <div className={styles.barTrack}>
-                              <div className={styles.barFill} style={{ width: `${percent}%` }} />
-                            </div>
-                          </td>
-                          <td className={styles.tdRight}>{formatTokens(d.requests)}</td>
-                          <td className={styles.tdRight}>{formatTokens(d.inputTokens)}</td>
-                          <td className={styles.tdRight}>{formatTokens(d.outputTokens)}</td>
-                          <td className={styles.tdRight}>{formatTokens(d.thinkingTokens)}</td>
-                          <td className={styles.tdRight} style={{ fontWeight: 600 }}>{formatTokens(totalTokens)}</td>
-                          <td className={styles.tdRight}>{formatUsd(d.estimatedUsd)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className={styles.tableWrapper}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th className={styles.th}>Ngày</th>
+                        <th className={styles.thRight}>Request</th>
+                        <th className={styles.thRight}>Input</th>
+                        <th className={styles.thRight}>Output</th>
+                        <th className={styles.thRight}>Thinking</th>
+                        <th className={styles.thRight}>Tổng Token</th>
+                        <th className={styles.thRight}>Ước tính USD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedByDay.map((d) => {
+                        const totalTokens = d.inputTokens + d.outputTokens + d.thinkingTokens;
+                        const percent = Math.min(100, Math.round((totalTokens / maxDayTokens) * 100));
+                        return (
+                          <tr key={d.day}>
+                            <td className={styles.td}>
+                              <div>{d.day}</div>
+                              <div className={styles.barTrack}>
+                                <div className={styles.barFill} style={{ width: `${percent}%` }} />
+                              </div>
+                            </td>
+                            <td className={styles.tdRight}>{formatTokens(d.requests)}</td>
+                            <td className={styles.tdRight}>{formatTokens(d.inputTokens)}</td>
+                            <td className={styles.tdRight}>{formatTokens(d.outputTokens)}</td>
+                            <td className={styles.tdRight}>{formatTokens(d.thinkingTokens)}</td>
+                            <td className={styles.tdRight} style={{ fontWeight: 600 }}>{formatTokens(totalTokens)}</td>
+                            <td className={styles.tdRight}>{formatUsd(d.estimatedUsd)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalDayPages > 1 && (
+                  <div className={styles.pagination}>
+                    <span className={styles.pageInfo}>
+                      Trang {pageByDay} / {totalDayPages} ({summary.byDay.length} ngày)
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.pageBtn}
+                      onClick={() => setPageByDay((p) => Math.max(1, p - 1))}
+                      disabled={pageByDay <= 1}
+                      aria-label="Trang trước"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.pageBtn}
+                      onClick={() => setPageByDay((p) => Math.min(totalDayPages, p + 1))}
+                      disabled={pageByDay >= totalDayPages}
+                      aria-label="Trang sau"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -337,49 +379,77 @@ export function UsageDashboard() {
             )}
           </section>
 
-          {/* Table by Recording (Top 50) */}
+          {/* Table by Recording */}
           <section className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Theo buổi thu (Top 50)</h2>
+              <h2 className={styles.sectionTitle}>Theo buổi thu</h2>
               <span className={styles.sectionDesc}>Sắp xếp theo tổng lượng token</span>
             </div>
 
             {summary.byRecording.length === 0 ? (
               <div className={styles.empty}>Chưa có buổi thu nào phát sinh yêu cầu dịch.</div>
             ) : (
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th className={styles.th}>Buổi thu</th>
-                      <th className={styles.thRight}>Request</th>
-                      <th className={styles.thRight}>Input</th>
-                      <th className={styles.thRight}>Output</th>
-                      <th className={styles.thRight}>Tổng Token</th>
-                      <th className={styles.thRight}>Ước tính USD</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.byRecording.map((r) => {
-                      const totalTokens = r.inputTokens + r.outputTokens + r.thinkingTokens;
-                      return (
-                        <tr key={r.recordingId}>
-                          <td className={styles.td}>
-                            <Link href={`/recordings/${r.recordingId}`} className={styles.link}>
-                              #{r.recordingId}
-                            </Link>
-                          </td>
-                          <td className={styles.tdRight}>{formatTokens(r.requests)}</td>
-                          <td className={styles.tdRight}>{formatTokens(r.inputTokens)}</td>
-                          <td className={styles.tdRight}>{formatTokens(r.outputTokens)}</td>
-                          <td className={styles.tdRight} style={{ fontWeight: 600 }}>{formatTokens(totalTokens)}</td>
-                          <td className={styles.tdRight}>{formatUsd(r.estimatedUsd)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className={styles.tableWrapper}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th className={styles.th}>Buổi thu</th>
+                        <th className={styles.thRight}>Request</th>
+                        <th className={styles.thRight}>Input</th>
+                        <th className={styles.thRight}>Output</th>
+                        <th className={styles.thRight}>Tổng Token</th>
+                        <th className={styles.thRight}>Ước tính USD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedByRecording.map((r) => {
+                        const totalTokens = r.inputTokens + r.outputTokens + r.thinkingTokens;
+                        return (
+                          <tr key={r.recordingId}>
+                            <td className={styles.td}>
+                              <Link href={`/recordings/${r.recordingId}`} className={styles.link}>
+                                #{r.recordingId}
+                              </Link>
+                            </td>
+                            <td className={styles.tdRight}>{formatTokens(r.requests)}</td>
+                            <td className={styles.tdRight}>{formatTokens(r.inputTokens)}</td>
+                            <td className={styles.tdRight}>{formatTokens(r.outputTokens)}</td>
+                            <td className={styles.tdRight} style={{ fontWeight: 600 }}>{formatTokens(totalTokens)}</td>
+                            <td className={styles.tdRight}>{formatUsd(r.estimatedUsd)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalRecordingPages > 1 && (
+                  <div className={styles.pagination}>
+                    <span className={styles.pageInfo}>
+                      Trang {pageByRecording} / {totalRecordingPages} ({summary.byRecording.length} buổi)
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.pageBtn}
+                      onClick={() => setPageByRecording((p) => Math.max(1, p - 1))}
+                      disabled={pageByRecording <= 1}
+                      aria-label="Trang trước"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.pageBtn}
+                      onClick={() => setPageByRecording((p) => Math.min(totalRecordingPages, p + 1))}
+                      disabled={pageByRecording >= totalRecordingPages}
+                      aria-label="Trang sau"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
 

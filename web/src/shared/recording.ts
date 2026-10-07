@@ -26,6 +26,7 @@ export interface RecordingItem {
   audioState: AudioState;
   audioDeletedAt?: string;
   audioMimeType?: string;
+  folder?: string;
   config: {
     translationModelKey: string;
     summaryModelKey?: string;

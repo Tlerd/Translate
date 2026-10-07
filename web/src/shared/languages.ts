@@ -15,8 +15,10 @@ const overrides: Record<string, string> = {
   'cmn-Hans-CN': 'Tiếng Trung phổ thông (giản thể, Trung Quốc)',
   'yue-Hant-HK': 'Tiếng Quảng Đông (phồn thể, Hồng Kông)',
   'es-419': 'Tiếng Tây Ban Nha (Mỹ Latinh)',
+  none: 'Không dịch',
 };
 export function canonicalLanguage(value: string): string | null {
+  if (value === 'none') return 'none';
   if (!/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(value)) return null;
   try {
     const canonical = Intl.getCanonicalLocales(value)[0];
@@ -33,11 +35,15 @@ function catalogue(codes: string[]): LanguageOption[] {
     .map(code => ({ code, name: languageName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
+export const PRIMARY_INPUT_CODES = ['vi-VN', 'ja-JP', 'en-US'] as const;
 export const TRANSCRIBE_LANGUAGES = catalogue(transcribeCodes);
 export const LIVE_LANGUAGES = catalogue(liveCodes);
 export const NEMOTRON_LANGUAGES = catalogue(NEMOTRON_LOCALES);
 export const SONIOX_LANGUAGES = catalogue(SONIOX_LOCALES);
-export const OUTPUT_LANGUAGES = catalogue([...transcribeCodes, ...liveCodes]);
+export const OUTPUT_LANGUAGES: LanguageOption[] = [
+  { code: 'none', name: 'Không dịch' },
+  ...catalogue([...transcribeCodes, ...liveCodes]),
+];
 export function inputLanguages(provider: SpeechProvider): LanguageOption[] {
   if (provider === 'soniox') return SONIOX_LANGUAGES;
   if (provider === 'nemotron') return NEMOTRON_LANGUAGES;

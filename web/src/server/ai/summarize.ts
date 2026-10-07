@@ -27,7 +27,7 @@ export async function executeSummarize(
     );
   }
 
-  const systemInstruction = buildSummarySystemPrompt(req.targetLanguage);
+  const systemInstruction = buildSummarySystemPrompt(req.targetLanguage, req.customPrompt);
   const userPayload = buildSummaryUserPayload(req.captions);
 
   const params = {

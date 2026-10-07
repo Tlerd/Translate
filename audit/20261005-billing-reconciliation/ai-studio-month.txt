@@ -1,0 +1,140 @@
+Browser tab: 1201112693, Title: "Spend | Google AI Studio", URL: "https://aistudio.google.com/spend?project=gen-lang-client-0243678801".
+0 AXWebArea Spend | Google AI Studio, URL: aistudio.google.com/spend?project=gen-lang-client-0243678801
+	1 container
+		2 button Skip to main content
+		3 container
+			4 link Description: Google AI Studio, Value: aistudio.google.com/prompts/new_chat
+			5 button Collapse navigation menu
+			6 link Description: Dashboard, Value: aistudio.google.com/prompts/new_chat
+			7 text PROJECT
+			8 content list
+				9 link Description: API Keys, Value: aistudio.google.com/api-keys
+				10 link Description: Projects, Value: aistudio.google.com/projects
+			11 text USAGE & BILLING
+			12 content list
+				13 link Description: Usage, Value: aistudio.google.com/usage
+				14 link Description: Rate Limit, Value: aistudio.google.com/rate-limit
+				15 link Description: Spend, Value: aistudio.google.com/spend
+				16 link Description: Billing, Value: aistudio.google.com/billing
+			17 text OBSERVE
+			18 content list
+				19 link Description: Logs and Datasets, Value: aistudio.google.com/logs
+			20 content list
+				21 link Description: Changelog, Value: aistudio.google.com/docs/changelog
+			22 container
+				23 button Redeem $50 in credits
+				24 pop up button (collapsed) Description: What's new, Secondary Actions: Expand
+				25 pop up button (collapsed) Description: Settings, Secondary Actions: Expand
+				26 button Search (Ctrl /)
+				27 button Get API key
+				28 button Google Account: 02.đức anh nguyễn trần (nguyentranducanh12345@gmail.com)
+					29 image 02.đức anh nguyễn trần
+					30 text nguyentranducanh12345@gmail.com
+					31 text PRO
+		32 container
+			33 heading Gemini API Spend, Value: 2
+				34 text Gemini API Spend
+			35 text Tier 1
+			36 button Learn more
+			37 text Project
+			38 container
+				39 combo box (collapsed) Project, Value: Total Project, ID: dashboard-select-input, Secondary Actions: Expand
+					40 container
+						41 text Total Project
+						42 text expand_more
+			43 container Import projects
+			44 container
+				45 text Monthly spend cap Experimental
+			46 button Set or edit spend cap
+			47 text ₫70,511 / ₫100,000
+			48 container
+				49 text Overages may occur during ~10 minute latency. Resets on the first day of each month (PST). 
+				50 link Description: Learn more, Value: aistudio.google.com/docs/billing#project-spend-caps
+			51 container
+				52 container
+					53 combo box (collapsed) Value: This Month, ID: time-range-select-input, Secondary Actions: Expand
+						54 container
+							55 text This Month
+							56 text expand_more
+				57 container
+					58 combo box (collapsed) All API Keys, ID: dashboard-select-input, Secondary Actions: Expand
+						59 container
+							60 text All API Keys
+							61 text expand_more
+				62 container
+					63 combo box (collapsed) All Models, ID: dashboard-select-input, Secondary Actions: Expand
+						64 container
+							65 text All Models
+							66 text expand_more
+				67 container sdui-13-0
+					68 container sdui-goog_1345128183
+						69 heading Your Total Cost, Value: 3, ID: sdui-goog_1345128193
+							70 text Your Total Cost
+						71 text October 1 - 5, 2026
+					72 container sdui-goog_1345128184
+						73 container sdui-goog_1345128188
+							74 text Cost
+							75 text ₫53.5K
+						76 container sdui-goog_1345128189
+							77 text -
+						78 container sdui-goog_1345128190
+							79 text Savings
+							80 text ₫0.00
+						81 container sdui-goog_1345128191
+							82 text =
+						83 container sdui-goog_1345128192
+							84 text Total cost
+							85 text ₫53.5K
+					86 container sdui-goog_1345128185
+						87 container
+							88 text This chart is described by one or more grids. A grid row represents a time series. A grid column corresponds to a timestamp. By default, charts hide most columns. To display the hidden columns next to the activated column, use the Read previous item (up arrow) key until you access the column header, and then use the Activate button (enter) key.
+							89 text Data values on this chart range from a minimum of 0 to a maximum of 27.022k.
+							90 container
+								91 text Data in this chart spans a time range from Thursday, October 1, 2026 at 12:00:00 AM Pacific Daylight Time to Tuesday, October 6, 2026 at 12:00:00 AM Pacific Daylight Time.
+								92 text Unpinning the X axis cursor allows the cursor to follow the mouse while hovering over the chart. The X axis cursor will always be pinned while using keyboard navigation to indicate that the values reflected in the tooltip or the legend are associated with the position of the X axis cursor.
+							93 container
+								94 button (expanded) Description: Populate data for table, "Bar 1", on chart, "Untitled", Secondary Actions: Collapse
+								95 table Description: Data for chart, Untitled, including time series, Total cost, ID: ac-accessibility-grid-2-table
+									96 row Grid for data, "Bar 1", on chart, "Untitled". Navigate this grid using arrow keys. Page Up and Page Down moves focus up and down by 10 rows. Home and End moves focus to the first and last cell in the current row. Ctrl+Home and Ctrl+End moves focus to the first and last cell of the grid. Audio Oct 2, 12:00 AM Oct 3, 12:00 AM Oct 4, 12:00 AM Oct 5, 12:00 AM Oct 6, 12:00 AM
+										97 cell Grid for data, "Bar 1", on chart, "Untitled". Navigate this grid using arrow keys. Page Up and Page Down moves focus up and down by 10 rows. Home and End moves focus to the first and last cell in the current row. Ctrl+Home and Ctrl+End moves focus to the first and last cell of the grid.
+											98 text Grid for data, "Bar 1", on chart, "Untitled". Navigate this grid using arrow keys. Page Up and Page Down moves focus up and down by 10 rows. Home and End moves focus to the first and last cell in the current row. Ctrl+Home and Ctrl+End moves focus to the first and last cell of the grid.
+										99 cell Audio
+											100 text Audio
+										101 cell
+											102 text Oct 2, 12:00 AM
+										103 cell
+											104 text Oct 3, 12:00 AM
+										105 cell
+											106 text Oct 4, 12:00 AM
+										107 cell
+											108 text Oct 5, 12:00 AM
+										109 cell
+											110 text Oct 6, 12:00 AM
+									111 row Total cost Play audio overview for Total cost 27.022k 10.324k 1.367k 14.763k 0
+										112 cell
+											113 text Total cost
+										114 cell
+											115 button Play audio overview for Total cost, ID: ac-accessibility-grid-2-audio-0
+										116 cell
+											117 button 27.022k, ID: ac-accessibility-grid-2-value-0-0
+										118 cell
+											119 button 10.324k, ID: ac-accessibility-grid-2-value-0-1
+										120 cell
+											121 button 1.367k, ID: ac-accessibility-grid-2-value-0-2
+										122 cell
+											123 button 14.763k, ID: ac-accessibility-grid-2-value-0-3
+										124 cell
+											125 button 0, ID: ac-accessibility-grid-2-value-0-4
+								126 text If subsequent columns are omitted, activating a column header will reveal all subsequent columns up to the next revealed column.
+								127 text If subsequent rows are omitted, activating a row header will reveal all subsequent rows up to the next revealed row.
+								128 text Activating a grid cell will open the tooltip at this data point.
+								129 text Table populated. A 1 × 5 (rows × columns) dataset is now available.
+						130 content list Legend for chart, ""
+							131 button Total cost
+								132 text Total cost
+						133 text Name and value for each data series. Values listed are usually the most recent values for the data series. When using keyboard navigation on the chart, values listed are the values as of the focused time. Up and down arrow keys to navigate entries.
+				134 text Cost information may take up to 24 hours to update.
+			135 text Billing total reflects only Gemini API usage and does not include usage of other Google Cloud products or Google AI Studio. 
+			136 link Description: Open in Cloud Console, Value: console.cloud.google.com/billing, ID: open-in-cloud-console
+
+The focused UI element is 39 combo box (collapsed) Project, Value: Total Project, ID: dashboard-select-input, Secondary Actions: Expand

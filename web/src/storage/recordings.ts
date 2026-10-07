@@ -504,3 +504,30 @@ export async function updateCaptionSpeaker(
     return updated;
   });
 }
+
+export async function updateRecordingFolder(
+  id: string,
+  folder?: string | null
+): Promise<void> {
+  const db = getDb();
+  await db.recordings.update(id, { folder: folder ? folder.trim() : undefined });
+}
+
+export async function getCustomFolders(): Promise<string[]> {
+  const db = getDb();
+  const setting = await db.settings.get('custom_folders');
+  if (!setting?.value) return [];
+  try {
+    const list = JSON.parse(setting.value);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCustomFolders(folders: string[]): Promise<void> {
+  const db = getDb();
+  const clean = [...new Set(folders.map(f => f.trim()).filter(Boolean))];
+  await db.settings.put({ key: 'custom_folders', value: JSON.stringify(clean) });
+}
+

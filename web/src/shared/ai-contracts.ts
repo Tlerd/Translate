@@ -74,6 +74,7 @@ export const SummarizeRequestSchema = z.object({
   thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   modelKey: z.string().optional(),
   translationModelKey: z.string().optional(),
+  customPrompt: z.string().optional(),
   captions: z.array(CaptionInputSchema).min(1, 'Cần ít nhất một caption để tóm tắt'),
 });
 

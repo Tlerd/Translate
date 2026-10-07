@@ -10,10 +10,11 @@ interface TranscriptPaneProps {
   captions: CaptionItem[];
   highlightCaptionId?: number | null;
   speakerCount?: SpeakerCount;
+  targetLanguage?: string;
   onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
 }
 
-export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, onSpeakerChange }: TranscriptPaneProps) {
+export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange }: TranscriptPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -119,7 +120,7 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
               {isStreaming && (
                 <span className={styles.streamingBadge}>
                   <span className={styles.streamingDot} />
-                  {cap.isFinal ? 'Đang dịch...' : 'Đang nghe...'}
+                  {cap.isFinal && targetLanguage !== 'none' ? 'Đang dịch...' : 'Đang nghe...'}
                 </span>
               )}
             </div>
@@ -144,17 +145,19 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
             ) : null}
 
             {/* Translation */}
-            <div
-              className={styles.captionTranslation}
-              data-testid="caption-translation"
-            >
-              {cap.translation || (isStreaming ? '...' : '')}
-              {cap.translation && cap.targetSourceRevision !== cap.revision && (
-                <span style={{ display: 'block', marginTop: 5, color: 'var(--warning)', fontSize: '0.78rem' }}>
-                  Bản dịch cũ — lời gốc đã được chỉnh sửa
-                </span>
-              )}
-            </div>
+            {targetLanguage !== 'none' && (cap.translation || isStreaming) && (
+              <div
+                className={styles.captionTranslation}
+                data-testid="caption-translation"
+              >
+                {cap.translation || (isStreaming ? '...' : '')}
+                {cap.translation && cap.targetSourceRevision !== cap.revision && (
+                  <span style={{ display: 'block', marginTop: 5, color: 'var(--warning)', fontSize: '0.78rem' }}>
+                    Bản dịch cũ — lời gốc đã được chỉnh sửa
+                  </span>
+                )}
+              </div>
+            )}
 
             {cap.error && (
               <div style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>

@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Mic, Square, Volume2, BookOpen, Layers, Settings, Pause, Play, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Mic, Square, Volume2, BookOpen, MessageSquare, Settings, Pause, Play, AlertTriangle, ArrowLeftRight, Info } from 'lucide-react';
 import { useRecording } from './recording-context';
 import styles from './recording-ui.module.css';
 import { LanguageSelect } from './language-select';
 import languageStyles from './language-select.module.css';
-import { inputLanguages, inputLanguage, languageName, OUTPUT_LANGUAGES } from '@/shared/languages';
+import { inputLanguages, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/languages';
 import { speechProviderName } from '@/shared/transcription';
 
 interface RecorderToolbarProps {
@@ -25,11 +25,13 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
     resumeApi,
     switchMode,
     setLanguages,
+    swapLanguages,
   } = useRecording();
 
   const [pendingAction, setPendingAction] = useState<'starting' | 'stopping' | 'pausing' | 'resuming' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const isRecording = state.state === 'recording';
 
@@ -108,21 +110,42 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
 
   return (
     <div className={`${styles.toolbar} ${isRecording ? styles.recordingToolbar : ''}`}>
-      <div className={`${languageStyles.row} ${isRecording ? languageStyles.recordingControls : ''}`}>
-        <LanguageSelect label="Ngôn ngữ đầu vào" value={inputLanguage(state.sourceLanguage, state.speechProvider) ?? state.sourceLanguage}
-          options={inputLanguages(state.speechProvider)} disabled={isRecording || pendingAction !== null}
-          onChange={code => setLanguages(code, state.targetLanguage)} />
-        <button type="button" className={languageStyles.swap} aria-label="Đổi chiều ngôn ngữ" title="Đổi chiều ngôn ngữ"
-          disabled={isRecording || pendingAction !== null || !inputLanguage(state.targetLanguage, state.speechProvider)}
-          onClick={() => setLanguages(state.targetLanguage, state.sourceLanguage)}><ArrowLeftRight size={20} /></button>
-        <LanguageSelect label="Ngôn ngữ đầu ra" value={state.targetLanguage} options={OUTPUT_LANGUAGES}
-          disabled={isRecording || pendingAction !== null} onChange={code => setLanguages(state.sourceLanguage, code)} />
+      <div className={languageStyles.row}>
+        <LanguageSelect
+          label="Ngôn ngữ đầu vào"
+          value={inputLanguage(state.sourceLanguage, state.speechProvider) ?? state.sourceLanguage}
+          options={inputLanguages(state.speechProvider)}
+          disabled={isRecording || pendingAction !== null}
+          onChange={code => setLanguages(code, state.targetLanguage)}
+        />
+        <button
+          type="button"
+          className={languageStyles.swap}
+          aria-label="Đổi chiều ngôn ngữ"
+          title={isRecording ? "Hoán đổi ngôn ngữ đầu vào và đầu ra" : "Đổi chiều ngôn ngữ"}
+          disabled={
+            pendingAction !== null ||
+            state.targetLanguage === 'none' ||
+            !inputLanguage(state.targetLanguage, state.speechProvider)
+          }
+          onClick={async () => {
+            if (isRecording) {
+              await swapLanguages();
+            } else {
+              setLanguages(state.targetLanguage, state.sourceLanguage);
+            }
+          }}
+        >
+          <ArrowLeftRight size={18} />
+        </button>
+        <LanguageSelect
+          label="Ngôn ngữ đầu ra"
+          value={state.targetLanguage}
+          options={OUTPUT_LANGUAGES}
+          disabled={pendingAction !== null}
+          onChange={code => setLanguages(state.sourceLanguage, code)}
+        />
       </div>
-      {isRecording && <div className={languageStyles.recordingPair} aria-label="Ngôn ngữ buổi đang thu">
-        <div><small>Ngôn ngữ đầu vào</small><span title={state.sourceLanguage}>{languageName(state.sourceLanguage)}</span></div>
-        <ArrowLeftRight size={16} aria-hidden="true" />
-        <div><small>Ngôn ngữ đầu ra</small><span title={state.targetLanguage}>{languageName(state.targetLanguage)}</span></div>
-      </div>}
       {/* Primary Clean Action Row */}
       <div className={styles.primaryActionRow}>
         <div className={styles.primaryActionsLeft}>
@@ -193,8 +216,8 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               onClick={() => switchMode('readingPractice')}
               className={`${styles.modeSwitchBtn} ${state.mode === 'readingPractice' ? styles.modeSwitchBtnActive : ''}`}
             >
-              <Layers size={14} />
-              <span>Luyện đọc</span>
+              <MessageSquare size={14} />
+              <span>Hội thoại</span>
             </button>
           </div>
         </div>
@@ -240,6 +263,20 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               ? 'Đang thu'
               : 'Sẵn sàng'}
           </div>
+
+          {/* Toggle Diagnostics Button */}
+          {isRecording && (
+            <button
+              type="button"
+              onClick={() => setShowDiagnostics((prev) => !prev)}
+              className={styles.diagToggleBtn}
+              title={showDiagnostics ? 'Ẩn thông số kỹ thuật' : 'Xem thông số kỹ thuật'}
+              aria-pressed={showDiagnostics}
+            >
+              <Info size={13} />
+              <span>{showDiagnostics ? 'Ẩn thông số' : 'Thông số'}</span>
+            </button>
+          )}
 
           {/* Link to AI Settings */}
           <Link
@@ -301,7 +338,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
       )}
 
       {/* Audio Diagnostics during recording */}
-      {isRecording && (
+      {isRecording && showDiagnostics && (
         <div className={styles.audioDiagnostics} aria-live="polite" aria-label="Chẩn đoán âm thanh và nhận giọng">
           <span>
             Nhận giọng:{' '}

@@ -17,6 +17,9 @@ import {
   getSummary,
   loadSettings,
   saveSettings,
+  updateRecordingFolder,
+  getCustomFolders,
+  saveCustomFolders,
 } from '@/storage/recordings';
 import {
   exportRecordingData,
@@ -74,6 +77,30 @@ describe('Storage Layer', () => {
     await renameRecording('rec_rename', 'Tên mới đã sửa');
     const updated = await getRecording('rec_rename');
     expect(updated?.title).toBe('Tên mới đã sửa');
+  });
+
+  it('manages custom folders and moves recordings into folders', async () => {
+    await saveCustomFolders(['Tiếng Nhật N3', 'Tiếng Anh Giao Tiếp']);
+    const folders = await getCustomFolders();
+    expect(folders).toEqual(['Tiếng Nhật N3', 'Tiếng Anh Giao Tiếp']);
+
+    const rec = await createRecording({
+      id: 'rec_folder_test',
+      title: 'Bài 1',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
+    });
+    expect(rec.folder).toBeUndefined();
+
+    await updateRecordingFolder('rec_folder_test', 'Tiếng Nhật N3');
+    const updated = await getRecording('rec_folder_test');
+    expect(updated?.folder).toBe('Tiếng Nhật N3');
+
+    await updateRecordingFolder('rec_folder_test', undefined);
+    const cleared = await getRecording('rec_folder_test');
+    expect(cleared?.folder).toBeUndefined();
   });
 
   it('stores and retrieves audio chunks and stitches blob', async () => {

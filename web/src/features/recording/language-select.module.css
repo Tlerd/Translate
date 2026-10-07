@@ -1,18 +1,21 @@
-.row { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 12px; }
-.field { min-width: 0; display: grid; gap: 5px; }
+.row { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; width: 100%; }
+.field { min-width: 0; display: grid; gap: 3px; }
 .labelRow { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.labelRow button { color: var(--accent); padding: 3px; }
-.field label { font-size: .85rem; font-weight: 600; }
-.field label span, .field small { color: var(--text-muted); font-size: .75rem; font-weight: 400; }
-.field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); }
-.swap { padding: 9px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--accent); }
+.labelRow button { color: var(--accent); padding: 2px; }
+.field label { font-size: .78rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field small { color: var(--text-muted); font-size: .7rem; font-weight: 400; }
+.field input, .field select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: .82rem; outline: none; }
+.field select:disabled { opacity: 0.75; cursor: not-allowed; background: var(--bg-secondary); }
+.swap { display: inline-flex; align-items: center; justify-content: center; padding: 7px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--accent); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0; }
+.swap:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); transform: scale(1.05); }
+.swap:active:not(:disabled) { transform: scale(0.95); }
+.swap:disabled { opacity: 0.4; cursor: not-allowed; }
 .recordingPair { display: none; }
-@media (max-width: 600px) { .row { gap: 6px; } .field label { font-size: .75rem; } .field select { padding: 7px 4px; font-size: .8rem; } .swap { padding: 6px; } }
-@media (max-width: 480px) {
-  .recordingControls { display: none; }
-  .recordingPair { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: center; }
-  .recordingPair > div { display: grid; gap: 3px; min-width: 0; }
-  .recordingPair small { font-size: .68rem; color: var(--text-muted); }
-  .recordingPair span { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .recordingPair svg { color: var(--accent); }
+@media (max-width: 600px) {
+  .row { gap: 6px; }
+  .field label { font-size: .72rem; }
+  .field small { display: none; }
+  .field select { padding: 5px 6px; font-size: .78rem; }
+  .swap { padding: 5px; }
 }
+

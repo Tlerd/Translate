@@ -34,6 +34,11 @@ export function SummaryPanel({
   const [modelData, setModelData] = useState<ModelsResponse | null>(null);
   const [thinkingLevel, setThinkingLevel] = useState('auto');
   const [selectedSummaryModelKey, setSelectedSummaryModelKey] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [isAuthoring, setIsAuthoring] = useState(false);
+  const [authorTitle, setAuthorTitle] = useState('');
+  const [authorOverview, setAuthorOverview] = useState('');
+  const [authorBulletsText, setAuthorBulletsText] = useState('');
 
   useEffect(() => {
     fetchModels()
@@ -52,6 +57,51 @@ export function SummaryPanel({
     });
   const selectedSummaryModel: ModelInfo | undefined = summaryModels.find((model) => model.key === selectedSummaryModelKey);
   const summaryThinkingLevels = selectedSummaryModel?.thinkingLevels ?? [];
+
+  const handleStartAuthoring = () => {
+    setAuthorTitle(summary?.title || 'Tóm tắt buổi học');
+    setAuthorOverview(summary?.overview || '');
+    const bullets = (summary?.sections ?? []).flatMap(s => s.bullets).join('\n');
+    setAuthorBulletsText(bullets || '');
+    setIsAuthoring(true);
+  };
+
+  const handleSaveAuthoring = async () => {
+    if (!authorTitle.trim()) {
+      alert('Vui lòng nhập tiêu đề tóm tắt.');
+      return;
+    }
+    try {
+      const sourceHash = await computeCaptionSourceHash(captions);
+      const bullets = authorBulletsText
+        .split('\n')
+        .map(b => b.trim())
+        .filter(Boolean);
+
+      const manualSummary: SummaryItem = {
+        id: `sum_${recordingId}`,
+        recordingId,
+        sourceHash,
+        preset: 'default',
+        modelKey: 'Tự biên soạn',
+        title: authorTitle.trim(),
+        overview: authorOverview.trim(),
+        sections: [
+          {
+            heading: 'Nội dung cốt lõi',
+            bullets: bullets.length ? bullets : ['Đã lưu tóm tắt theo nội dung tự nhập.'],
+            captionIds: [],
+          },
+        ],
+        generatedAt: new Date().toISOString(),
+      };
+      await saveSummary(manualSummary);
+      onSummaryGenerated(manualSummary);
+      setIsAuthoring(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const handleGenerateSummary = async () => {
     if (captions.length === 0) {
@@ -74,6 +124,7 @@ export function SummaryPanel({
         thinkingLevel: thinkingLevel === 'auto' ? undefined : (thinkingLevel as 'minimal' | 'low' | 'medium' | 'high'),
         modelKey: selectedSummaryModelKey || modelData?.defaults.summarize,
         translationModelKey,
+        customPrompt: customPrompt.trim() || undefined,
         captions: captions.map((c) => ({
           id: c.id,
           startMs: c.startMs,
@@ -115,12 +166,12 @@ export function SummaryPanel({
             <h3>Tóm Tắt Buổi Học</h3>
           </div>
           <span className={styles.presetBadge}>
-            Kiểu: Mặc định
+            Kiểu: {summary?.modelKey === 'Tự biên soạn' ? 'Tự soạn' : 'Mặc định'}
           </span>
         </div>
 
         <div className={styles.headerControls}>
-          {summaryModels.length > 0 && (
+          {summaryModels.length > 0 && !isAuthoring && (
             <label className={styles.controlField}>
               <span>Model tóm tắt</span>
               <select
@@ -143,7 +194,7 @@ export function SummaryPanel({
             </label>
           )}
 
-          {summaryThinkingLevels.length > 0 && (
+          {summaryThinkingLevels.length > 0 && !isAuthoring && (
             <label className={styles.controlField}>
               <span>Mức suy luận</span>
               <select
@@ -163,25 +214,112 @@ export function SummaryPanel({
             </label>
           )}
 
-          <button
-            onClick={handleGenerateSummary}
-            disabled={loading || captions.length === 0}
-            className={styles.summaryActionBtn}
-          >
-            {loading ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {!isAuthoring ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
-                <span>Đang tóm tắt...</span>
+                <button
+                  type="button"
+                  onClick={handleStartAuthoring}
+                  disabled={loading}
+                  className={styles.authoringBtn}
+                  title="Tự nhập hoặc chỉnh sửa tóm tắt theo ý bạn"
+                >
+                  <span>{summary ? 'Chỉnh sửa tóm tắt' : 'Tự soạn tóm tắt'}</span>
+                </button>
+
+                <button
+                  onClick={handleGenerateSummary}
+                  disabled={loading || captions.length === 0}
+                  className={styles.summaryActionBtn}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Đang tóm tắt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      <span>{summaryIsStale ? 'Tạo lại' : summary ? 'Tóm tắt lại' : 'Tóm tắt AI'}</span>
+                    </>
+                  )}
+                </button>
               </>
             ) : (
               <>
-                <Sparkles size={16} />
-                <span>{summaryIsStale ? 'Tạo lại' : summary ? 'Tóm tắt lại' : 'Tóm tắt'}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsAuthoring(false)}
+                  className={styles.authoringCancelBtn}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAuthoring}
+                  className={styles.summaryActionBtn}
+                >
+                  Lưu tóm tắt
+                </button>
               </>
             )}
-          </button>
+          </div>
         </div>
       </div>
+
+      {/* Custom Prompt input for AI summary */}
+      {!isAuthoring && (
+        <div className={styles.customPromptContainer}>
+          <label htmlFor="custom-summary-prompt" className={styles.customPromptLabel}>
+            <span>Yêu cầu tóm tắt riêng (tùy chọn theo ý bạn):</span>
+          </label>
+          <input
+            id="custom-summary-prompt"
+            type="text"
+            className={styles.customPromptInput}
+            placeholder="Ví dụ: Tập trung vào từ vựng mới, tóm tắt dưới 5 gạch đầu dòng, các bài tập..."
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+      )}
+
+      {/* Manual Authoring Form */}
+      {isAuthoring && (
+        <div className={styles.authoringCard}>
+          <div className={styles.authoringField}>
+            <label>Tiêu đề tóm tắt</label>
+            <input
+              type="text"
+              value={authorTitle}
+              onChange={(e) => setAuthorTitle(e.target.value)}
+              placeholder="Nhập tiêu đề tóm tắt..."
+              className={styles.authoringInput}
+            />
+          </div>
+          <div className={styles.authoringField}>
+            <label>Tổng quan (khái quát nội dung)</label>
+            <textarea
+              rows={3}
+              value={authorOverview}
+              onChange={(e) => setAuthorOverview(e.target.value)}
+              placeholder="Viết đoạn tổng quan ngắn gọn theo ý của bạn..."
+              className={styles.authoringTextarea}
+            />
+          </div>
+          <div className={styles.authoringField}>
+            <label>Các ý chính / Ghi chú (mỗi dòng một gạch đầu dòng)</label>
+            <textarea
+              rows={6}
+              value={authorBulletsText}
+              onChange={(e) => setAuthorBulletsText(e.target.value)}
+              placeholder="Nhập các điểm mấu chốt, mỗi dòng tương ứng một ý..."
+              className={styles.authoringTextarea}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div

@@ -1,0 +1,41 @@
+{
+  "mode": "count",
+  "model": "gemini-3.1-flash-lite",
+  "thinkingLevel": "minimal",
+  "generatedAt": "2026-10-05T16:26:00.293Z",
+  "pricingAsOf": "2026-10-05",
+  "pricingSource": "https://ai.google.dev/gemini-api/docs/pricing",
+  "reviewStatus": "draft rubric; human Japanese/Vietnamese review required before claiming quality or changing defaults",
+  "limits": {
+    "limit": 3,
+    "historyLimits": [
+      0,
+      2,
+      6
+    ],
+    "maxRequests": 27,
+    "maxUsd": 0.1
+  },
+  "providerCalls": 0,
+  "estimatedSpent": 0,
+  "unknownCost": false,
+  "stopReason": "missing GOOGLE_API_KEY; zero provider calls",
+  "variants": [
+    {
+      "name": "original-json",
+      "ref": "d16d22f^",
+      "sha256": "19a5bf233af06eca7c455d7b352834efff0214c2b0d94c09de9fb1819af73b4f"
+    },
+    {
+      "name": "lean-v1",
+      "ref": "9690936",
+      "sha256": "d8613a93af85862a5a53d0f9f9818251231450cadb21da6e3dd6cc584c04919a"
+    },
+    {
+      "name": "lean-fidelity-v2",
+      "ref": "working-tree",
+      "sha256": "b21c82a9feef082362c1bdb2e44de03c57f98918f1b6aee65e4931daa35237ad"
+    }
+  ],
+  "rows": []
+}

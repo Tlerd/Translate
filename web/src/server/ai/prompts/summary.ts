@@ -1,9 +1,12 @@
 import 'server-only';
 import type { CaptionItem } from '@/shared/recording';
 
-export function buildSummarySystemPrompt(targetLanguage: string): string {
+export function buildSummarySystemPrompt(targetLanguage: string, customPrompt?: string): string {
+  const customSection = customPrompt?.trim()
+    ? `\n\nUSER CUSTOM FOCUS & INSTRUCTIONS:\nFocus on the following user preference while generating the summary: "${customPrompt.trim()}".`
+    : '';
   return `You are an expert summarizer for language classes and conversation recordings.
-Create a faithful, structured summary in ${targetLanguage === 'vi' ? 'Vietnamese' : targetLanguage} based STRICTLY on the provided transcript captions.
+Create a faithful, structured summary in ${targetLanguage === 'vi' ? 'Vietnamese' : targetLanguage} based STRICTLY on the provided transcript captions.${customSection}
 Do not add outside facts or extrapolate unmentioned details.
 
 You must respond with valid JSON ONLY, strictly following this JSON schema:

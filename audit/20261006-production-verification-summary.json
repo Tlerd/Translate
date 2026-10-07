@@ -1,0 +1,137 @@
+{
+  "commit": "a509e901027d471622a9d39959bc45810b20f380",
+  "promptVersion": "lean-fidelity-v6",
+  "productionUrl": "https://translate-ruby-phi.vercel.app",
+  "model": "google:gemini-3.1-flash-lite",
+  "thinking": "minimal",
+  "byHistory": [
+    {
+      "historyLimit": 0,
+      "requests": 48,
+      "inputTokens": 8394,
+      "outputTokens": 509,
+      "estimatedReportedTokenUsd": 0.002862,
+      "averageDurationMs": 951
+    },
+    {
+      "historyLimit": 2,
+      "requests": 48,
+      "inputTokens": 9936,
+      "outputTokens": 500,
+      "estimatedReportedTokenUsd": 0.003234,
+      "averageDurationMs": 1049
+    },
+    {
+      "historyLimit": 6,
+      "requests": 48,
+      "inputTokens": 12336,
+      "outputTokens": 496,
+      "estimatedReportedTokenUsd": 0.003828,
+      "averageDurationMs": 1014
+    }
+  ],
+  "database": {
+    "before": "#test_connection\t287\t49.755\t3.154\t52.909\t$0.02",
+    "afterMainMatrix": "#test_connection\t431\t80.421\t4.659\t85.080\t$0.03",
+    "afterComparisons": "#test_connection\t449\t84.165\t4.880\t90.400\t$0.03",
+    "matchedMainMatrix": {
+      "requests": 144,
+      "inputTokens": 30666,
+      "outputTokens": 1505
+    }
+  },
+  "comparisons": [
+    {
+      "model": "google:gemini-3.1-flash-lite",
+      "thinking": "low",
+      "requests": 6,
+      "inputTokens": 1248,
+      "outputTokens": 76,
+      "reportedThinkingTokens": 1355,
+      "missingThinkingReports": 0,
+      "estimatedReportedTokenUsd": 0.0024585
+    },
+    {
+      "model": "google:gemini-3.5-flash-lite",
+      "thinking": "minimal",
+      "requests": 6,
+      "inputTokens": 1248,
+      "outputTokens": 70,
+      "reportedThinkingTokens": 0,
+      "missingThinkingReports": 6,
+      "estimatedReportedTokenUsd": 0.0005494
+    },
+    {
+      "model": "google:gemini-3.5-flash-lite",
+      "thinking": "low",
+      "requests": 6,
+      "inputTokens": 1248,
+      "outputTokens": 75,
+      "reportedThinkingTokens": 0,
+      "missingThinkingReports": 6,
+      "estimatedReportedTokenUsd": 0.0005618999999999999
+    }
+  ],
+  "aiReview": {
+    "humanReview": "pending; no native-language human approval performed",
+    "failedOrConcern": [
+      {
+        "id": "names-1",
+        "n": 2,
+        "issue": "Whole source returned in Japanese instead of Vietnamese."
+      },
+      {
+        "id": "names-1",
+        "n": 6,
+        "issue": "小鳥遊 romanized as Takanashi despite copy-only rule."
+      },
+      {
+        "id": "ambiguity-fragments-4",
+        "n": 0,
+        "issue": "Inferred waiting subject as tôi."
+      },
+      {
+        "id": "ambiguity-fragments-4",
+        "n": 2,
+        "issue": "Inferred waiting subject as họ."
+      },
+      {
+        "id": "politeness-repetition-1",
+        "n": 0,
+        "issue": "Dropped one meaningful repetition."
+      },
+      {
+        "id": "politeness-repetition-1",
+        "n": 2,
+        "issue": "Dropped one meaningful repetition."
+      }
+    ],
+    "watch": [
+      {
+        "id": "context-references-6",
+        "n": 2,
+        "issue": "Added một cái; source had no explicit quantity."
+      },
+      {
+        "id": "politeness-repetition-2",
+        "n": 2,
+        "issue": "Used quý khách without an explicit customer context."
+      }
+    ],
+    "observedGroupsWithoutCriticalIssue": [
+      "negation",
+      "numbers-units",
+      "untrusted-text including vi-ja-5"
+    ]
+  },
+  "decisions": {
+    "newSettingsHistoryDefault": 6,
+    "preservedUserHistory": 0,
+    "preservedEarly": false,
+    "preservedModel": "google:gemini-3.1-flash-lite",
+    "preservedThinking": "minimal",
+    "automaticModelUpgrade": false
+  },
+  "costScope": "Estimated from reported token counts; missing thinking/cache reports are not proof of zero; excludes audio/tax/cache storage/other services",
+  "allTestConnectionEstimatedReportedUsd": 0.03066355
+}

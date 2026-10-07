@@ -137,6 +137,29 @@ describe('Summarize Task Execution', () => {
     }
   });
 
+  it('incorporates customPrompt in summary system instruction', async () => {
+    await executeSummarize({
+      requestId: 'req_sum_custom',
+      recordingId: 'rec_test',
+      sourceHash: 'hash_custom',
+      targetLanguage: 'vi',
+      customPrompt: 'Tập trung vào phần ngữ pháp N3',
+      captions: [
+        {
+          id: 1,
+          startMs: 0,
+          endMs: 2000,
+          source: 'テスト',
+          revision: 1,
+          isFinal: true,
+        },
+      ],
+    });
+    expect(aiSdk.googleContent).toHaveBeenCalled();
+    const lastCall = aiSdk.googleContent.mock.calls.at(-1);
+    expect(JSON.stringify(lastCall)).toContain('T\u1eadp trung v\u00e0o ph\u1ea7n ng\u1eef ph\u00e1p N3');
+  });
+
   it('rejects input exceeding max characters with INPUT_TOO_LARGE', async () => {
     const longText = 'A'.repeat(65000);
     await expect(

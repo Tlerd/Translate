@@ -19,6 +19,7 @@ interface RecordingContextValue {
   setTranslationThinkingLevel: (level: string) => void;
   setPauseMs: (milliseconds: number) => void;
   setLanguages: (source: string, target: string) => void;
+  swapLanguages: () => Promise<void>;
   setReadingPauseMs: (milliseconds: number) => void;
 }
 
@@ -122,6 +123,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setLanguages: (source, target) => {
       settingsChangedByUserRef.current = true;
       controllerRef.current!.setLanguages(source, target);
+      const next = controllerRef.current!.snapshot();
+      void saveSettings({ sourceLanguage: next.sourceLanguage, targetLanguage: next.targetLanguage }).catch(error => console.warn('Không thể lưu ngôn ngữ:', error));
+    },
+    swapLanguages: async () => {
+      settingsChangedByUserRef.current = true;
+      await controllerRef.current!.swapLanguages();
       const next = controllerRef.current!.snapshot();
       void saveSettings({ sourceLanguage: next.sourceLanguage, targetLanguage: next.targetLanguage }).catch(error => console.warn('Không thể lưu ngôn ngữ:', error));
     },

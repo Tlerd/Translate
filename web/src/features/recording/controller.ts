@@ -1,5 +1,5 @@
 import { queueAudio } from '@/storage/audio-assets';
-import { canonicalLanguage, inputLanguage } from '@/shared/languages';
+import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/languages';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { NemotronRecognizer } from './nemotron-recognition';
@@ -322,6 +322,9 @@ export class ClassroomController {
     // Live Translation Scheduler
     this.scheduler = new LiveTranslationScheduler({
       runner: async (source, direction, history, signal, requestSnapshot, onDelta, requestKind = 'final') => {
+        if (direction.targetCode === 'none' || !direction.targetCode) {
+          return '';
+        }
         const requestedAt = Date.now();
         return new Promise<string>((resolve, reject) => {
           let accumulated = '';
@@ -839,10 +842,12 @@ export class ClassroomController {
       translationModelKey: this.state.translationModelKey,
       state: event.error
         ? 'failed'
-        : event.isFinal && !!event.targetText && event.targetSourceRevision >= event.sourceRevision
+        : event.isFinal && (this.state.targetLanguage === 'none' || (!!event.targetText && event.targetSourceRevision >= event.sourceRevision))
           ? 'done'
           : 'streaming',
-      error: event.error,
+      error: event.error?.includes('503') || event.error?.includes('UNAVAILABLE')
+        ? 'Dịch vụ dịch tạm thời gián đoạn (503). Vui lòng thử lại sau.'
+        : event.error,
       skipReason: event.skipReason,
       speakerLabel: previous?.speakerLabel ?? this.captionSpeakers.get(event.captionId),
       sourceHistory,
@@ -1168,13 +1173,75 @@ export class ClassroomController {
   }
 
   public setLanguages(source: string, target: string): void {
-    if (this.state.state === 'recording' || this.starting || this.stopping) return;
-    const sourceLanguage = inputLanguage(source, this.state.speechProvider);
+    if (this.starting || this.stopping) return;
     const targetLanguage = canonicalLanguage(target);
+    const sourceLanguage = inputLanguage(source, this.state.speechProvider);
+
+    if (this.state.state === 'recording') {
+      if (targetLanguage && targetLanguage !== this.state.targetLanguage) {
+        this.state.targetLanguage = targetLanguage;
+        this.scheduler?.setLanguages(this.state.sourceLanguage, targetLanguage);
+        this.notify();
+      }
+      return;
+    }
+
     if (!sourceLanguage || !targetLanguage) return;
     this.state.sourceLanguage = sourceLanguage;
     this.state.targetLanguage = targetLanguage;
     this.notify();
+  }
+
+  public async swapLanguages(): Promise<void> {
+    if (this.starting || this.stopping) return;
+    const currentSource = this.state.sourceLanguage;
+    const currentTarget = this.state.targetLanguage;
+    if (currentTarget === 'none') return;
+
+    const newSource = inputLanguage(currentTarget, this.state.speechProvider);
+    const baseTarget = currentSource.split('-')[0];
+    const newTarget = OUTPUT_LANGUAGES.find((l) => l.code === currentSource || l.code === baseTarget)?.code || canonicalLanguage(currentSource);
+    if (!newSource || !newTarget) return;
+
+    if (this.state.state !== 'recording') {
+      this.state.sourceLanguage = newSource;
+      this.state.targetLanguage = newTarget;
+      this.notify();
+      return;
+    }
+
+    if (this.hasPendingTranscript) {
+      this.assembler?.handleBlockClosed(this.activeBlockId);
+      this.scheduler?.onBlockClosed(this.activeBlockId++);
+      this.hasPendingTranscript = false;
+    }
+
+    this.state.sourceLanguage = newSource;
+    this.state.targetLanguage = newTarget;
+    this.scheduler?.setLanguages(newSource, newTarget);
+    this.notify();
+
+    if (this.apiState !== 'paused' && this.speechRecognizer) {
+      const oldRecognizer = this.speechRecognizer;
+      this.speechRecognizer = null;
+      try {
+        if (typeof (oldRecognizer as { finalizeUtterance?: () => void }).finalizeUtterance === 'function') {
+          (oldRecognizer as { finalizeUtterance: () => void }).finalizeUtterance();
+        }
+      } catch (err) {
+        console.warn('Lỗi finalize recognizer khi đổi chiều ngôn ngữ:', err);
+      }
+      const drain = Promise.resolve().then(() => oldRecognizer.stop()).catch(() => {});
+      this.pendingRecognizerDrains.add(drain);
+      void drain.finally(() => this.pendingRecognizerDrains.delete(drain));
+
+      try {
+        const currentOffsetMs = Date.now() - this.startTime;
+        await this.startTranscriber(this.sessionEpoch, currentOffsetMs);
+      } catch (err) {
+        console.warn('Lỗi khởi động recognizer mới sau khi đổi chiều ngôn ngữ:', err);
+      }
+    }
   }
 
   public setTranslationModel(modelKey: string): void {
