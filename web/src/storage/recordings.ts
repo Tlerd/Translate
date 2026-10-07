@@ -65,14 +65,47 @@ export async function getRecording(id: string): Promise<RecordingItem | undefine
   return db.recordings.get(id);
 }
 
-export async function listRecordings(limit = 50, offset = 0): Promise<RecordingItem[]> {
+export async function listRecordings(limit = 50, offset = 0, includeDeleted = false): Promise<RecordingItem[]> {
   const db = getDb();
-  return db.recordings
+  const all = await db.recordings
     .orderBy('createdAt')
     .reverse()
-    .offset(offset)
-    .limit(limit)
     .toArray();
+  const filtered = includeDeleted ? all : all.filter(r => !r.deletedAt);
+  return filtered.slice(offset, offset + limit);
+}
+
+export async function listTrashRecordings(limit = 50, offset = 0): Promise<RecordingItem[]> {
+  const db = getDb();
+  const all = await db.recordings
+    .orderBy('createdAt')
+    .reverse()
+    .toArray();
+  const trash = all.filter(r => Boolean(r.deletedAt));
+  return trash.slice(offset, offset + limit);
+}
+
+export async function softDeleteRecording(id: string): Promise<void> {
+  const db = getDb();
+  const recording = await db.recordings.get(id);
+  if (!recording) return;
+  if (recording.state === 'recording') {
+    throw new Error('Buổi đang thu không thể xóa.');
+  }
+  await db.recordings.update(id, { deletedAt: new Date().toISOString() });
+}
+
+export async function restoreRecording(id: string): Promise<void> {
+  const db = getDb();
+  await db.recordings.update(id, { deletedAt: undefined });
+}
+
+export async function emptyTrash(): Promise<void> {
+  const db = getDb();
+  const trashItems = await db.recordings.filter(r => Boolean(r.deletedAt)).toArray();
+  for (const item of trashItems) {
+    await deleteRecording(item.id);
+  }
 }
 
 export async function updateRecording(

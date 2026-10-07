@@ -1,31 +1,48 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, Square, Settings, Radio, BarChart3 } from 'lucide-react';
+import { PanelLeft, Square, Settings, Radio, BarChart3 } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
 import { ThemeToggle } from './theme-toggle';
 
 export function AppShell({ children, accountControls }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { state: recordingState, stopRecording } = useRecording();
   const pathname = usePathname();
+  const isRecording = recordingState.state === 'recording';
+
+  // On initial mount on small screens, collapse sidebar
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   // Close mobile sidebar upon navigation
   useEffect(() => {
-    setSidebarOpen(false);
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
   }, [pathname]);
+
+  // Auto-collapse sidebar when recording starts to enter LilysAI focus mode
+  const prevRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    if (!prevRecordingRef.current && isRecording) {
+      setSidebarOpen(false);
+    }
+    prevRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, []);
-
-  const isRecording = recordingState.state === 'recording';
 
   const formatDuration = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -48,9 +65,12 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
       {/* Sidebar */}
       <aside
         id="recording-library"
-        className={`${styles.sidebarWrapper} ${sidebarOpen ? styles.sidebarOpen : ''}`}
+        className={`${styles.sidebarWrapper} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}
       >
-        <LibrarySidebar onCloseMobile={() => setSidebarOpen(false)} />
+        <LibrarySidebar
+          onCloseMobile={() => setSidebarOpen(false)}
+          onToggleSidebar={() => setSidebarOpen(v => !v)}
+        />
       </aside>
 
       {/* Main Content Area */}
@@ -60,12 +80,12 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
             <button
               className={`${styles.toggleButton} ${styles.menuButton}`}
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Mở/Đóng danh sách bản ghi"
-              aria-label={sidebarOpen ? 'Đóng danh sách bản ghi' : 'Mở danh sách bản ghi'}
+              title={sidebarOpen ? "Thu gọn thanh bên" : "Mở thanh bên"}
+              aria-label={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở thanh bên'}
               aria-expanded={sidebarOpen}
               aria-controls="recording-library"
             >
-              {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
+              <PanelLeft size={18} />
             </button>
             <Link href="/app" className={styles.appTitle} title="Máy Dịch Lớp Học" aria-label="Máy Dịch Lớp Học">
               <span className={styles.appLogo}>

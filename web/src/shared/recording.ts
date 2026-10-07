@@ -25,6 +25,7 @@ export interface RecordingItem {
   durationMs: number;
   audioState: AudioState;
   audioDeletedAt?: string;
+  deletedAt?: string; // ISO string when moved to trash
   audioMimeType?: string;
   folder?: string;
   config: {

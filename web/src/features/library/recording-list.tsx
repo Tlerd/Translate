@@ -18,7 +18,7 @@ import {
 import type { RecordingItem } from '@/shared/recording';
 import {
   renameRecording,
-  deleteRecording,
+  softDeleteRecording,
   deleteAudioOnly,
   updateRecordingFolder,
 } from '@/storage/recordings';
@@ -118,9 +118,9 @@ export function RecordingList({
     e.stopPropagation();
     e.preventDefault();
     setOpenMenuId(null);
-    if (window.confirm('Bạn có chắc muốn xóa toàn bộ buổi này và các dữ liệu liên quan?')) {
+    if (window.confirm('Bạn có muốn chuyển buổi này vào thùng rác? Bạn có thể khôi phục lại bất kỳ lúc nào.')) {
       try {
-        await deleteRecording(id);
+        await softDeleteRecording(id);
         onRefresh();
         if (selectedId === id) {
           router.push('/app');

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Pencil, Sparkles, Volume2 } from 'lucide-react';
+import { FileText, Pencil, Sparkles, Volume2, Columns2 } from 'lucide-react';
 import { TranscriptPane } from './transcript-pane';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
 import { AudioSegmentsDialog } from './audio-segments-dialog';
@@ -31,6 +31,7 @@ export function RecordingWorkspace({
   speakerAssignmentBusy = false,
 }: RecordingWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary'>('transcript');
+  const [viewMode, setViewMode] = useState<'split' | 'tabs'>('split');
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
   const [workspaceCaptions, setWorkspaceCaptions] = useState(captions);
   const [highlightCaptionId, setHighlightCaptionId] = useState<number | null>(null);
@@ -57,7 +58,7 @@ export function RecordingWorkspace({
   }, [workspaceCaptions]);
 
   const handleSelectCaption = (captionId: number) => {
-    setActiveTab('transcript');
+    if (viewMode === 'tabs') setActiveTab('transcript');
     setHighlightCaptionId(captionId);
 
     // Scroll to the element
@@ -90,26 +91,34 @@ export function RecordingWorkspace({
 
   return (
     <div className={styles.workspace}>
-      {/* Tab bar */}
+      {/* Workspace Header / Tab Bar */}
       <div className={styles.workspaceTabs}>
         <div className={styles.tabPillContainer}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('transcript')}
-            className={`${styles.tabPill} ${activeTab === 'transcript' ? styles.tabPillActive : ''}`}
-          >
-            <FileText size={15} />
-            <span>Bản dịch ({workspaceCaptions.length})</span>
-          </button>
+          {viewMode === 'tabs' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveTab('transcript')}
+                className={`${styles.tabPill} ${activeTab === 'transcript' ? styles.tabPillActive : ''}`}
+              >
+                <FileText size={15} />
+                <span>Bản dịch ({workspaceCaptions.length})</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('summary')}
-            className={`${styles.tabPill} ${activeTab === 'summary' ? styles.tabPillActive : ''}`}
-          >
-            <Sparkles size={15} />
-            <span>Tóm tắt {summary ? '✓' : ''}</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('summary')}
+                className={`${styles.tabPill} ${activeTab === 'summary' ? styles.tabPillActive : ''}`}
+              >
+                <Sparkles size={15} />
+                <span>Tóm tắt {summary ? '✓' : ''}</span>
+              </button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 8px', fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <span>Chế độ song song (Split-View)</span>
+            </div>
+          )}
 
           {/* Audio Segments button */}
           {(recording.audioState !== 'deleted') && (
@@ -125,25 +134,81 @@ export function RecordingWorkspace({
           )}
         </div>
 
-        {activeTab === 'transcript' && workspaceCaptions.length > 0 && (
-          <div className={recordingInProgress ? styles.recordingTools : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {recordingInProgress && <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Kết thúc buổi thu để chỉnh sửa</span>}
+        {/* Right action tools: Split-View Toggle & Edit script */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!recordingInProgress && (
             <button
               type="button"
-              onClick={() => setEditorOpen(true)}
-              disabled={recordingInProgress}
-              title={recordingInProgress ? 'Không thể chỉnh sửa khi buổi thu đang chạy vì nội dung trực tiếp có thể ghi đè thay đổi.' : 'Chỉnh sửa kịch bản'}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', color: recordingInProgress ? 'var(--text-muted)' : 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', opacity: recordingInProgress ? 0.55 : 1 }}
+              onClick={() => setViewMode(v => v === 'split' ? 'tabs' : 'split')}
+              className={styles.tabPill}
+              title={viewMode === 'split' ? "Chuyển sang dạng tab" : "Chuyển sang dạng song song 2 cột"}
+              style={{ fontSize: '0.8rem' }}
             >
-              <Pencil size={14} /> Chỉnh sửa kịch bản
+              <Columns2 size={14} />
+              <span>{viewMode === 'split' ? 'Dạng Tab' : 'Song song'}</span>
             </button>
-          </div>
-        )}
+          )}
+
+          {((viewMode === 'tabs' && activeTab === 'transcript') || viewMode === 'split') && workspaceCaptions.length > 0 && (
+            <div className={recordingInProgress ? styles.recordingTools : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                disabled={recordingInProgress}
+                title={recordingInProgress ? 'Không thể chỉnh sửa khi buổi thu đang chạy' : 'Chỉnh sửa kịch bản'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '5px 9px',
+                  color: recordingInProgress ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.78rem',
+                  opacity: recordingInProgress ? 0.55 : 1,
+                  background: 'var(--bg-card)',
+                  cursor: recordingInProgress ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <Pencil size={13} /> Sửa kịch bản
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main View Area */}
       <div className={styles.workspaceContent}>
-        {activeTab === 'transcript' ? (
+        {viewMode === 'split' && !recordingInProgress ? (
+          /* LilysAI Split-View Two Columns */
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(360px, 1.2fr)', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+            {/* Left: Transcript */}
+            <div style={{ borderRight: '1px solid var(--border-color)', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <TranscriptPane
+                captions={workspaceCaptions}
+                highlightCaptionId={highlightCaptionId}
+                speakerCount={speakerCount}
+                targetLanguage={recording.targetLanguage}
+                onSpeakerChange={!recordingInProgress && !speakerAssignmentBusy ? handleSpeakerChange : undefined}
+              />
+            </div>
+
+            {/* Right: AI Summary Workspace */}
+            <div style={{ height: '100%', minHeight: 0, overflowY: 'auto' }}>
+              <SummaryPanel
+                recordingId={recording.id}
+                captions={workspaceCaptions}
+                summary={summary}
+                summaryIsStale={summaryIsStale}
+                targetLanguage={recording.targetLanguage}
+                translationModelKey={recording.config.translationModelKey}
+                onSummaryGenerated={handleSummaryGenerated}
+                onSelectCaption={handleSelectCaption}
+              />
+              {summary && currentSourceHash === summary.sourceHash && <ImagePanel recordingId={recording.id} summary={summary} />}
+            </div>
+          </div>
+        ) : activeTab === 'transcript' ? (
           <TranscriptPane
             captions={workspaceCaptions}
             highlightCaptionId={highlightCaptionId}

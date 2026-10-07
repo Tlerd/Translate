@@ -529,4 +529,55 @@ describe('Storage Layer', () => {
     expect(blob).not.toBeNull();
     expect(await blob?.blob.text()).toBe('legacy-whole-audio');
   });
+
+  it('supports soft delete, trash listing, restore and empty trash', async () => {
+    const { softDeleteRecording, restoreRecording, listTrashRecordings, emptyTrash, updateRecording } = await import('@/storage/recordings');
+
+    await createRecording({
+      id: 'rec_trash_1',
+      title: 'Bản ghi 1',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.1-flash-lite',
+    });
+    await updateRecording('rec_trash_1', { state: 'stopped' });
+
+    await createRecording({
+      id: 'rec_trash_2',
+      title: 'Bản ghi 2',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.1-flash-lite',
+    });
+    await updateRecording('rec_trash_2', { state: 'stopped' });
+
+    const activeBefore = await listRecordings();
+    expect(activeBefore.length).toBe(2);
+    expect(await listTrashRecordings()).toHaveLength(0);
+
+    // Soft delete rec_trash_1
+    await softDeleteRecording('rec_trash_1');
+    const activeAfterDelete = await listRecordings();
+    expect(activeAfterDelete.map(r => r.id)).toEqual(['rec_trash_2']);
+
+    const trash = await listTrashRecordings();
+    expect(trash.map(r => r.id)).toEqual(['rec_trash_1']);
+
+    // Restore rec_trash_1
+    await restoreRecording('rec_trash_1');
+    const activeAfterRestore = await listRecordings();
+    expect(activeAfterRestore.length).toBe(2);
+    expect(await listTrashRecordings()).toHaveLength(0);
+
+    // Soft delete both and empty trash
+    await softDeleteRecording('rec_trash_1');
+    await softDeleteRecording('rec_trash_2');
+    expect(await listTrashRecordings()).toHaveLength(2);
+
+    await emptyTrash();
+    expect(await listTrashRecordings()).toHaveLength(0);
+    expect(await listRecordings(50, 0, true)).toHaveLength(0);
+  });
 });
