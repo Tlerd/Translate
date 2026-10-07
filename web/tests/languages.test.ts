@@ -5,18 +5,20 @@ import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcripti
 
 describe('model language catalogues', () => {
   it('restricts the first Soniox integration to Japanese and Vietnamese, including locale aliases', () => {
-    expect(inputLanguages('soniox').map(item => item.code).sort()).toEqual(['ja-JP', 'vi-VN']);
+    expect(inputLanguages('soniox').map(item => item.code).sort()).toEqual(['auto', 'ja-JP', 'vi-VN']);
     for (const code of ['ja', 'ja-JP']) expect(inputLanguage(code, 'soniox')).toBe('ja-JP');
     for (const code of ['vi', 'vi-VN']) expect(inputLanguage(code, 'soniox')).toBe('vi-VN');
+    expect(inputLanguage('auto', 'soniox')).toBe('auto');
     expect(inputLanguage('en-US', 'soniox')).toBeNull();
     expect(inputLanguage('ja_JP', 'soniox')).toBeNull();
   });
   it('offers the 32 ready Nemotron locales, including Japanese and Vietnamese, without adaptation-only languages', () => {
-    expect(inputLanguages('nemotron')).toEqual(NEMOTRON_LANGUAGES);
+    expect(inputLanguages('nemotron')).toEqual([{ code: 'auto', name: 'Tự nhận biết ngôn ngữ' }, ...NEMOTRON_LANGUAGES]);
     expect(NEMOTRON_LANGUAGES).toHaveLength(32);
     expect(inputLanguage('ja', 'nemotron')).toBe('ja-JP');
     expect(inputLanguage('vi', 'nemotron')).toBe('vi-VN');
     expect(inputLanguage('cmn-Hans-CN', 'nemotron')).toBe('zh-CN');
+    expect(inputLanguage('auto', 'nemotron')).toBe('auto');
     expect(inputLanguage('th-TH', 'nemotron')).toBeNull();
     expect(inputLanguage('el-GR', 'nemotron')).toBeNull();
   });
@@ -24,8 +26,8 @@ describe('model language catalogues', () => {
     expect(TRANSCRIBE_LANGUAGES).toHaveLength(83);
     expect(new Set(TRANSCRIBE_LANGUAGES.map(item => item.code)).size).toBe(83);
     expect(TRANSCRIBE_LANGUAGES.some(item => item.code === 'cmn-Hans-CN')).toBe(true);
-    expect(inputLanguages('google')).toEqual(TRANSCRIBE_LANGUAGES);
-    expect(inputLanguages('google-flash-live')).toEqual(LIVE_LANGUAGES);
+    expect(inputLanguages('google')).toEqual([{ code: 'auto', name: 'Tự nhận biết ngôn ngữ' }, ...TRANSCRIBE_LANGUAGES]);
+    expect(inputLanguages('google-flash-live')).toEqual([{ code: 'auto', name: 'Tự nhận biết ngôn ngữ' }, ...LIVE_LANGUAGES]);
   });
   it('accepts numeric regions and script-region codes and rejects malformed codes', () => {
     expect(canonicalLanguage('es-419')).toBe('es-419');
@@ -43,10 +45,14 @@ describe('model language catalogues', () => {
   it('sends the selected language in both Live model configurations', () => {
     expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'yue-Hant-HK').inputAudioTranscription?.languageCodes).toEqual(['yue-Hant-HK']);
     expect(JSON.stringify(liveSpeechConfig(FLASH_LIVE_MODEL, 'verbatim', 'ja'))).toContain('selected input language is ja');
+    expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'auto').inputAudioTranscription?.languageCodes).toEqual([]);
+    expect(JSON.stringify(liveSpeechConfig(FLASH_LIVE_MODEL, 'verbatim', 'auto'))).toContain('auto-detected');
   });
-  it('supports none option for turning off translation in output languages', () => {
+  it('supports none option for turning off translation in output languages and auto for input languages', () => {
     expect(canonicalLanguage('none')).toBe('none');
     expect(languageName('none')).toBe('Không dịch');
     expect(OUTPUT_LANGUAGES.some(l => l.code === 'none')).toBe(true);
+    expect(canonicalLanguage('auto')).toBe('auto');
+    expect(languageName('auto')).toBe('Tự nhận biết ngôn ngữ');
   });
 });

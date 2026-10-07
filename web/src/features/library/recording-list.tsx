@@ -13,6 +13,7 @@ import {
   Check,
   X,
   Folder,
+  AudioLines,
 } from 'lucide-react';
 import type { RecordingItem } from '@/shared/recording';
 import {
@@ -167,9 +168,12 @@ export function RecordingList({
             key={rec.id}
             style={{
               position: 'relative',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: isSelected ? 'var(--bg-active)' : 'transparent',
-              transition: 'background 0.15s',
+              borderRadius: 'var(--radius-md)',
+              border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+              backgroundColor: isSelected ? 'rgba(56, 189, 248, 0.08)' : 'var(--bg-card)',
+              boxShadow: isSelected ? '0 0 12px var(--accent-glow)' : 'var(--shadow-sm)',
+              transition: 'all 0.18s ease',
+              marginBottom: 4,
             }}
           >
             <Link
@@ -177,70 +181,38 @@ export function RecordingList({
               onClick={onSelect}
               style={{
                 display: 'block',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-sm)',
-                color: isSelected ? '#fff' : 'var(--text-primary)',
+                padding: '9px 12px',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                {isEditing ? (
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      style={{
-                        flex: 1,
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        fontSize: '0.85rem',
-                      }}
-                      autoFocus
-                    />
-                    <button onClick={(e) => handleSaveRename(rec.id, e)} title="Lưu">
-                      <Check size={16} color="var(--success)" />
-                    </button>
-                    <button onClick={handleCancelRename} title="Hủy">
-                      <X size={16} color="var(--danger)" />
-                    </button>
-                  </div>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: '0.9rem',
-                      fontWeight: isSelected ? 600 : 500,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      flex: 1,
-                    }}
-                  >
-                    {rec.title}
+              {/* LilysAI style: Audio indicator and status row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <AudioLines size={13} color="var(--accent)" />
+                  <span style={{ fontSize: '0.72rem', color: isSelected ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 500 }}>
+                    Ghi âm
                   </span>
-                )}
+                </div>
 
-                {/* Status Dot */}
+                {/* Status Dot & Menu Button */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {isActiveRecording ? (
                     <span
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 7,
+                        height: 7,
                         borderRadius: '50%',
                         backgroundColor: 'var(--danger)',
+                        boxShadow: '0 0 6px var(--danger)',
                       }}
                       title="Đang thu"
                     />
                   ) : rec.state === 'stopped' ? (
                     <span
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 7,
+                        height: 7,
                         borderRadius: '50%',
                         backgroundColor: 'var(--success)',
                       }}
@@ -249,8 +221,8 @@ export function RecordingList({
                   ) : (
                     <span
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 7,
+                        height: 7,
                         borderRadius: '50%',
                         backgroundColor: 'var(--warning)',
                       }}
@@ -266,15 +238,65 @@ export function RecordingList({
                       setOpenMenuId(isMenuOpen ? null : rec.id);
                     }}
                     style={{
-                      padding: 4,
-                      color: isSelected ? '#fff' : 'var(--text-muted)',
-                      opacity: 0.8,
+                      background: 'none',
+                      border: 'none',
+                      padding: 2,
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
                     }}
                     title="Tùy chọn"
                   >
-                    <MoreVertical size={16} />
+                    <MoreVertical size={14} />
                   </button>
                 </div>
+              </div>
+
+              {/* Title row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {isEditing ? (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      style={{
+                        flex: 1,
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--accent)',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        fontSize: '0.84rem',
+                        color: 'var(--text-primary)',
+                      }}
+                      autoFocus
+                    />
+                    <button onClick={(e) => handleSaveRename(rec.id, e)} title="Lưu" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                      <Check size={15} color="var(--success)" />
+                    </button>
+                    <button onClick={handleCancelRename} title="Hủy" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                      <X size={15} color="var(--danger)" />
+                    </button>
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                      flex: 1,
+                    }}
+                  >
+                    {rec.title}
+                  </span>
+                )}
               </div>
 
               {/* Meta row */}
@@ -282,10 +304,11 @@ export function RecordingList({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  fontSize: '0.75rem',
-                  color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)',
+                  gap: 6,
+                  fontSize: '0.72rem',
+                  color: 'var(--text-muted)',
                   marginTop: 4,
+                  flexWrap: 'wrap',
                 }}
               >
                 <span>{formatDate(rec.createdAt)}</span>
@@ -293,9 +316,9 @@ export function RecordingList({
                 <span>{formatDuration(rec.durationMs)}</span>
                 <span>•</span>
                 {rec.audioState === 'present' ? (
-                  <span title="Có âm thanh"><Volume2 size={13} /></span>
+                  <span title="Có âm thanh" style={{ display: 'inline-flex', alignItems: 'center' }}><Volume2 size={12} /></span>
                 ) : (
-                  <span title="Âm thanh đã xóa hoặc thiếu"><VolumeX size={13} /></span>
+                  <span title="Âm thanh đã xóa hoặc thiếu" style={{ display: 'inline-flex', alignItems: 'center' }}><VolumeX size={12} /></span>
                 )}
                 {rec.folder && (
                   <>
@@ -306,14 +329,15 @@ export function RecordingList({
                         alignItems: 'center',
                         gap: 3,
                         padding: '1px 6px',
-                        borderRadius: 'var(--radius-sm)',
-                        backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(56, 189, 248, 0.15)',
-                        color: isSelected ? '#fff' : 'var(--accent)',
-                        fontSize: '0.72rem',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                        color: 'var(--accent)',
+                        fontSize: '0.7rem',
+                        fontWeight: 500,
                       }}
                       title={`Thư mục: ${rec.folder}`}
                     >
-                      <Folder size={11} />
+                      <Folder size={10} />
                       <span>{rec.folder}</span>
                     </span>
                   </>

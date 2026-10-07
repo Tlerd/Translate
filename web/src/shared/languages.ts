@@ -11,6 +11,7 @@ const liveCodes = `af ak sq am ar hy as az eu be bn bs bg my ca ceb zh-Hans zh-H
 export interface LanguageOption { code: string; name: string }
 const names = new Intl.DisplayNames(['vi'], { type: 'language' });
 const overrides: Record<string, string> = {
+  auto: 'Tự nhận biết ngôn ngữ',
   rup: 'Tiếng Aroman', kea: 'Tiếng Cabo Verde', ceb: 'Tiếng Cebuano',
   'cmn-Hans-CN': 'Tiếng Trung phổ thông (giản thể, Trung Quốc)',
   'yue-Hant-HK': 'Tiếng Quảng Đông (phồn thể, Hồng Kông)',
@@ -19,6 +20,7 @@ const overrides: Record<string, string> = {
 };
 export function canonicalLanguage(value: string): string | null {
   if (value === 'none') return 'none';
+  if (value === 'auto') return 'auto';
   if (!/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(value)) return null;
   try {
     const canonical = Intl.getCanonicalLocales(value)[0];
@@ -35,7 +37,7 @@ function catalogue(codes: string[]): LanguageOption[] {
     .map(code => ({ code, name: languageName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
-export const PRIMARY_INPUT_CODES = ['vi-VN', 'ja-JP', 'en-US'] as const;
+export const PRIMARY_INPUT_CODES = ['auto', 'vi-VN', 'ja-JP', 'en-US'] as const;
 export const TRANSCRIBE_LANGUAGES = catalogue(transcribeCodes);
 export const LIVE_LANGUAGES = catalogue(liveCodes);
 export const NEMOTRON_LANGUAGES = catalogue(NEMOTRON_LOCALES);
@@ -45,13 +47,17 @@ export const OUTPUT_LANGUAGES: LanguageOption[] = [
   ...catalogue([...transcribeCodes, ...liveCodes]),
 ];
 export function inputLanguages(provider: SpeechProvider): LanguageOption[] {
-  if (provider === 'soniox') return SONIOX_LANGUAGES;
-  if (provider === 'nemotron') return NEMOTRON_LANGUAGES;
-  return provider === 'google-flash-live' ? LIVE_LANGUAGES : TRANSCRIBE_LANGUAGES;
+  const autoOption: LanguageOption = { code: 'auto', name: 'Tự nhận biết ngôn ngữ' };
+  let baseList: LanguageOption[];
+  if (provider === 'soniox') baseList = SONIOX_LANGUAGES;
+  else if (provider === 'nemotron') baseList = NEMOTRON_LANGUAGES;
+  else baseList = provider === 'google-flash-live' ? LIVE_LANGUAGES : TRANSCRIBE_LANGUAGES;
+  return [autoOption, ...baseList];
 }
 export function inputLanguage(code: string, provider: SpeechProvider): string | null {
   const canonical = canonicalLanguage(code);
   if (!canonical) return null;
+  if (canonical === 'auto') return 'auto';
   const list = inputLanguages(provider);
   const exact = list.find(item => item.code === canonical);
   if (exact) return exact.code;

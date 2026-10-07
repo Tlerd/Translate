@@ -158,7 +158,7 @@ export async function POST(req: Request): Promise<Response> {
       input: [{ type: 'audio', uri: uploadedFile.uri, mime_type: mimeType }],
       generation_config: {
         transcription_config: {
-          language_codes: languageCode ? [languageCode] : [],
+          language_codes: languageCode && languageCode !== 'auto' ? [languageCode] : [],
           mode: mode === 'smart' ? 'smart' : {
             type: 'verbatim',
             diarization_mode: 'speaker',

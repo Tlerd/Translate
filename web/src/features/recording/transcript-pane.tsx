@@ -68,9 +68,9 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
   if (captions.length === 0) {
     return (
       <div data-testid="transcript-empty-state" className={styles.emptyTranscript} style={{ color: 'var(--text-muted)' }}>
-        <p style={{ fontSize: '1rem' }}>Chưa có nội dung nói.</p>
+        <p style={{ fontSize: '1rem', fontWeight: 600 }}>Chưa có nội dung nói</p>
         <p style={{ fontSize: '0.85rem' }}>
-          Bấm <strong>Bắt đầu thu</strong> và nói vào micro (tiếng Nhật, tiếng Việt hoặc tiếng Anh).
+          Bấm <strong>Bắt đầu thu</strong> và nói vào micro để nhận diện giọng nói và dịch thời gian thực.
         </p>
       </div>
     );

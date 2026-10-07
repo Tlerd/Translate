@@ -15,8 +15,10 @@ export function LanguageSelect({ label, value, options, disabled, onChange }: {
   const selected = options.find(option => option.code === value);
 
   const isInput = label.toLowerCase().includes('đầu vào');
-  const primaryCodes = ['vi-VN', 'ja-JP', 'en-US'];
-  const primaryOptions = options.filter(opt => primaryCodes.includes(opt.code));
+  const primaryCodes = ['auto', 'vi-VN', 'ja-JP', 'en-US'];
+  const primaryOptions = primaryCodes
+    .map(code => options.find(opt => opt.code === code))
+    .filter((opt): opt is LanguageOption => Boolean(opt));
   const otherOptions = options.filter(opt => !primaryCodes.includes(opt.code));
 
   return <div className={styles.field}>
@@ -26,7 +28,7 @@ export function LanguageSelect({ label, value, options, disabled, onChange }: {
     {searching && <input id={`${id}-search`} type="search" aria-label={`Từ khóa ${label.toLowerCase()}`} placeholder="Tìm tên hoặc mã…"
       disabled={disabled} value={query} autoFocus onChange={event => setQuery(event.target.value)} />}
     <select id={id} value={value} disabled={disabled} onChange={event => { onChange(event.target.value); setQuery(''); setSearching(false); }}>
-      {selected && !filtered.some(option => option.code === value) && <option value={value}>{selected.name} {value === 'none' ? '' : `· ${value}`}</option>}
+      {selected && !filtered.some(option => option.code === value) && <option value={value}>{selected.name} {value === 'none' || value === 'auto' ? '' : `· ${value}`}</option>}
       {!selected && <option value={value}>Chọn ngôn ngữ · {value}</option>}
       {isInput && !searching && primaryOptions.length > 0 ? (
         <>
@@ -38,10 +40,10 @@ export function LanguageSelect({ label, value, options, disabled, onChange }: {
           </optgroup>
         </>
       ) : (
-        filtered.map(option => <option key={option.code} value={option.code}>{option.name} {option.code === 'none' ? '' : `· ${option.code}`}</option>)
+        filtered.map(option => <option key={option.code} value={option.code}>{option.name} {option.code === 'none' || option.code === 'auto' ? '' : `· ${option.code}`}</option>)
       )}
     </select>
-    <small role="status">{query ? `${filtered.length} kết quả / ` : ''}{options.length} lựa chọn</small>
+    {query ? <small role="status">{filtered.length} kết quả / {options.length} lựa chọn</small> : null}
   </div>;
 }
 

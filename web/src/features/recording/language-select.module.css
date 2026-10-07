@@ -1,21 +1,113 @@
-.row { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; width: 100%; }
-.field { min-width: 0; display: grid; gap: 3px; }
-.labelRow { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.labelRow button { color: var(--accent); padding: 2px; }
-.field label { font-size: .78rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.field small { color: var(--text-muted); font-size: .7rem; font-weight: 400; }
-.field input, .field select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: .82rem; outline: none; }
-.field select:disabled { opacity: 0.75; cursor: not-allowed; background: var(--bg-secondary); }
-.swap { display: inline-flex; align-items: center; justify-content: center; padding: 7px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--accent); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0; }
-.swap:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); transform: scale(1.05); }
-.swap:active:not(:disabled) { transform: scale(0.95); }
-.swap:disabled { opacity: 0.4; cursor: not-allowed; }
-.recordingPair { display: none; }
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 20px;
+}
+.labelRow button {
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.labelRow button:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+.field label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.field small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.field input, .field select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field select:focus, .field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.field select:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  background: var(--bg-secondary);
+}
+.swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  align-self: flex-end;
+  box-shadow: var(--shadow-sm);
+}
+.swap:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  transform: rotate(180deg) scale(1.06);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.swap:active:not(:disabled) {
+  transform: rotate(180deg) scale(0.94);
+}
+.swap:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.recordingPair {
+  display: none;
+}
 @media (max-width: 600px) {
   .row { gap: 6px; }
-  .field label { font-size: .72rem; }
+  .field label { font-size: 0.72rem; }
   .field small { display: none; }
-  .field select { padding: 5px 6px; font-size: .78rem; }
-  .swap { padding: 5px; }
+  .field input, .field select { height: 32px; font-size: 0.78rem; padding: 0 8px; }
+  .swap { width: 32px; height: 32px; }
 }
 

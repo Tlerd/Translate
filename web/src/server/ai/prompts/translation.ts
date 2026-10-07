@@ -15,7 +15,10 @@ export function buildTranslationSystemPrompt(
   sourceLanguage: string,
   targetLanguage: string
 ): string {
-  return `Translate ONLY from ${sourceLanguage} to ${targetLanguage}.
+  const fromClause = sourceLanguage.toLowerCase() === 'auto'
+    ? 'the detected source language'
+    : sourceLanguage;
+  return `Translate ONLY from ${fromClause} to ${targetLanguage}.
 Return only the current text's translation, without commentary or markdown.
 Preserve meaning, negation, numbers, units, tone, politeness, uncertainty, meaningful repetitions, names, and [không nghe rõ].
 Do not guess missing speech, subjects, or name readings; keep ambiguity.

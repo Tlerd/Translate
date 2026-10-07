@@ -93,7 +93,7 @@ export class WebSpeechRecognizer {
       this.revisionsByResult.clear();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = this.lang;
+      recognition.lang = this.lang === 'auto' ? (typeof navigator !== 'undefined' ? navigator.language || '' : '') : this.lang;
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {

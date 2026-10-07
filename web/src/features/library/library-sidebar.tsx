@@ -129,16 +129,18 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
-              padding: '9px 14px',
-              backgroundColor: 'var(--bg-active)',
+              gap: 7,
+              padding: '8px 16px',
+              backgroundColor: 'var(--accent)',
               color: '#fff',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 'var(--radius-full)',
               fontWeight: 600,
-              fontSize: '0.88rem',
+              fontSize: '0.86rem',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'all 0.18s ease',
             }}
           >
-            <Plus size={18} />
+            <Plus size={16} />
             <span>Buổi mới</span>
           </Link>
         </div>
@@ -151,11 +153,11 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
             gap: 8,
             backgroundColor: 'var(--bg-primary)',
             border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '6px 10px',
+            borderRadius: 'var(--radius-full)',
+            padding: '6px 12px',
           }}
         >
-          <Search size={16} color="var(--text-muted)" />
+          <Search size={15} color="var(--text-muted)" />
           <input
             type="text"
             placeholder="Tìm bản ghi..."
@@ -165,7 +167,7 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
               background: 'none',
               border: 'none',
               outline: 'none',
-              fontSize: '0.85rem',
+              fontSize: '0.84rem',
               width: '100%',
               color: 'var(--text-primary)',
             }}
@@ -173,23 +175,27 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
         </div>
 
         {/* Folder filter chips */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', paddingBottom: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           <button
             type="button"
             onClick={() => setSelectedFolder('all')}
             style={{
-              padding: '3px 8px',
+              padding: '4px 10px',
               fontSize: '0.74rem',
               borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--border-color)',
-              background: selectedFolder === 'all' ? 'var(--bg-active)' : 'var(--bg-card)',
-              color: selectedFolder === 'all' ? '#fff' : 'var(--text-secondary)',
+              border: selectedFolder === 'all' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+              background: selectedFolder === 'all' ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-card)',
+              color: selectedFolder === 'all' ? 'var(--accent)' : 'var(--text-secondary)',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               fontWeight: selectedFolder === 'all' ? 600 : 400,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              transition: 'all 0.15s ease',
             }}
           >
-            Tất cả ({recordings.length})
+            <span>Tất cả ({recordings.length})</span>
           </button>
 
           {customFolders.map((folder) => {
@@ -201,18 +207,23 @@ export function LibrarySidebar({ onCloseMobile }: { onCloseMobile?: () => void }
                 type="button"
                 onClick={() => setSelectedFolder(folder)}
                 style={{
-                  padding: '3px 8px',
+                  padding: '4px 10px',
                   fontSize: '0.74rem',
                   borderRadius: 'var(--radius-full)',
-                  border: '1px solid var(--border-color)',
-                  background: isSel ? 'var(--bg-active)' : 'var(--bg-card)',
-                  color: isSel ? '#fff' : 'var(--text-secondary)',
+                  border: isSel ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                  background: isSel ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-card)',
+                  color: isSel ? 'var(--accent)' : 'var(--text-secondary)',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   fontWeight: isSel ? 600 : 400,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                {folder} ({count})
+                <Folder size={11} />
+                <span>{folder} ({count})</span>
               </button>
             );
           })}
