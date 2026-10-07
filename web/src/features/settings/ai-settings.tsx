@@ -25,6 +25,7 @@ import {
   type SpeakerCount,
   type TranscriptionMode,
 } from '@/shared/transcription';
+import { inputLanguages, OUTPUT_LANGUAGES } from '@/shared/languages';
 
 export function AiSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -222,6 +223,102 @@ export function AiSettings() {
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* 0. Ngôn ngữ chính (Đầu vào & Đầu ra) */}
+        <div
+          style={{
+            padding: '20px 22px',
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Languages size={17} color="var(--accent)" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                Ngôn ngữ chính mặc định
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Thiết lập ngôn ngữ đầu vào và đầu ra mặc định cho các buổi học mới
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            {/* Đầu vào chính */}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Ngôn ngữ đầu vào chính:
+              </span>
+              <select
+                value={settings.sourceLanguage}
+                onChange={(e) => setSettings({ ...settings, sourceLanguage: e.target.value })}
+                style={{
+                  padding: '9px 12px',
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.86rem',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {inputLanguages(settings.speechProvider).map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                Chọn &ldquo;Tự nhận biết ngôn ngữ&rdquo; để hệ thống tự động xác định giọng nói.
+              </span>
+            </label>
+
+            {/* Đầu ra chính */}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Ngôn ngữ đầu ra chính:
+              </span>
+              <select
+                value={settings.targetLanguage}
+                onChange={(e) => setSettings({ ...settings, targetLanguage: e.target.value })}
+                style={{
+                  padding: '9px 12px',
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.86rem',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {OUTPUT_LANGUAGES.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                Chọn &ldquo;Không dịch&rdquo; nếu chỉ muốn chép lời thoại gốc mà không cần dịch.
+              </span>
+            </label>
+          </div>
+        </div>
+
         {/* 1. Nhận giọng (Speech Provider) */}
         <div
           style={{

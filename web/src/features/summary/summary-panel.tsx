@@ -5,7 +5,7 @@ import { Sparkles, Loader2, BookOpen, AlertCircle } from 'lucide-react';
 import { fetchModels, requestSummary } from '@/lib/api-client';
 import { computeCaptionSourceHash, saveSummary } from '@/storage/recordings';
 import type { SummaryItem, CaptionItem } from '@/shared/recording';
-import type { ModelInfo, ModelsResponse } from '@/shared/ai-contracts';
+import type { ModelsResponse } from '@/shared/ai-contracts';
 import styles from './summary-panel.module.css';
 
 interface SummaryPanelProps {
@@ -32,7 +32,7 @@ export function SummaryPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelData, setModelData] = useState<ModelsResponse | null>(null);
-  const [thinkingLevel, setThinkingLevel] = useState('auto');
+  const [thinkingLevel] = useState('auto');
   const [selectedSummaryModelKey, setSelectedSummaryModelKey] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isAuthoring, setIsAuthoring] = useState(false);
@@ -48,15 +48,6 @@ export function SummaryPanel({
       })
       .catch((err) => console.warn('Lỗi lấy danh sách model:', err));
   }, []);
-
-  const summaryModels = (modelData?.models ?? [])
-    .filter((model) => model.allowedTasks.includes('summarize') && model.enabled)
-    .sort((a, b) => {
-      const order = ['google:gemini-3.1-flash-lite', 'google:gemini-3.8-flash'];
-      return (order.indexOf(a.key) < 0 ? 99 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 99 : order.indexOf(b.key));
-    });
-  const selectedSummaryModel: ModelInfo | undefined = summaryModels.find((model) => model.key === selectedSummaryModelKey);
-  const summaryThinkingLevels = selectedSummaryModel?.thinkingLevels ?? [];
 
   const handleStartAuthoring = () => {
     setAuthorTitle(summary?.title || 'Tóm tắt buổi học');
@@ -171,49 +162,6 @@ export function SummaryPanel({
         </div>
 
         <div className={styles.headerControls}>
-          {summaryModels.length > 0 && !isAuthoring && (
-            <label className={styles.controlField}>
-              <span>Model tóm tắt</span>
-              <select
-                aria-label="Model tóm tắt"
-                value={selectedSummaryModelKey}
-                onChange={(event) => {
-                  setSelectedSummaryModelKey(event.target.value);
-                  setThinkingLevel('auto');
-                }}
-                disabled={loading}
-                className={styles.controlSelect}
-              >
-                {summaryModels.map((model) => (
-                  <option key={model.key} value={model.key} disabled={model.key === translationModelKey}>
-                    {model.name}
-                    {model.key === translationModelKey ? ' (đang dùng để dịch)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {summaryThinkingLevels.length > 0 && !isAuthoring && (
-            <label className={styles.controlField}>
-              <span>Mức suy luận</span>
-              <select
-                aria-label="Mức suy luận tóm tắt"
-                value={thinkingLevel}
-                onChange={(event) => setThinkingLevel(event.target.value)}
-                disabled={loading}
-                className={styles.controlSelect}
-              >
-                <option value="auto">Tự động</option>
-                {summaryThinkingLevels.map((level) => (
-                  <option key={level} value={level}>
-                    {({ minimal: 'Tối thiểu', low: 'Thấp', medium: 'Vừa', high: 'Cao' } as const)[level]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             {!isAuthoring ? (
               <>

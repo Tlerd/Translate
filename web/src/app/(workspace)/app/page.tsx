@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useRecording } from '@/features/recording/recording-context';
 import { RecorderToolbar } from '@/features/recording/recorder-toolbar';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
@@ -16,9 +17,26 @@ function formatSessionTitle(date: Date = new Date()) {
   return `note_${d}/${m} lúc ${hours} giờ ${minutes} phút`;
 }
 
-export default function WorkspaceHomePage() {
+function WorkspaceContent() {
   const { state, controller } = useRecording();
+  const searchParams = useSearchParams();
+  const action = searchParams.get('action');
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+
+  useEffect(() => {
+    if (action === 'new') {
+      setIsCreatingNew(true);
+    }
+  }, [action]);
+
   const isRecording = state.state === 'recording';
+
+  // When recording starts, exit creating new state
+  useEffect(() => {
+    if (isRecording) {
+      setIsCreatingNew(false);
+    }
+  }, [isRecording]);
 
   const mockActiveRecording: RecordingItem = {
     id: state.recordingId || 'current',
@@ -87,10 +105,12 @@ export default function WorkspaceHomePage() {
     );
   }
 
-  // Normal Setup & Replay Mode
+  // Show top toolbar ONLY when creating new session OR when no recordings exist yet
+  const showTopToolbar = isCreatingNew || state.captions.length === 0 || action === 'new';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      <RecorderToolbar />
+      {showTopToolbar && <RecorderToolbar />}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <RecordingWorkspace
           recording={mockActiveRecording}
@@ -101,5 +121,13 @@ export default function WorkspaceHomePage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function WorkspaceHomePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải...</div>}>
+      <WorkspaceContent />
+    </Suspense>
   );
 }

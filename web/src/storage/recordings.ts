@@ -564,3 +564,31 @@ export async function saveCustomFolders(folders: string[]): Promise<void> {
   await db.settings.put({ key: 'custom_folders', value: JSON.stringify(clean) });
 }
 
+export async function deleteCustomFolder(folderName: string): Promise<void> {
+  const db = getDb();
+  const currentFolders = await getCustomFolders();
+  const updatedFolders = currentFolders.filter((f) => f !== folderName);
+  await saveCustomFolders(updatedFolders);
+
+  // Unlink folder from any recording that was in this folder
+  const matchingRecordings = await db.recordings.filter((r) => r.folder === folderName).toArray();
+  for (const rec of matchingRecordings) {
+    await db.recordings.update(rec.id, { folder: undefined });
+  }
+}
+
+export async function renameCustomFolder(oldName: string, newName: string): Promise<void> {
+  const cleanNew = newName.trim();
+  if (!cleanNew || oldName === cleanNew) return;
+  const db = getDb();
+  const currentFolders = await getCustomFolders();
+  const updatedFolders = currentFolders.map((f) => (f === oldName ? cleanNew : f));
+  await saveCustomFolders(updatedFolders);
+
+  // Update recordings
+  const matchingRecordings = await db.recordings.filter((r) => r.folder === oldName).toArray();
+  for (const rec of matchingRecordings) {
+    await db.recordings.update(rec.id, { folder: cleanNew });
+  }
+}
+

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { Mic, Square, Volume2, BookOpen, MessageSquare, Settings, Pause, Play, AlertTriangle, ArrowLeftRight, Info } from 'lucide-react';
+import { Mic, Square, Volume2, BookOpen, MessageSquare, Pause, Play, AlertTriangle, ArrowLeftRight, Info } from 'lucide-react';
 import { useRecording } from './recording-context';
 import styles from './recording-ui.module.css';
 import { LanguageSelect } from './language-select';
@@ -277,17 +276,6 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               <span>{showDiagnostics ? 'Ẩn thông số' : 'Thông số'}</span>
             </button>
           )}
-
-          {/* Link to AI Settings */}
-          <Link
-            href="/settings"
-            aria-label="Cấu hình AI"
-            className={styles.configLinkBadge}
-            title="Đến Cấu hình AI để đổi model, cách nhận giọng hoặc khoảng nghỉ"
-          >
-            <Settings size={14} />
-            <span className={styles.configBadgeText}>Cấu hình AI</span>
-          </Link>
         </div>
       </div>
 

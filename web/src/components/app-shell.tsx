@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PanelLeft, Square, Settings, Radio, BarChart3 } from 'lucide-react';
+import { PanelLeft, Square, Settings, Radio, BarChart3, Plus } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
@@ -77,16 +77,19 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
       <div className={styles.mainContent}>
         <header className={styles.topBar}>
           <div className={styles.topBarLeft}>
-            <button
-              className={`${styles.toggleButton} ${styles.menuButton}`}
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title={sidebarOpen ? "Thu gọn thanh bên" : "Mở thanh bên"}
-              aria-label={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở thanh bên'}
-              aria-expanded={sidebarOpen}
-              aria-controls="recording-library"
-            >
-              <PanelLeft size={18} />
-            </button>
+            {/* Show toggle button in TopBar ONLY when sidebar is closed (LilysAI standard) */}
+            {!sidebarOpen && (
+              <button
+                className={`${styles.toggleButton} ${styles.menuButton}`}
+                onClick={() => setSidebarOpen(true)}
+                title="Mở thanh bên"
+                aria-label="Mở thanh bên"
+                aria-expanded={false}
+                aria-controls="recording-library"
+              >
+                <PanelLeft size={18} />
+              </button>
+            )}
             <Link href="/app" className={styles.appTitle} title="Máy Dịch Lớp Học" aria-label="Máy Dịch Lớp Học">
               <span className={styles.appLogo}>
                 <Radio size={18} color="var(--accent)" />
@@ -96,6 +99,16 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
           </div>
 
           <div className={styles.topBarRight}>
+            {/* LilysAI style + Thêm mới button on TopBar */}
+            <Link
+              href="/app?action=new"
+              className={styles.topBarNewBtn}
+              title="Bắt đầu buổi ghi mới"
+            >
+              <Plus size={14} />
+              <span>Thêm mới</span>
+            </Link>
+
             {/* Active recording persistent status banner */}
             {isRecording && (
               <div className={styles.activeSessionBanner}>

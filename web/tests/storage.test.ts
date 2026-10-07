@@ -580,4 +580,40 @@ describe('Storage Layer', () => {
     expect(await listTrashRecordings()).toHaveLength(0);
     expect(await listRecordings(50, 0, true)).toHaveLength(0);
   });
+
+  it('handles custom folder creation, renaming, and deletion with unlinking', async () => {
+    const {
+      getCustomFolders,
+      saveCustomFolders,
+      renameCustomFolder,
+      deleteCustomFolder,
+      updateRecordingFolder,
+      createRecording,
+      getRecording,
+    } = await import('@/storage/recordings');
+
+    await saveCustomFolders(['Toán học', 'Tiếng Nhật']);
+    expect(await getCustomFolders()).toEqual(['Toán học', 'Tiếng Nhật']);
+
+    await createRecording({
+      id: 'rec_fld_1',
+      title: 'Bài giảng tiếng Nhật',
+      mode: 'lecture',
+      sourceLanguage: 'ja',
+      targetLanguage: 'vi',
+      translationModelKey: 'google:gemini-3.1-flash-lite',
+    });
+    await updateRecordingFolder('rec_fld_1', 'Tiếng Nhật');
+    expect((await getRecording('rec_fld_1'))?.folder).toBe('Tiếng Nhật');
+
+    // Rename folder
+    await renameCustomFolder('Tiếng Nhật', 'Ngoại ngữ');
+    expect(await getCustomFolders()).toEqual(['Toán học', 'Ngoại ngữ']);
+    expect((await getRecording('rec_fld_1'))?.folder).toBe('Ngoại ngữ');
+
+    // Delete folder - recordings should unlink without data loss
+    await deleteCustomFolder('Ngoại ngữ');
+    expect(await getCustomFolders()).toEqual(['Toán học']);
+    expect((await getRecording('rec_fld_1'))?.folder).toBeUndefined();
+  });
 });
