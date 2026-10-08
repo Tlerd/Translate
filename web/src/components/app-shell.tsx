@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PanelLeft, Square, Radio, Plus } from 'lucide-react';
@@ -8,13 +8,18 @@ import styles from './app-shell.module.css';
 import { LibraryNav } from '@/features/library/library-nav';
 import { useRecording } from '@/features/recording/recording-context';
 import { MobileBottomNav, isBottomNavHidden } from './mobile-nav';
+import { SidebarProvider } from './sidebar-context';
 
 export function AppShell({ children }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { state: recordingState, stopRecording } = useRecording();
   const pathname = usePathname();
   const isRecording = recordingState.state === 'recording';
-  const isRecordingDetail = pathname.startsWith('/recordings/');
+  const isRecordingDetail = /^\/recordings\/[^/]+/.test(pathname);
+  const sidebarValue = useMemo(
+    () => ({ sidebarOpen, setSidebarOpen, toggleSidebar: () => setSidebarOpen(open => !open) }),
+    [sidebarOpen],
+  );
   // The drawer reserves room for the bottom nav only when the nav is actually shown.
   const bottomNavHidden = isBottomNavHidden(pathname);
 
@@ -46,6 +51,16 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
     prevRecordingRef.current = isRecording;
   }, [isRecording]);
 
+  // Entering a saved recording on desktop collapses the sidebar once; the detail header's toggle reopens it.
+  const prevRecordingDetailRef = useRef(false);
+  useEffect(() => {
+    const entered = isRecordingDetail && !prevRecordingDetailRef.current;
+    prevRecordingDetailRef.current = isRecordingDetail;
+    if (entered && window.innerWidth > 768) {
+      setSidebarOpen(false);
+    }
+  }, [isRecordingDetail]);
+
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
     window.addEventListener('keydown', close);
@@ -63,7 +78,8 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
     <div
       className={styles.shell}
       data-sidebar-open={sidebarOpen ? 'true' : 'false'}
-      data-recording-detail={isRecordingDetail ? 'true' : 'false'}
+      // A live session keeps the top bar so its Dừng button stays reachable from any page.
+      data-recording-detail={isRecordingDetail && !isRecording ? 'true' : 'false'}
       data-bottom-nav={bottomNavHidden ? 'hidden' : 'shown'}
     >
       {/* Mobile backdrop */}
@@ -146,7 +162,9 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
           </div>
         </header>
 
-        <main className={styles.contentBody}>{children}</main>
+        <main className={styles.contentBody}>
+          <SidebarProvider value={sidebarValue}>{children}</SidebarProvider>
+        </main>
 
         {/* Mobile Bottom Navigation. It reads the URL (useSearchParams), so it needs a Suspense boundary. */}
         <Suspense fallback={null}>

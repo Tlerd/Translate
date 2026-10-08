@@ -15,14 +15,18 @@ interface TranscriptPaneProps {
   onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
   /** Full-screen reading: a centred column with scalable text. */
   reading?: { scale: number; display: ReadingDisplay };
+  /** Reports the pane's own scroll position, so a parent can hide its bars while reading. */
+  onScrollTop?: (scrollTop: number) => void;
+  /** Saved recordings open at the first line; live captions follow the newest line. */
+  startAtTop?: boolean;
 }
 
-export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange, reading }: TranscriptPaneProps) {
+export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange, reading, onScrollTop, startAtTop = false }: TranscriptPaneProps) {
   const scale = reading?.scale ?? 1;
   const display = reading?.display ?? 'both';
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(!reading);
+  const [autoScroll, setAutoScroll] = useState(!reading && !startAtTop);
   const [pendingSpeakerId, setPendingSpeakerId] = useState<number | null>(null);
   const [speakerError, setSpeakerError] = useState<string | null>(null);
 
@@ -42,7 +46,8 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
     // User is considered at the bottom if within 48px
     const isNearBottom = distanceToBottom <= 48;
     setAutoScroll(isNearBottom);
-  }, []);
+    onScrollTop?.(el.scrollTop);
+  }, [onScrollTop]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     setAutoScroll(true);
@@ -93,162 +98,171 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
     );
   }
 
+  // Reading mode keeps its scalable inline type; otherwise the CSS classes decide (desktop flattens them).
+  const sourceStyle: React.CSSProperties | undefined = reading
+    ? { fontWeight: 500, fontSize: `${0.96 * scale}rem`, lineHeight: 1.5, color: 'var(--text-primary)' }
+    : undefined;
+  const translationStyle: React.CSSProperties | undefined = reading
+    ? {
+        marginTop: 8,
+        padding: '2px 0 2px 12px',
+        fontSize: `${1.04 * scale}rem`,
+        lineHeight: 1.55,
+        fontWeight: 500,
+        color: 'var(--text-primary)',
+        borderLeft: '3px solid var(--accent)',
+      }
+    : undefined;
+
   return (
     <div
       ref={containerRef}
       data-testid="transcript-pane"
-      className={styles.transcriptPane}
+      className={reading ? styles.transcriptPane : `${styles.transcriptPane} ${styles.transcriptFlat}`}
       onScroll={handleScroll}
       onTouchMove={handleScroll}
       style={reading ? { padding: '24px max(16px, calc((100% - 880px) / 2)) 48px' } : undefined}
     >
-      {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
-      {captions.map((cap) => {
-        const isHighlighted = highlightCaptionId === cap.id;
-        const isStreaming = cap.state === 'streaming';
-        const speakerNumber = cap.speakerLabel ? cap.speakerLabel.replace('spk_', '') : '1';
-        const isSource = isSourceSpeakerLabel(cap.speakerLabel);
-        // Avatar shows the number for Speaker N, or the initial for a source label.
-        const avatarText = isSource ? (cap.speakerLabel === SOURCE_SPEAKER_LABELS.mic ? 'T' : 'CH') : speakerNumber;
-        const speakerName = cap.speakerLabel ? displaySpeakerLabel(cap.speakerLabel) : `Speaker ${speakerNumber}`;
+      <div className={styles.transcriptColumn}>
+        {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
+        {captions.map((cap) => {
+          const isHighlighted = highlightCaptionId === cap.id;
+          const isStreaming = cap.state === 'streaming';
+          const speakerNumber = cap.speakerLabel ? cap.speakerLabel.replace('spk_', '') : '1';
+          const isSource = isSourceSpeakerLabel(cap.speakerLabel);
+          // Avatar shows the number for Speaker N, or the initial for a source label.
+          const avatarText = isSource ? (cap.speakerLabel === SOURCE_SPEAKER_LABELS.mic ? 'T' : 'CH') : speakerNumber;
+          const speakerName = cap.speakerLabel ? displaySpeakerLabel(cap.speakerLabel) : `Speaker ${speakerNumber}`;
 
-        return (
-          <div
-            key={cap.id}
-            id={`caption-${cap.id}`}
-            data-testid="caption-card"
-            className={`${styles.captionCard} ${isHighlighted ? styles.captionCardHighlighted : ''}`}
-            style={{ borderRadius: 12, padding: '12px 16px' }}
-          >
-            {/* Header: Speaker Avatar, Name, and Timestamp */}
-            <div className={styles.captionHeader} style={{ marginBottom: 8 }}>
-              <div className={styles.captionMeta} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    backgroundColor: getSpeakerColor(cap.speakerLabel),
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}
-                  title={isSource ? speakerName : `Người nói ${speakerNumber}`}
-                >
-                  {avatarText}
+          return (
+            <div
+              key={cap.id}
+              id={`caption-${cap.id}`}
+              data-testid="caption-card"
+              className={`${styles.captionCard} ${isHighlighted ? styles.captionCardHighlighted : ''}`}
+            >
+              {/* Header: Speaker Avatar, Name, and Timestamp */}
+              <div className={styles.captionHeader}>
+                <div className={styles.captionMeta} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      backgroundColor: getSpeakerColor(cap.speakerLabel),
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                    title={isSource ? speakerName : `Người nói ${speakerNumber}`}
+                  >
+                    {avatarText}
+                  </div>
+
+                  {onSpeakerChange ? (
+                    <select
+                      aria-label={`Người nói cho câu ${cap.id}`}
+                      className={styles.speakerSelect}
+                      value={cap.speakerLabel ?? ''}
+                      disabled={pendingSpeakerId !== null}
+                      aria-busy={pendingSpeakerId === cap.id}
+                      onChange={(event) => void changeSpeaker(cap.id, event.target.value)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      <option value="">{isSource ? 'Chưa gán' : `Speaker ${speakerNumber}`}</option>
+                      {(hasSourceLabels || isSource) && (
+                        <>
+                          <option value={SOURCE_SPEAKER_LABELS.mic}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.mic)}</option>
+                          <option value={SOURCE_SPEAKER_LABELS.display}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.display)}</option>
+                        </>
+                      )}
+                      {cap.speakerLabel && !isSource && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
+                        <option value={cap.speakerLabel} disabled>{displaySpeakerLabel(cap.speakerLabel)} (nhãn cũ)</option>
+                      )}
+                      {SPEAKER_COUNTS.slice(0, speakerCount).map(count => <option key={count} value={`spk_${count}`}>Speaker {count}</option>)}
+                    </select>
+                  ) : (
+                    <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                      {speakerName}
+                    </span>
+                  )}
                 </div>
 
-                {onSpeakerChange ? (
-                  <select
-                    aria-label={`Người nói cho câu ${cap.id}`}
-                    className={styles.speakerSelect}
-                    value={cap.speakerLabel ?? ''}
-                    disabled={pendingSpeakerId !== null}
-                    aria-busy={pendingSpeakerId === cap.id}
-                    onChange={(event) => void changeSpeaker(cap.id, event.target.value)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    <option value="">{isSource ? 'Chưa gán' : `Speaker ${speakerNumber}`}</option>
-                    {(hasSourceLabels || isSource) && (
-                      <>
-                        <option value={SOURCE_SPEAKER_LABELS.mic}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.mic)}</option>
-                        <option value={SOURCE_SPEAKER_LABELS.display}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.display)}</option>
-                      </>
-                    )}
-                    {cap.speakerLabel && !isSource && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
-                      <option value={cap.speakerLabel} disabled>{displaySpeakerLabel(cap.speakerLabel)} (nhãn cũ)</option>
-                    )}
-                    {SPEAKER_COUNTS.slice(0, speakerCount).map(count => <option key={count} value={`spk_${count}`}>Speaker {count}</option>)}
-                  </select>
-                ) : (
-                  <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                    {speakerName}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isStreaming && (
+                    <span className={styles.streamingBadge}>
+                      <span className={styles.streamingDot} />
+                      {cap.isFinal && targetLanguage !== 'none' ? 'Đang dịch...' : 'Đang nghe...'}
+                    </span>
+                  )}
+                  <span className={styles.captionTime}>
+                    {formatTimestamp(cap.startMs)}
                   </span>
-                )}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {isStreaming && (
-                  <span className={styles.streamingBadge}>
-                    <span className={styles.streamingDot} />
-                    {cap.isFinal && targetLanguage !== 'none' ? 'Đang dịch...' : 'Đang nghe...'}
-                  </span>
-                )}
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>
-                  {formatTimestamp(cap.startMs)}
-                </span>
-              </div>
+              {/* Original source (the translation stands alone when only it is wanted and exists) */}
+              {(display !== 'translation' || !cap.translation) && (
+                <div
+                  data-testid="caption-source"
+                  className={styles.captionText}
+                  style={sourceStyle}
+                >
+                  {cap.source}
+                </div>
+              )}
+
+              {cap.sourceHistory?.length ? (
+                <details className={styles.sourceHistory} style={{ marginTop: 4 }}>
+                  <summary>Lời nhận dạng trước đó ({cap.sourceHistory.length})</summary>
+                  <ol>
+                    {cap.sourceHistory.map((item) => (
+                      <li key={`${item.revision}-${item.text}`}>
+                        <span>{item.text}</span>
+                        <span className={styles.historyRevision}>Bản {item.revision}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
+
+              {/* Translation */}
+              {targetLanguage !== 'none' && display !== 'source' && (cap.translation || isStreaming) && (
+                <div
+                  className={styles.captionTranslation}
+                  data-testid="caption-translation"
+                  style={translationStyle}
+                >
+                  {cap.translation || (isStreaming ? '...' : '')}
+                  {cap.translation && cap.targetSourceRevision !== cap.revision && (
+                    <span style={{ display: 'block', marginTop: 4, color: 'var(--warning)', fontSize: '0.76rem' }}>
+                      Bản dịch cũ — lời gốc đã được chỉnh sửa
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {cap.error && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>
+                  Lỗi dịch: {cap.error}
+                </div>
+              )}
             </div>
-
-            {/* Original source (the translation stands alone when only it is wanted and exists) */}
-            {(display !== 'translation' || !cap.translation) && (
-              <div
-                data-testid="caption-source"
-                className={styles.captionText}
-                style={{ fontWeight: 500, fontSize: `${0.96 * scale}rem`, lineHeight: 1.5, color: 'var(--text-primary)' }}
-              >
-                {cap.source}
-              </div>
-            )}
-
-            {cap.sourceHistory?.length ? (
-              <details className={styles.sourceHistory} style={{ marginTop: 4 }}>
-                <summary>Lời nhận dạng trước đó ({cap.sourceHistory.length})</summary>
-                <ol>
-                  {cap.sourceHistory.map((item) => (
-                    <li key={`${item.revision}-${item.text}`}>
-                      <span>{item.text}</span>
-                      <span className={styles.historyRevision}>Bản {item.revision}</span>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            ) : null}
-
-            {/* Translation */}
-            {targetLanguage !== 'none' && display !== 'source' && (cap.translation || isStreaming) && (
-              <div
-                className={styles.captionTranslation}
-                data-testid="caption-translation"
-                style={{
-                  marginTop: 8,
-                  padding: '2px 0 2px 12px',
-                  fontSize: `${1.04 * scale}rem`,
-                  lineHeight: 1.55,
-                  fontWeight: 500,
-                  color: 'var(--text-primary)',
-                  borderLeft: '3px solid var(--accent)',
-                }}
-              >
-                {cap.translation || (isStreaming ? '...' : '')}
-                {cap.translation && cap.targetSourceRevision !== cap.revision && (
-                  <span style={{ display: 'block', marginTop: 4, color: 'var(--warning)', fontSize: '0.76rem' }}>
-                    Bản dịch cũ — lời gốc đã được chỉnh sửa
-                  </span>
-                )}
-              </div>
-            )}
-
-            {cap.error && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>
-                Lỗi dịch: {cap.error}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       <div ref={bottomRef} />
       {!autoScroll && (
         <button
