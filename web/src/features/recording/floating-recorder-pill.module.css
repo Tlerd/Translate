@@ -77,6 +77,12 @@
   letter-spacing: 0.02em;
 }
 
+.sourceIcon {
+  display: inline-flex;
+  align-items: center;
+  color: #7dd3fc;
+}
+
 .divider {
   width: 1px;
   height: 18px;
