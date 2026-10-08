@@ -489,7 +489,7 @@
 
 .rowCols {
   display: grid;
-  grid-template-columns: 84px 64px 88px 112px 128px;
+  grid-template-columns: 84px 64px 136px 112px 112px;
   column-gap: 10px;
   align-items: center;
   min-width: 0;

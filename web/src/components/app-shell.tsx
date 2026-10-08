@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PanelLeft, Square, Radio, Plus } from 'lucide-react';
 import styles from './app-shell.module.css';
-import { LibrarySidebar } from '@/features/library/library-sidebar';
+import { LibraryNav } from '@/features/library/library-nav';
 import { useRecording } from '@/features/recording/recording-context';
 import { MobileBottomNav } from './mobile-nav';
 
@@ -72,10 +72,16 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
         id="recording-library"
         className={`${styles.sidebarWrapper} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}
       >
-        <LibrarySidebar
-          onCloseMobile={() => setSidebarOpen(false)}
-          onToggleSidebar={() => setSidebarOpen(v => !v)}
-        />
+        {/* LibraryNav reads the URL (useSearchParams), so it needs a Suspense boundary. */}
+        <Suspense fallback={null}>
+          <LibraryNav
+            onCloseMobile={() => {
+              // Only the mobile drawer closes after picking a collection; the desktop sidebar stays put.
+              if (window.innerWidth <= 768) setSidebarOpen(false);
+            }}
+            onToggleSidebar={() => setSidebarOpen(v => !v)}
+          />
+        </Suspense>
       </aside>
 
       {/* Main Content Area */}

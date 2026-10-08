@@ -47,7 +47,10 @@ export interface DayGroup {
   items: LibraryEntry[];
 }
 
-const VIEWS: readonly LibraryView[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived', 'trash'];
+/** Every view key, in the order the library and its navigation list them. */
+export const LIBRARY_VIEWS: readonly LibraryView[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived', 'trash'];
+/** URL value for recordings without a folder. Also reserved: no folder may be named this. */
+export const FOLDER_NONE = '_none';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_MS = 7 * DAY_MS;
 // Asia/Ho_Chi_Minh has no DST and is a fixed UTC+7 offset.
@@ -168,7 +171,7 @@ export function queryLibrary(entries: LibraryEntry[], query: LibraryQuery, now: 
   const nowMs = now.getTime();
 
   const counts = Object.fromEntries(
-    VIEWS.map((view) => [view, entries.filter((entry) => isInView(entry, view, nowMs)).length]),
+    LIBRARY_VIEWS.map((view) => [view, entries.filter((entry) => isInView(entry, view, nowMs)).length]),
   ) as Record<LibraryView, number>;
 
   const terms = foldText(query.q ?? '').split(/\s+/).filter(Boolean);

@@ -47,7 +47,7 @@ async function run() {
     await page.getByRole('heading', { name: 'Nghe trọn câu. Hiểu rõ ý.' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).count(), 0);
     await page.screenshot({ path: path.join(out, 'landing-desktop.png'), fullPage: true });
-    for (const route of ['/app', '/settings', '/recordings/fixture']) {
+    for (const route of ['/library', '/settings', '/recordings/fixture']) {
       await page.goto(base + route);
       await page.waitForURL('**/login');
       await page.getByRole('button', { name: 'Tiếp tục với Google' }).waitFor();
@@ -62,7 +62,7 @@ async function run() {
     ]) {
       await ctx.clearCookies();
       await ctx.addCookies([{ name: cookie, value, url: base, httpOnly: true, sameSite: 'Lax' }]);
-      await page.goto(base + '/app');
+      await page.goto(base + '/library');
       await page.waitForURL('**/login');
       assert.equal((await ctx.request.post(base + '/api/speech/nemotron/session', { data: { languageCode: 'vi-VN' } })).status(), 401);
       console.log(`PASS rejects ${label} session`);
@@ -70,7 +70,7 @@ async function run() {
     await ctx.clearCookies();
     await ctx.addCookies([{ name: cookie, value: await encode({ secret, salt: cookie, token: { email: owner, sub: 'owner-fixture' }, maxAge: 3600 }), url: base, httpOnly: true, sameSite: 'Lax' }]);
     await page.goto(base + '/login');
-    await page.waitForURL('**/app');
+    await page.waitForURL('**/library');
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
     // Real Auth.js endpoint must rotate the cookie, not just return a session.
     await page.evaluate(async () => { const response = await fetch('/api/auth/session'); if (!response.ok) throw new Error('Session refresh failed'); });
@@ -79,12 +79,12 @@ async function run() {
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
       for (let attempt = 0; attempt < 3; attempt++) {
-        await page.goto(base + '/app'); await page.reload();
+        await page.goto(base + '/library'); await page.reload();
         await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).waitFor();
         await page.locator('a[href="/settings"]').last().click(); await page.waitForURL('**/settings');
-        await page.goBack(); await page.waitForURL('**/app');
+        await page.goBack(); await page.waitForURL('**/library');
         await page.goForward(); await page.waitForURL('**/settings');
-        await page.getByRole('link', { name: 'Máy Dịch Lớp Học', exact: true }).click(); await page.waitForURL('**/app');
+        await page.getByRole('link', { name: 'Máy Dịch Lớp Học', exact: true }).click(); await page.waitForURL('**/library');
       }
       console.log(`PASS valid-session reload, client navigation, Back/Forward at ${viewport.width}px`);
     }
@@ -96,7 +96,7 @@ async function run() {
     console.log('PASS multiple tabs and return to app after focus with renewed cookie');
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await page.waitForURL(base + '/');
-    await page.goto(base + '/app');
+    await page.goto(base + '/library');
     await page.waitForURL('**/login');
     console.log('PASS owner access, login redirect and sign-out revokes access');
     await page.goto(base + '/login?error=AccessDenied');

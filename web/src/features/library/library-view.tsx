@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Mic, Search, Trash2 } from 'lucide-react';
 import { useLibrary } from './use-library';
 import {
+  FOLDER_NONE,
+  LIBRARY_VIEWS,
   groupByDay,
   listLanguagePairs,
   queryLibrary,
@@ -35,9 +37,7 @@ import { LibraryToast, type LibraryToastState } from './library-toast';
 import { isTextEntry } from './library-menu';
 import styles from './library-view.module.css';
 
-const VIEW_KEYS: readonly LibraryViewKey[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived', 'trash'];
 const SORT_KEYS: readonly LibrarySort[] = ['newest', 'oldest', 'longest', 'title'];
-const FOLDER_NONE = '_none';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type UrlKey = 'view' | 'folder' | 'q' | 'sort' | 'lang' | 'from' | 'to' | 'audio';
@@ -55,7 +55,7 @@ interface LibraryParams {
 }
 
 function isView(value: string | null): value is LibraryViewKey {
-  return VIEW_KEYS.some((key) => key === value);
+  return LIBRARY_VIEWS.some((key) => key === value);
 }
 
 function isSort(value: string | null): value is LibrarySort {

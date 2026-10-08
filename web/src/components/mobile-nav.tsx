@@ -14,14 +14,15 @@ export function MobileBottomNav() {
     return null;
   }
 
-  const isCollections = pathname === '/collections' || pathname === '/library';
+  // Legacy paths (/collections, /trash, /app) still belong to the library section.
+  const isLibrary = pathname === '/library' || pathname === '/collections' || pathname === '/trash' || pathname === '/app';
   const isSettings = pathname === '/settings' || pathname === '/usage';
 
   return (
     <nav className={styles.bottomNav} aria-label="Điều hướng di động">
       <Link
         href="/library"
-        className={`${styles.navItem} ${isCollections ? styles.active : ''}`}
+        className={`${styles.navItem} ${isLibrary ? styles.active : ''}`}
         title="Thư viện"
       >
         <BookOpen size={20} />
