@@ -3,6 +3,9 @@ import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { Pcm16kResampler, floatToPcm16 } from './pcm-resampler';
 import { isAllowedSpeakerLabel, TRANSCRIPTION_MODEL, type SpeakerCount, type TranscriptionMode, type TranscriptionTurn } from '@/shared/transcription';
 
+/** Quiet laptop/phone microphones sit well under the old 0.015 gate. */
+const QUIET_SPEECH_RMS = 0.006;
+
 /** Unary transcription: ordered WAV segments, never a live WebSocket session. */
 export class GeminiTranscribeRecognizer {
   private epoch = 0;
@@ -59,7 +62,7 @@ export class GeminiTranscribeRecognizer {
     this.sampleCount += samples.length;
     let power = 0;
     for (const sample of samples) power += sample * sample;
-    if (Math.sqrt(power / samples.length) < 0.015) this.silenceSamples += samples.length;
+    if (Math.sqrt(power / samples.length) < QUIET_SPEECH_RMS) this.silenceSamples += samples.length;
     else { this.speechSamples += samples.length; this.silenceSamples = 0; }
   }
 

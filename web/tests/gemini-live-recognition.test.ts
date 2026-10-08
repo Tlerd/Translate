@@ -355,4 +355,39 @@ describe('Pcm16kResampler', () => {
     expect(output.every(Number.isFinite)).toBe(true);
     expect(output[1]).toBeCloseTo(source[3], 5);
   });
+
+  async function openRecognizer(model: string, epoch: number, onTranscript: ReturnType<typeof vi.fn>, target?: string) {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', model as never, target);
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(epoch);
+    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+    const socket = FakeWebSocket.last!;
+    socket.open(); socket.message({ setupComplete: {} }); await starting;
+    return { recognizer, socket };
+  }
+
+  it('shows Flash text from a quiet microphone that stays below the old 0.015 gate', async () => {
+    const onTranscript = vi.fn();
+    const { recognizer, socket } = await openRecognizer(FLASH_LIVE_MODEL, 31, onTranscript);
+    try {
+      recognizer.pushPcm(new Float32Array(1600).fill(0.008), 16000);
+      socket.message({ serverContent: { inputTranscription: { text: 'こんにちは' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['こんにちは', false]);
+    } finally { await recognizer.stop(0); }
+  });
+
+  it('shows translated text immediately when it arrives before the source transcript', async () => {
+    const onTranscript = vi.fn();
+    const { recognizer, socket } = await openRecognizer('gemini-3.5-transcribe-live', 32, onTranscript, 'vi');
+    try {
+      socket.message({ serverContent: { outputTranscription: { text: 'Xin chào' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['Xin chào', false]);
+      expect(onTranscript.mock.calls.at(-1)?.[6]).toBe('Xin chào');
+      socket.message({ serverContent: { interimInputTranscription: { text: 'こんにちは' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['こんにちは', false]);
+      expect(new Set(onTranscript.mock.calls.map((call) => call[3])).size).toBe(1);
+    } finally { await recognizer.stop(0); }
+  });
 });

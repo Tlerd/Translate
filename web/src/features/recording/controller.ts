@@ -2,6 +2,7 @@ import { queueAudio } from '@/storage/audio-assets';
 import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/languages';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
+import { AdaptiveVoiceDetector } from './voice-activity';
 import { NemotronRecognizer } from './nemotron-recognition';
 import { SonioxRecognizer } from './soniox-recognition';
 import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
@@ -143,6 +144,7 @@ export class ClassroomController {
   private activeBlockId = 1;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private pcmVoiceActive = false;
+  private voiceDetector = new AdaptiveVoiceDetector();
   private pcmLastVoiceTime = 0;
   private pcmPreRollBuffer: CapturedPcm[] = [];
   private pcmPreRollMs = 0;
@@ -266,6 +268,7 @@ export class ClassroomController {
     this.segmentStartTimes.clear();
     this.segmentStartTimes.set(1, 0);
     this.pcmVoiceActive = false;
+    this.voiceDetector.reset();
     this.pcmLastVoiceTime = 0;
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
@@ -564,7 +567,7 @@ export class ClassroomController {
         const rms = Math.sqrt(sum / samples.length);
         const now = Date.now();
         const startMs = Math.max(0, now - this.startTime - chunkMs);
-        const isVoice = rms >= 0.015;
+        const isVoice = this.voiceDetector.isVoice(rms);
 
         const forwardPcm = (item: CapturedPcm) => {
           if (this.pcmReady && this.speechRecognizer) {

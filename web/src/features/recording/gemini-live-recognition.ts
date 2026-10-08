@@ -2,6 +2,7 @@ import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL, type LiveSpeechModel, type 
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
+import { chunkRms, MIN_VOICE_RMS } from './voice-activity';
 
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
 const SOCKET_OPEN = 1;
@@ -187,15 +188,11 @@ export class GeminiLiveRecognizer {
   /** Push raw Web Audio Float32 PCM at its native AudioContext sample rate. */
   public pushPcm(samples: Float32Array, inputRate: number): void {
     if (!this.socket || this.diagnosticsValue.status !== 'listening') return;
-    if (this.model === FLASH_LIVE_MODEL && samples.length) {
-      let power = 0;
-      for (const sample of samples) power += sample * sample;
-      if (Math.sqrt(power / samples.length) >= 0.015) {
-        this.heardSpeech = true;
-        // A silence boundary seals the old caption, but buffered ASR can still
-        // correct it. Fresh microphone speech starts a new provider identity.
-        if (this.locallyClosedFlashInput) this.resetFlashInput();
-      }
+    if (this.model === FLASH_LIVE_MODEL && samples.length && chunkRms(samples) >= MIN_VOICE_RMS) {
+      this.heardSpeech = true;
+      // A silence boundary seals the old caption, but buffered ASR can still
+      // correct it. Fresh microphone speech starts a new provider identity.
+      if (this.locallyClosedFlashInput) this.resetFlashInput();
     }
     if (!this.resampler || this.resamplerInputRate !== inputRate) {
       this.resampler = new Pcm16kResampler(inputRate);
@@ -313,8 +310,10 @@ export class GeminiLiveRecognizer {
       this.lastSourceText = '';
       if (this.diagnosticsValue.status === 'draining') this.finishDrain();
     }
-    if (!finalText && !interimText && (finalTrans || interimTrans) && this.lastSourceText) {
-      this.emitTranscript(this.lastSourceText, false, this.currentTranslation);
+    if (!finalText && !interimText && (finalTrans || interimTrans)) {
+      // Translation can precede (or replace) the source transcript. Show it
+      // right away; the source text takes over this row when it arrives.
+      this.emitTranscript(this.lastSourceText || this.currentTranslation || '', false, this.currentTranslation);
     }
     if (content && 'turnComplete' in content && content.turnComplete && this.diagnosticsValue.status === 'draining') {
       this.finishDrain();
