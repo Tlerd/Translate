@@ -20,23 +20,37 @@
     z-index: 100;
   }
 
+  /* Links and the Thư mục button share this look; the button needs the resets. */
   .navItem {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 3px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    border: none;
+    background: none;
     color: var(--text-muted);
+    font-family: inherit;
     text-decoration: none;
     font-size: 0.72rem;
     font-weight: 500;
-    padding: 6px 18px;
+    /* Five tabs share the 360px phone width, so the side padding stays small. */
+    padding: 6px 8px;
     border-radius: var(--radius-sm);
+    cursor: pointer;
     transition: color 0.15s ease;
   }
 
   .navItem:hover {
     color: var(--text-primary);
+  }
+
+  .navItem:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .active {

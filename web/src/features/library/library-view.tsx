@@ -126,6 +126,7 @@ export function LibraryView() {
   const [toast, setToast] = useState<LibraryToastState | null>(null);
   const anchorRef = useRef<string | null>(null);
   const toastSeqRef = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // URL is the source of truth for view, folder, search, sort and filters.
   const paramsKey = searchParams.toString();
@@ -139,6 +140,18 @@ export function LibraryView() {
     setSelected(new Set());
     anchorRef.current = null;
   }, [paramsKey]);
+
+  // The bottom nav's search tab opens /library?focus=search. Focus the field, then drop the flag
+  // so a refresh does not steal focus again. Other parameters stay as they are.
+  const wantsSearchFocus = searchParams.get('focus') === 'search';
+  useEffect(() => {
+    if (!wantsSearchFocus) return;
+    searchInputRef.current?.focus();
+    const next = new URLSearchParams(paramsRef.current);
+    next.delete('focus');
+    const queryString = next.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+  }, [wantsSearchFocus, pathname, router]);
 
   useEffect(() => {
     let active = true;
@@ -472,6 +485,17 @@ export function LibraryView() {
     anchorRef.current = null;
   }, []);
 
+  // Long press always selects (never toggles off), so repeating it on a selected row is harmless.
+  const handleLongPress = useCallback(
+    (id: string) => {
+      const entry = entryById.get(id);
+      if (!entry || entry.recording.state === 'recording') return;
+      anchorRef.current = id;
+      setSelected((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
+    },
+    [entryById],
+  );
+
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'a') return;
     if (isTextEntry(event.target)) return;
@@ -564,8 +588,10 @@ export function LibraryView() {
                       entry={entry}
                       showDay={showDay}
                       selected={selected.has(entry.recording.id)}
+                      selectionActive={selectedIds.length > 0}
                       folders={folders}
                       onSelect={handleSelect}
+                      onLongPress={handleLongPress}
                       onRename={renameOne}
                       onToggleStar={handleToggleStar}
                       onToggleArchive={handleToggleArchive}
@@ -586,8 +612,9 @@ export function LibraryView() {
   };
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${selectedIds.length > 0 ? styles.pageSelecting : ''}`}>
       <LibraryToolbar
+        searchInputRef={searchInputRef}
         view={params.view}
         folderLabel={folderLabel}
         counts={result.counts}

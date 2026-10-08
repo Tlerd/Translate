@@ -107,7 +107,7 @@ export function FolderMenuItems({ folders, current, onPick, onCreate }: FolderMe
         onClick={() => setCreating(true)}
       >
         <Plus size={14} aria-hidden="true" />
-        <span className={styles.menuItemLabel}>Thư mục mới…</span>
+        <span className={styles.menuItemLabel}>Tạo thư mục mới</span>
       </button>
       {creating ? (
         <form

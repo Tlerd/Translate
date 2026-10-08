@@ -7,7 +7,7 @@ import { PanelLeft, Square, Radio, Plus } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibraryNav } from '@/features/library/library-nav';
 import { useRecording } from '@/features/recording/recording-context';
-import { MobileBottomNav } from './mobile-nav';
+import { MobileBottomNav, isBottomNavHidden } from './mobile-nav';
 
 export function AppShell({ children }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -15,6 +15,13 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
   const pathname = usePathname();
   const isRecording = recordingState.state === 'recording';
   const isRecordingDetail = pathname.startsWith('/recordings/');
+  // The drawer reserves room for the bottom nav only when the nav is actually shown.
+  const bottomNavHidden = isBottomNavHidden(pathname);
+
+  // Tabs close the mobile drawer; the desktop sidebar stays put.
+  const closeDrawerOnMobile = () => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
+  };
 
   // On initial mount on small screens, collapse sidebar
   useEffect(() => {
@@ -57,6 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
       className={styles.shell}
       data-sidebar-open={sidebarOpen ? 'true' : 'false'}
       data-recording-detail={isRecordingDetail ? 'true' : 'false'}
+      data-bottom-nav={bottomNavHidden ? 'hidden' : 'shown'}
     >
       {/* Mobile backdrop */}
       {sidebarOpen && (
@@ -140,8 +148,13 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
 
         <main className={styles.contentBody}>{children}</main>
 
-        {/* Mobile Bottom Navigation */}
-        <MobileBottomNav />
+        {/* Mobile Bottom Navigation. It reads the URL (useSearchParams), so it needs a Suspense boundary. */}
+        <Suspense fallback={null}>
+          <MobileBottomNav
+            onOpenFolders={() => setSidebarOpen(true)}
+            onNavigate={closeDrawerOnMobile}
+          />
+        </Suspense>
       </div>
     </div>
   );
