@@ -3,7 +3,8 @@ import type { RecordingItem } from '@/shared/recording';
 // Pure query layer for the library. Nothing in this file reads the database or
 // the system clock: callers pass `now` explicitly so results are reproducible.
 
-export type LibraryView = 'all' | 'recent' | 'starred' | 'unsummarized' | 'unsynced' | 'recording' | 'archived';
+// 'trash' is the only view that holds soft-deleted recordings; every other view hides them.
+export type LibraryView = 'all' | 'recent' | 'starred' | 'unsummarized' | 'unsynced' | 'recording' | 'archived' | 'trash';
 export type LibrarySort = 'newest' | 'oldest' | 'longest' | 'title';
 export type SyncState = 'synced' | 'pending' | 'error' | 'local';
 
@@ -46,7 +47,7 @@ export interface DayGroup {
   items: LibraryEntry[];
 }
 
-const VIEWS: readonly LibraryView[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived'];
+const VIEWS: readonly LibraryView[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived', 'trash'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_MS = 7 * DAY_MS;
 // Asia/Ho_Chi_Minh has no DST and is a fixed UTC+7 offset.
@@ -64,6 +65,11 @@ export function foldText(text: string): string {
 
 function timeOf(entry: LibraryEntry): number {
   const time = Date.parse(entry.recording.createdAt);
+  return Number.isFinite(time) ? time : 0;
+}
+
+function deletedTimeOf(entry: LibraryEntry): number {
+  const time = Date.parse(entry.recording.deletedAt ?? '');
   return Number.isFinite(time) ? time : 0;
 }
 
@@ -85,9 +91,15 @@ function isLive(entry: LibraryEntry): boolean {
   return !entry.recording.deletedAt;
 }
 
+function isTrashed(entry: LibraryEntry): boolean {
+  return !isLive(entry);
+}
+
 function matchesView(entry: LibraryEntry, view: LibraryView, nowMs: number): boolean {
   const { recording } = entry;
   switch (view) {
+    case 'trash':
+      return isTrashed(entry);
     case 'all':
       return !isArchived(entry);
     case 'recent':
@@ -103,6 +115,12 @@ function matchesView(entry: LibraryEntry, view: LibraryView, nowMs: number): boo
     case 'archived':
       return isArchived(entry);
   }
+}
+
+/** Whether a row belongs to a view. Deleted rows only ever match the trash view. */
+function isInView(entry: LibraryEntry, view: LibraryView, nowMs: number): boolean {
+  if (view !== 'trash' && isTrashed(entry)) return false;
+  return matchesView(entry, view, nowMs);
 }
 
 function matchesFolder(entry: LibraryEntry, folder: string | null | undefined): boolean {
@@ -124,9 +142,11 @@ function matchesFilters(entry: LibraryEntry, filters: LibraryFilters | undefined
   return true;
 }
 
-function compareEntries(sort: LibrarySort): (a: LibraryEntry, b: LibraryEntry) => number {
+function compareEntries(sort: LibrarySort, view: LibraryView): (a: LibraryEntry, b: LibraryEntry) => number {
   switch (sort) {
     case 'newest':
+      // In the trash, "newest" means most recently deleted first.
+      if (view === 'trash') return (a, b) => deletedTimeOf(b) - deletedTimeOf(a);
       return (a, b) => timeOf(b) - timeOf(a);
     case 'oldest':
       return (a, b) => timeOf(a) - timeOf(b);
@@ -146,10 +166,9 @@ function compareEntries(sort: LibrarySort): (a: LibraryEntry, b: LibraryEntry) =
 
 export function queryLibrary(entries: LibraryEntry[], query: LibraryQuery, now: Date): LibraryResult {
   const nowMs = now.getTime();
-  const live = entries.filter(isLive);
 
   const counts = Object.fromEntries(
-    VIEWS.map((view) => [view, live.filter((entry) => matchesView(entry, view, nowMs)).length]),
+    VIEWS.map((view) => [view, entries.filter((entry) => isInView(entry, view, nowMs)).length]),
   ) as Record<LibraryView, number>;
 
   const terms = foldText(query.q ?? '').split(/\s+/).filter(Boolean);
@@ -157,18 +176,18 @@ export function queryLibrary(entries: LibraryEntry[], query: LibraryQuery, now: 
 
   const folderCounts: Record<string, number> = {};
   let uncategorizedCount = 0;
-  for (const entry of live) {
-    if (isArchived(entry)) continue;
+  for (const entry of entries) {
+    if (isTrashed(entry) || isArchived(entry)) continue;
     const folder = entry.recording.folder;
     if (folder) folderCounts[folder] = (folderCounts[folder] ?? 0) + 1;
     else uncategorizedCount += 1;
   }
 
-  const items = live
+  const items = entries
     .filter((entry) => {
-      // Search in the "all" view also reaches archived recordings.
-      const inView = matchesView(entry, query.view, nowMs)
-        || (searching && query.view === 'all' && isArchived(entry));
+      // Search in the "all" view also reaches archived recordings (never trashed ones).
+      const inView = isInView(entry, query.view, nowMs)
+        || (searching && query.view === 'all' && isLive(entry) && isArchived(entry));
       if (!inView) return false;
       if (!matchesFolder(entry, query.folder)) return false;
       if (searching) {
@@ -177,7 +196,7 @@ export function queryLibrary(entries: LibraryEntry[], query: LibraryQuery, now: 
       }
       return matchesFilters(entry, query.filters);
     })
-    .sort(compareEntries(query.sort ?? 'newest'));
+    .sort(compareEntries(query.sort ?? 'newest', query.view));
 
   return { items, counts, folderCounts, uncategorizedCount };
 }
@@ -189,11 +208,15 @@ const DAY_LABELS: Record<DayGroup['key'], string> = {
   older: 'Trước đó',
 };
 
-export function groupByDay(items: LibraryEntry[], now: Date): DayGroup[] {
+/**
+ * Buckets rows by Vietnam calendar day. The trash groups by deletion day ('deletedAt');
+ * every other view groups by creation day.
+ */
+export function groupByDay(items: LibraryEntry[], now: Date, field: 'createdAt' | 'deletedAt' = 'createdAt'): DayGroup[] {
   const today = vnDayIndex(now.getTime());
   const buckets: Record<DayGroup['key'], LibraryEntry[]> = { today: [], yesterday: [], week: [], older: [] };
   for (const entry of items) {
-    const daysAgo = today - vnDayIndex(timeOf(entry));
+    const daysAgo = today - vnDayIndex(field === 'deletedAt' ? deletedTimeOf(entry) : timeOf(entry));
     if (daysAgo <= 0) buckets.today.push(entry);
     else if (daysAgo === 1) buckets.yesterday.push(entry);
     else if (daysAgo <= 6) buckets.week.push(entry);

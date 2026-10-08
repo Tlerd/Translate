@@ -24,13 +24,13 @@ function syncStateOf(recording: RecordingItem, hasCloudText: boolean, assetStatu
 
 /**
  * Reads the library rows without loading captions, summary bodies or audio blobs.
- * Soft-deleted recordings are excluded.
+ * Soft-deleted recordings are included; the query layer decides which view shows them.
  */
 export async function loadLibraryEntries(): Promise<LibraryEntry[]> {
   const db = getDb();
 
   const [recordings, summaryRecordingIds, cloudIds, assetKeysByStatus] = await Promise.all([
-    db.recordings.filter((recording) => !recording.deletedAt).toArray(),
+    db.recordings.toArray(),
     db.summaries.orderBy('recordingId').uniqueKeys(),
     db.settings.where('key').startsWith(CLOUD_KEY_PREFIX).primaryKeys(),
     Promise.all(

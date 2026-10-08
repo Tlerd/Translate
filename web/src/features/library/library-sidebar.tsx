@@ -664,7 +664,7 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
               {/* 3. Thùng rác - Nằm ở cuối cùng của danh sách Thư viện khi lướt xuống */}
               <div style={{ marginTop: 'auto', paddingTop: 10, paddingBottom: 6 }}>
                 <Link
-                  href="/trash"
+                  href="/library?view=trash"
                   onClick={onCloseMobile}
                   style={{
                     display: 'flex',

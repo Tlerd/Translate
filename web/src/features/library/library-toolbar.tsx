@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import type { LibrarySort, LibraryView as LibraryViewKey } from './library-query';
 import { viewLabel } from './library-format';
 import { isTextEntry } from './library-menu';
@@ -16,6 +16,7 @@ const VIEW_ORDER: readonly LibraryViewKey[] = [
   'unsynced',
   'recording',
   'archived',
+  'trash',
 ];
 
 const SORT_OPTIONS: ReadonlyArray<{ value: LibrarySort; label: string }> = [
@@ -149,8 +150,9 @@ export function LibraryToolbar({
             aria-pressed={view === key}
             onClick={() => onView(key)}
           >
+            {key === 'trash' ? <Trash2 size={14} aria-hidden="true" /> : null}
             {viewLabel(key)}
-            <span className={styles.chipCount}>{counts[key]}</span>
+            {key === 'trash' && counts[key] === 0 ? null : <span className={styles.chipCount}>{counts[key]}</span>}
           </button>
         ))}
       </div>

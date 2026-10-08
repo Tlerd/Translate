@@ -14,12 +14,13 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   Star,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import type { LibraryEntry, SyncState } from './library-query';
-import { formatClock, formatDay, formatDuration, languageBadge } from './library-format';
+import { formatClock, formatDay, formatDuration, formatTrashRemaining, languageBadge, trashDaysLeft } from './library-format';
 import { FolderMenuItems, focusFirstMenuItem, handleMenuNavigation, useDismissible } from './library-menu';
 import styles from './library-view.module.css';
 
@@ -35,6 +36,10 @@ export interface LibraryRowProps {
   onToggleArchive: (id: string) => void;
   onMove: (id: string, folder: string | null) => void;
   onTrash: (id: string) => void;
+  /** Set only in the trash view: the current time, used for the days-left label. */
+  trashNow?: number;
+  onRestore: (id: string) => void;
+  onDeleteForever: (id: string) => void;
 }
 
 type SyncLabelState = Exclude<SyncState, 'local'>;
@@ -60,14 +65,21 @@ export const LibraryRow = memo(function LibraryRow({
   onToggleArchive,
   onMove,
   onTrash,
+  trashNow,
+  onRestore,
+  onDeleteForever,
 }: LibraryRowProps) {
   const { recording, hasSummary, sync } = entry;
   const { id, title } = recording;
+  const inTrash = trashNow !== undefined;
   const isRecording = recording.state === 'recording';
   const isStarred = recording.category === 'priority';
   const isArchived = recording.category === 'archive';
   const href = isRecording ? '/recording' : `/recordings/${encodeURIComponent(id)}`;
-  const timeText = `${showDay ? `${formatDay(recording.createdAt)} ` : ''}${formatClock(recording.createdAt)}`;
+  // In the trash the date cell shows the days left instead of the creation time.
+  const timeText = trashNow !== undefined
+    ? formatTrashRemaining(trashDaysLeft(recording.deletedAt ?? '', trashNow))
+    : `${showDay ? `${formatDay(recording.createdAt)} ` : ''}${formatClock(recording.createdAt)}`;
 
   const [renaming, setRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -117,7 +129,7 @@ export const LibraryRow = memo(function LibraryRow({
   };
 
   return (
-    <div className={`${styles.row} ${selected ? styles.rowSelected : ''}`}>
+    <div className={`${styles.row} ${selected ? styles.rowSelected : ''} ${inTrash ? styles.rowTrashed : ''}`}>
       <div className={styles.rowLead}>
         <input
           type="checkbox"
@@ -127,16 +139,18 @@ export const LibraryRow = memo(function LibraryRow({
           aria-label={`Chọn buổi "${title}"`}
           onChange={(event) => onSelect(id, hasShift(event.nativeEvent))}
         />
-        <button
-          type="button"
-          className={`${styles.iconButton} ${isStarred ? styles.starOn : ''}`}
-          aria-pressed={isStarred}
-          aria-label={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
-          title={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
-          onClick={() => onToggleStar(id)}
-        >
-          <Star size={16} fill={isStarred ? 'currentColor' : 'none'} aria-hidden="true" />
-        </button>
+        {inTrash ? null : (
+          <button
+            type="button"
+            className={`${styles.iconButton} ${isStarred ? styles.starOn : ''}`}
+            aria-pressed={isStarred}
+            aria-label={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
+            title={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
+            onClick={() => onToggleStar(id)}
+          >
+            <Star size={16} fill={isStarred ? 'currentColor' : 'none'} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className={styles.rowTitle}>
@@ -149,6 +163,11 @@ export const LibraryRow = memo(function LibraryRow({
             }}
             onCancel={() => setRenaming(false)}
           />
+        ) : inTrash ? (
+          // Trashed recordings are not opened from the list; restore them first.
+          <span className={styles.rowTitleMuted} title={title}>
+            {title || 'Chưa có tiêu đề'}
+          </span>
         ) : (
           <Link href={href} className={styles.rowTitleLink} title={title}>
             {title || 'Chưa có tiêu đề'}
@@ -209,7 +228,35 @@ export const LibraryRow = memo(function LibraryRow({
             className={styles.menu}
             onKeyDown={onMenuKeyDown}
           >
-            {panel === 'main' ? (
+            {inTrash ? (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    closeMenu(true);
+                    onRestore(id);
+                  }}
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  <span className={styles.menuItemLabel}>Khôi phục</span>
+                </button>
+                <div role="separator" className={styles.menuSeparator} />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                  onClick={() => {
+                    closeMenu(true);
+                    onDeleteForever(id);
+                  }}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  <span className={styles.menuItemLabel}>Xóa vĩnh viễn</span>
+                </button>
+              </>
+            ) : panel === 'main' ? (
               <>
                 <button type="button" role="menuitem" className={styles.menuItem} onClick={startRename}>
                   <Pencil size={14} aria-hidden="true" />

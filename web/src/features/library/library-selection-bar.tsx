@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Archive, ArchiveRestore, ChevronDown, Star, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, RotateCcw, Star, Trash2, X } from 'lucide-react';
 import { FolderMenuItems, focusFirstMenuItem, handleMenuNavigation, useDismissible } from './library-menu';
 import styles from './library-view.module.css';
 
@@ -18,6 +18,10 @@ export interface LibrarySelectionBarProps {
   onToggleStar: () => void;
   onToggleArchive: () => void;
   onTrash: () => void;
+  /** Trash view: the bar offers restore and permanent delete instead of the library actions. */
+  trash: boolean;
+  onRestore: () => void;
+  onDeleteForever: () => void;
 }
 
 export function LibrarySelectionBar({
@@ -32,6 +36,9 @@ export function LibrarySelectionBar({
   onToggleStar,
   onToggleArchive,
   onTrash,
+  trash,
+  onRestore,
+  onDeleteForever,
 }: LibrarySelectionBarProps) {
   const [moveOpen, setMoveOpen] = useState(false);
   const moveWrapRef = useRef<HTMLDivElement>(null);
@@ -78,48 +85,64 @@ export function LibrarySelectionBar({
         Chọn tất cả (đang hiện {visibleCount})
       </button>
 
-      <div className={styles.moveWrap} ref={moveWrapRef}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className={styles.barButton}
-          aria-haspopup="menu"
-          aria-expanded={moveOpen}
-          onClick={() => setMoveOpen((open) => !open)}
-        >
-          Di chuyển
-          <ChevronDown size={14} aria-hidden="true" />
-        </button>
-        {moveOpen ? (
-          <div
-            ref={menuRef}
-            role="menu"
-            aria-label="Chuyển các buổi đã chọn tới thư mục"
-            className={styles.menuUp}
-            onKeyDown={onMenuKeyDown}
-          >
-            <FolderMenuItems
-              folders={folders}
-              current={undefined}
-              onPick={pickFolder}
-              onCreate={(name) => pickFolder(name)}
-            />
+      {trash ? (
+        <>
+          <button type="button" className={styles.barButton} onClick={onRestore}>
+            <RotateCcw size={14} aria-hidden="true" />
+            Khôi phục
+          </button>
+          <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onDeleteForever}>
+            <Trash2 size={14} aria-hidden="true" />
+            Xóa vĩnh viễn
+          </button>
+        </>
+      ) : (
+        <>
+          <div className={styles.moveWrap} ref={moveWrapRef}>
+            <button
+              ref={triggerRef}
+              type="button"
+              className={styles.barButton}
+              aria-haspopup="menu"
+              aria-expanded={moveOpen}
+              onClick={() => setMoveOpen((open) => !open)}
+            >
+              Di chuyển
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            {moveOpen ? (
+              <div
+                ref={menuRef}
+                role="menu"
+                aria-label="Chuyển các buổi đã chọn tới thư mục"
+                className={styles.menuUp}
+                onKeyDown={onMenuKeyDown}
+              >
+                <FolderMenuItems
+                  folders={folders}
+                  current={undefined}
+                  onPick={pickFolder}
+                  onCreate={(name) => pickFolder(name)}
+                />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      <button type="button" className={styles.barButton} onClick={onToggleStar}>
-        <Star size={14} aria-hidden="true" fill={allStarred ? 'currentColor' : 'none'} />
-        {allStarred ? 'Bỏ sao' : 'Gắn sao'}
-      </button>
-      <button type="button" className={styles.barButton} onClick={onToggleArchive}>
-        {allArchived ? <ArchiveRestore size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
-        {allArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
-      </button>
-      <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onTrash}>
-        <Trash2 size={14} aria-hidden="true" />
-        Xóa
-      </button>
+          <button type="button" className={styles.barButton} onClick={onToggleStar}>
+            <Star size={14} aria-hidden="true" fill={allStarred ? 'currentColor' : 'none'} />
+            {allStarred ? 'Bỏ sao' : 'Gắn sao'}
+          </button>
+          <button type="button" className={styles.barButton} onClick={onToggleArchive}>
+            {allArchived ? <ArchiveRestore size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
+            {allArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
+          </button>
+          <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onTrash}>
+            <Trash2 size={14} aria-hidden="true" />
+            Xóa
+          </button>
+        </>
+      )}
+
       <button type="button" className={styles.barButton} onClick={onClear}>
         <X size={14} aria-hidden="true" />
         Bỏ chọn

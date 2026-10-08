@@ -104,6 +104,7 @@ describe('library query: counts and folders', () => {
       unsynced: 2,
       recording: 1,
       archived: 1,
+      trash: 1,
     });
     expect(run(entries, { view: 'archived', folder: 'Lớp A', q: 'zzz', filters: { hasAudio: true } }).counts)
       .toEqual(base.counts);
@@ -232,3 +233,71 @@ describe('groupByDay', () => {
     expect(groupByDay([], now)).toEqual([]);
   });
 });
+
+describe('library query: trash view', () => {
+  // Deleted 2026-01-09 17:00 and 2026-01-02 17:00 in Vietnam; created on other days, so
+  // creation order and deletion order disagree for 'gone-new'.
+  const entries = [
+    entry('live', { createdAt: '2026-01-09T05:00:00Z' }),
+    entry('starred', { category: 'priority' }),
+    entry('filed', { folder: 'Lớp A' }),
+    entry('gone-old', { deletedAt: '2026-01-02T10:00:00Z', createdAt: '2026-01-08T05:00:00Z' }),
+    entry('gone-new', { deletedAt: '2026-01-09T10:00:00Z', createdAt: '2026-01-01T05:00:00Z' }),
+    entry('gone-archived', { deletedAt: '2026-01-05T10:00:00Z', category: 'archive', folder: 'Lớp A' }),
+  ];
+
+  it('contains only soft-deleted recordings, regardless of folder, archive or star state', () => {
+    expect(ids(run(entries, { view: 'trash' }).items)).toEqual(['gone-new', 'gone-archived', 'gone-old']);
+  });
+
+  it('sorts "newest" by deletion time, most recently deleted first', () => {
+    expect(ids(run(entries, { view: 'trash', sort: 'newest' }).items)).toEqual(['gone-new', 'gone-archived', 'gone-old']);
+  });
+
+  it('keeps other sorts on their usual keys inside the trash', () => {
+    expect(ids(run(entries, { view: 'trash', sort: 'oldest' }).items)).toEqual(['gone-new', 'gone-old', 'gone-archived']);
+    expect(ids(run(entries, { view: 'trash', sort: 'title' }).items)).toEqual(['gone-archived', 'gone-new', 'gone-old']);
+  });
+
+  it('applies search and folder filters inside the trash', () => {
+    expect(ids(run(entries, { view: 'trash', q: 'gone-o' }).items)).toEqual(['gone-old']);
+    expect(ids(run(entries, { view: 'trash', folder: 'Lớp A' }).items)).toEqual(['gone-archived']);
+  });
+
+  it('keeps soft-deleted archived recordings out of "all" even when searching', () => {
+    expect(ids(run(entries, { view: 'all', q: 'gone' }).items)).toEqual([]);
+    expect(ids(run(entries, { view: 'archived' }).items)).toEqual([]);
+  });
+
+  it('counts only live recordings in every view except the trash, which counts only deleted ones', () => {
+    const { counts } = run(entries, { view: 'all' });
+    expect(counts.trash).toBe(3);
+    expect(counts.all).toBe(3);
+    expect(counts.archived).toBe(0);
+    expect(counts.starred).toBe(1);
+  });
+
+  it('computes folder and uncategorized counts without deleted recordings', () => {
+    const result = run(entries, { view: 'all' });
+    expect(result.folderCounts).toEqual({ 'Lớp A': 1 });
+    expect(result.uncategorizedCount).toBe(2);
+  });
+
+  it('groups the trash by deletion day when asked', () => {
+    const items = run(entries, { view: 'trash' }).items;
+    const byDeletion = groupByDay(items, NOW, 'deletedAt');
+    expect(byDeletion.map((group) => [group.key, ids(group.items)])).toEqual([
+      ['yesterday', ['gone-new']],
+      ['week', ['gone-archived']],
+      ['older', ['gone-old']],
+    ]);
+    // By creation day, 'gone-new' (created 2026-01-01) falls out of the week.
+    const byCreation = groupByDay(items, NOW);
+    expect(byCreation.map((group) => [group.key, ids(group.items)])).toEqual([
+      ['yesterday', ['gone-archived']],
+      ['week', ['gone-old']],
+      ['older', ['gone-new']],
+    ]);
+  });
+});
+

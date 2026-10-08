@@ -4,6 +4,7 @@ import { AppDatabase, getDb, resetDbInstance } from '@/storage/db';
 import type { LocalAudioAsset } from '@/shared/audio';
 import type { RecordingItem, SummaryItem } from '@/shared/recording';
 import { loadLibraryEntries } from '@/features/library/library-data';
+import { queryLibrary } from '@/features/library/library-query';
 
 function rec(id: string, overrides: Partial<RecordingItem> = {}): RecordingItem {
   return {
@@ -63,7 +64,7 @@ describe('loadLibraryEntries', () => {
       rec('e', { audioState: 'present' }),
       // No local audio, so only the text baseline matters.
       rec('f', { audioState: 'missing' }),
-      // Soft-deleted: must not appear.
+      // Soft-deleted: loaded, but only the trash view shows it.
       rec('g', { deletedAt: '2026-01-10T00:00:00Z' }),
       // Audio synced.
       rec('h', { audioState: 'present' }),
@@ -83,7 +84,7 @@ describe('loadLibraryEntries', () => {
     const entries = await loadLibraryEntries();
     const byId = new Map(entries.map((entry) => [entry.recording.id, entry]));
 
-    expect([...byId.keys()].sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'h', 'i']);
+    expect([...byId.keys()].sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']);
     expect(byId.get('a')).toMatchObject({ hasSummary: true, sync: 'synced' });
     expect(byId.get('b')).toMatchObject({ hasSummary: false, sync: 'pending' });
     expect(byId.get('c')).toMatchObject({ sync: 'error' });
@@ -92,6 +93,17 @@ describe('loadLibraryEntries', () => {
     expect(byId.get('f')).toMatchObject({ sync: 'synced' });
     expect(byId.get('h')).toMatchObject({ sync: 'synced' });
     expect(byId.get('i')).toMatchObject({ sync: 'synced' });
+    expect(byId.get('g')).toMatchObject({ hasSummary: true, sync: 'synced' });
+  });
+
+  it('leaves soft-deleted rows to the query layer: hidden everywhere except the trash', async () => {
+    const db = getDb();
+    await db.recordings.bulkPut([rec('live'), rec('gone', { deletedAt: '2026-01-10T00:00:00Z' })]);
+
+    const entries = await loadLibraryEntries();
+    const now = new Date('2026-01-10T05:00:00Z');
+    expect(queryLibrary(entries, { view: 'all' }, now).items.map((item) => item.recording.id)).toEqual(['live']);
+    expect(queryLibrary(entries, { view: 'trash' }, now).items.map((item) => item.recording.id)).toEqual(['gone']);
   });
 
   it('returns an empty list for an empty database', async () => {

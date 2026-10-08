@@ -1,9 +1,5 @@
-import { TrashView } from '@/features/library/trash-view';
-
-export const metadata = {
-  title: 'Thùng rác | Máy Dịch Lớp Học',
-};
+import { redirect } from 'next/navigation';
 
 export default function TrashPage() {
-  return <TrashView />;
+  redirect('/library?view=trash');
 }

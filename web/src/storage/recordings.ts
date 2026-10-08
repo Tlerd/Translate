@@ -175,6 +175,74 @@ export async function deleteRecording(id: string): Promise<void> {
   notifyAudio(true);
 }
 
+/** Days a soft-deleted recording stays in the trash before it is purged for good. */
+export const TRASH_RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Epoch ms at which a trashed recording expires. An unparseable deletedAt returns
+ * Number.POSITIVE_INFINITY so a recording we cannot date is never purged automatically.
+ */
+export function trashExpiresAt(deletedAt: string): number {
+  const deletedMs = Date.parse(deletedAt);
+  if (!Number.isFinite(deletedMs)) return Number.POSITIVE_INFINITY;
+  return deletedMs + TRASH_RETENTION_DAYS * DAY_MS;
+}
+
+/**
+ * Permanently deletes trashed recordings whose retention has ended. Recordings still in
+ * progress are skipped. Returns how many were purged; a failing item is logged and skipped.
+ */
+export async function purgeExpiredTrash(now: number = Date.now()): Promise<number> {
+  const db = getDb();
+  const trashed = await db.recordings.filter((recording) => Boolean(recording.deletedAt)).toArray();
+  const expired = trashed.filter(
+    (recording) =>
+      recording.state !== 'recording' &&
+      recording.deletedAt !== undefined &&
+      trashExpiresAt(recording.deletedAt) <= now,
+  );
+
+  let purged = 0;
+  for (const recording of expired) {
+    try {
+      await deleteRecording(recording.id);
+      purged += 1;
+    } catch (error) {
+      console.error(`Không tự xóa được buổi trong thùng rác: ${recording.id}`, error);
+    }
+  }
+  return purged;
+}
+
+/** Clears deletedAt on the given recordings in one bulk update. Unknown ids are ignored. */
+export async function restoreRecordings(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = getDb();
+  await db.recordings.where('id').anyOf(ids).modify((recording) => {
+    delete recording.deletedAt;
+  });
+}
+
+/**
+ * Permanently deletes the given recordings. Each id is attempted even if an earlier one
+ * fails; the failures are logged and reported together once every id has been tried.
+ */
+export async function deleteRecordingsPermanently(ids: string[]): Promise<void> {
+  let failed = 0;
+  for (const id of ids) {
+    try {
+      await deleteRecording(id);
+    } catch (error) {
+      failed += 1;
+      console.error(`Không xóa vĩnh viễn được buổi: ${id}`, error);
+    }
+  }
+  if (failed > 0) {
+    throw new Error(`Không xóa vĩnh viễn được ${failed} mục.`);
+  }
+}
+
 // Audio Chunks
 export async function addAudioChunk(chunk: Omit<AudioChunk, 'id'>): Promise<void> {
   const db = getDb();

@@ -633,6 +633,60 @@
   margin-top: 6px;
 }
 
+/* ---------- Trash ---------- */
+
+.trashNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.trashNoteText {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.trashPurge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.trashPurge:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Trashed rows are read-only: the title is plain text and the row is muted. */
+.rowTitleMuted {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowTrashed .rowCols {
+  color: var(--text-muted);
+}
+
 /* ---------- Row menu ---------- */
 
 .menu,

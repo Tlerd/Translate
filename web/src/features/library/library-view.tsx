@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Mic, Search } from 'lucide-react';
+import { Mic, Search, Trash2 } from 'lucide-react';
 import { useLibrary } from './use-library';
 import {
   groupByDay,
@@ -16,12 +16,16 @@ import {
 } from './library-query';
 import { languageBadge, viewLabel } from './library-format';
 import {
+  TRASH_RETENTION_DAYS,
   batchSoftDelete,
   batchUpdateCategory,
   batchUpdateFolder,
+  deleteRecordingsPermanently,
   getLibraryFolders,
+  purgeExpiredTrash,
   renameRecording,
   restoreRecordingFields,
+  restoreRecordings,
   type RecordingFieldSnapshot,
 } from '@/storage/recordings';
 import { LibraryToolbar, type LibraryFilterPatch } from './library-toolbar';
@@ -31,7 +35,7 @@ import { LibraryToast, type LibraryToastState } from './library-toast';
 import { isTextEntry } from './library-menu';
 import styles from './library-view.module.css';
 
-const VIEW_KEYS: readonly LibraryViewKey[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived'];
+const VIEW_KEYS: readonly LibraryViewKey[] = ['all', 'recent', 'starred', 'unsummarized', 'unsynced', 'recording', 'archived', 'trash'];
 const SORT_KEYS: readonly LibrarySort[] = ['newest', 'oldest', 'longest', 'title'];
 const FOLDER_NONE = '_none';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -112,6 +116,11 @@ export function LibraryView() {
   const searchParams = useSearchParams();
   const { entries, loading } = useLibrary();
 
+  // Trashed recordings older than the retention window are removed once per visit to the library.
+  useEffect(() => {
+    purgeExpiredTrash().catch((error: unknown) => console.error('Không dọn được thùng rác.', error));
+  }, []);
+
   const [folders, setFolders] = useState<string[]>([]);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [toast, setToast] = useState<LibraryToastState | null>(null);
@@ -145,11 +154,18 @@ export function LibraryView() {
 
   const params = useMemo(() => readParams(new URLSearchParams(paramsKey)), [paramsKey]);
   const query = useMemo(() => buildQuery(params), [params]);
-  const { result, groups } = useMemo(() => {
+  const { result, groups, nowMs } = useMemo(() => {
     const now = new Date();
     const queried = queryLibrary(entries, query, now);
-    return { result: queried, groups: groupByDay(queried.items, now) };
+    // The trash is grouped by deletion day; every other view by creation day.
+    const field = query.view === 'trash' ? 'deletedAt' : 'createdAt';
+    return { result: queried, groups: groupByDay(queried.items, now, field), nowMs: now.getTime() };
   }, [entries, query]);
+  const trashIds = useMemo(
+    () => entries.filter((entry) => entry.recording.deletedAt).map((entry) => entry.recording.id),
+    [entries],
+  );
+  const hasLiveRecordings = useMemo(() => entries.some((entry) => !entry.recording.deletedAt), [entries]);
   const languagePairs = useMemo(() => listLanguagePairs(entries), [entries]);
 
   const items = result.items;
@@ -313,10 +329,48 @@ export function LibraryView() {
       runChange({
         ids,
         write: (targets) => batchSoftDelete(targets),
-        message: (count) => `Đã chuyển ${count} buổi vào thùng rác.`,
+        message: (count) => `Đã chuyển ${count} mục vào thùng rác.`,
         clearSelection,
       }),
     [runChange],
+  );
+
+  const clearSelectionState = useCallback(() => {
+    setSelected(new Set());
+    anchorRef.current = null;
+  }, []);
+
+  // Restores never offer undo: the recordings simply reappear in their views.
+  const restoreRows = useCallback(
+    async (ids: readonly string[], clearSelection: boolean) => {
+      const targets = ids.filter((id) => entryById.has(id));
+      if (targets.length === 0) return;
+      try {
+        await restoreRecordings(targets);
+        if (clearSelection) clearSelectionState();
+        showToast(`Đã khôi phục ${targets.length} mục`);
+      } catch (error: unknown) {
+        showToast(`Chưa thực hiện được: ${errorText(error)}`, 'error');
+      }
+    },
+    [entryById, clearSelectionState, showToast],
+  );
+
+  // Permanent deletes are irreversible, so they confirm first and never offer undo.
+  const purgeRows = useCallback(
+    async (ids: readonly string[], confirmText: (count: number) => string, clearSelection: boolean) => {
+      const targets = ids.filter((id) => entryById.has(id));
+      if (targets.length === 0) return;
+      if (!window.confirm(confirmText(targets.length))) return;
+      try {
+        await deleteRecordingsPermanently(targets);
+        if (clearSelection) clearSelectionState();
+        showToast(`Đã xóa vĩnh viễn ${targets.length} mục`);
+      } catch (error: unknown) {
+        showToast(`Chưa thực hiện được: ${errorText(error)}`, 'error');
+      }
+    },
+    [entryById, clearSelectionState, showToast],
   );
 
   const archiveRows = useCallback(
@@ -369,6 +423,15 @@ export function LibraryView() {
   );
 
   const handleTrash = useCallback((id: string) => void trashRows([id], false), [trashRows]);
+  const handleRestore = useCallback((id: string) => void restoreRows([id], false), [restoreRows]);
+  const handleDeleteForever = useCallback(
+    (id: string) => void purgeRows([id], (count) => `Xóa vĩnh viễn ${count} mục? Không thể hoàn tác.`, false),
+    [purgeRows],
+  );
+  const onEmptyTrash = useCallback(
+    () => void purgeRows(trashIds, (count) => `Xóa vĩnh viễn tất cả ${count} mục trong thùng rác?`, false),
+    [purgeRows, trashIds],
+  );
   const handleMove = useCallback((id: string, folder: string | null) => void moveRows([id], folder, false), [moveRows]);
 
   // ---- Selection -------------------------------------------------------------
@@ -430,7 +493,16 @@ export function LibraryView() {
     }
 
     if (items.length === 0) {
-      if (entries.length === 0) {
+      if (params.view === 'trash' && !hasActiveFilters) {
+        return (
+          <div className={styles.empty}>
+            <Trash2 size={36} aria-hidden="true" className={styles.emptyIcon} />
+            <p className={styles.emptyTitle}>Thùng rác trống</p>
+            <p className={styles.emptyText}>Buổi bị xóa sẽ nằm ở đây trong {TRASH_RETENTION_DAYS} ngày.</p>
+          </div>
+        );
+      }
+      if (params.view !== 'trash' && !hasLiveRecordings) {
         return (
           <div className={styles.empty}>
             <Mic size={36} aria-hidden="true" className={styles.emptyIcon} />
@@ -471,7 +543,7 @@ export function LibraryView() {
           <div className={styles.rowCols}>
             <span className={styles.colLang}>Ngôn ngữ</span>
             <span className={styles.colDuration}>Độ dài</span>
-            <span className={styles.colTime}>Thời điểm</span>
+            <span className={styles.colTime}>{params.view === 'trash' ? 'Còn lại' : 'Thời điểm'}</span>
             <span className={styles.colFolder}>Thư mục</span>
             <span className={styles.colStatus}>Trạng thái</span>
           </div>
@@ -499,6 +571,9 @@ export function LibraryView() {
                       onToggleArchive={handleToggleArchive}
                       onMove={handleMove}
                       onTrash={handleTrash}
+                      trashNow={params.view === 'trash' ? nowMs : undefined}
+                      onRestore={handleRestore}
+                      onDeleteForever={handleDeleteForever}
                     />
                   </li>
                 ))}
@@ -534,6 +609,18 @@ export function LibraryView() {
         activeFilterCount={activeFilterCount}
       />
 
+      {params.view === 'trash' ? (
+        <div className={styles.trashNote}>
+          <p className={styles.trashNoteText}>Mục trong thùng rác sẽ tự động xóa sau {TRASH_RETENTION_DAYS} ngày.</p>
+          {trashIds.length > 0 ? (
+            <button type="button" className={styles.trashPurge} onClick={onEmptyTrash}>
+              <Trash2 size={14} aria-hidden="true" />
+              Dọn thùng rác
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className={styles.listWrap} onKeyDown={onListKeyDown}>
         {renderBody()}
       </div>
@@ -551,6 +638,11 @@ export function LibraryView() {
           onToggleStar={() => void starRows(selectedIds, !allStarred, true)}
           onToggleArchive={() => void archiveRows(selectedIds, !allArchived, true)}
           onTrash={() => void trashRows(selectedIds, true)}
+          trash={params.view === 'trash'}
+          onRestore={() => void restoreRows(selectedIds, true)}
+          onDeleteForever={() =>
+            void purgeRows(selectedIds, (count) => `Xóa vĩnh viễn ${count} mục? Không thể hoàn tác.`, true)
+          }
         />
       ) : null}
 
