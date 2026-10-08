@@ -9,6 +9,7 @@ import type {
   SummaryItem,
   ImageItem,
   AppSettings,
+  AudioSource,
   ClassroomMode,
 } from '@/shared/recording';
 import { DEFAULT_SETTINGS } from '@/shared/recording';
@@ -30,6 +31,7 @@ export interface CreateRecordingParams {
   glossary?: string;
   transcriptionMode?: TranscriptionMode;
   speakerCount?: SpeakerCount;
+  audioSource?: AudioSource;
 }
 
 export async function createRecording(params: CreateRecordingParams): Promise<RecordingItem> {
@@ -57,6 +59,8 @@ export async function createRecording(params: CreateRecordingParams): Promise<Re
       glossary: params.glossary,
       transcriptionMode: params.transcriptionMode,
       speakerCount: params.speakerCount,
+      // Microphone-only sessions keep the original record shape so older tabs and builds read them unchanged.
+      ...(params.audioSource && params.audioSource !== 'mic' ? { audioSource: params.audioSource } : {}),
     },
   };
 

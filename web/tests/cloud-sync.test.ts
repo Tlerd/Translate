@@ -25,6 +25,20 @@ function remoteFetch(row: CloudRow) {
   });
 }
 
+describe('cloud payload audioSource', () => {
+  it('accepts config.audioSource and payloads without it', () => {
+    const withSource = payload('a', recording({ config: { translationModelKey: 'test-model', audioSource: 'display' } }));
+    const withoutSource = payload('b');
+    expect(cloudPayloadSchema.safeParse(withSource).success).toBe(true);
+    expect(cloudPayloadSchema.safeParse(withoutSource).success).toBe(true);
+  });
+
+  it('still rejects unknown config fields', () => {
+    const bogus = payload('c', recording({ config: { translationModelKey: 'test-model', bogus: true } as unknown as CloudPayload['recording']['config'] }));
+    expect(cloudPayloadSchema.safeParse(bogus).success).toBe(false);
+  });
+});
+
 describe('cloud recording sync', () => {
   beforeEach(() => {
     resetDbInstance(new AppDatabase(`cloud_sync_${Date.now()}_${Math.random()}`));

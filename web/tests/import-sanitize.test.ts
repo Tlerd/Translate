@@ -60,6 +60,11 @@ describe('sanitizeRecording', () => {
     expect(Object.keys(sanitized.config).sort()).toEqual(Object.keys(fullRecording.config).sort());
   });
 
+  it('keeps config.audioSource on a display-audio recording', () => {
+    const withDisplay: RecordingItem = { ...fullRecording, config: { ...fullRecording.config, audioSource: 'display' } };
+    expect(sanitizeRecording(withUnknownFields(withDisplay)).config.audioSource).toBe('display');
+  });
+
   it('keeps a minimal recording without optional fields unchanged', () => {
     const minimal: RecordingItem = {
       id: 'rec_min',

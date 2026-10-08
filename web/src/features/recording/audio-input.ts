@@ -5,7 +5,9 @@
  * stream that may feed MediaRecorder, PCM capture or speech recognition.
  */
 
-export type AudioSource = 'mic' | 'display' | 'mixed';
+import type { AudioSource } from '@/shared/recording';
+
+export type { AudioSource };
 export type DisplayCaptureErrorCode = 'unsupported' | 'cancelled' | 'no-audio' | 'failed';
 
 const UNSUPPORTED_MESSAGE = 'Trình duyệt hoặc thiết bị này không hỗ trợ ghi âm thanh màn hình. Hãy dùng Chrome hoặc Edge trên máy tính.';

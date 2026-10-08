@@ -94,6 +94,7 @@ const CONFIG_FIELDS: Record<keyof RecordingItem['config'], true> = {
   glossary: true,
   transcriptionMode: true,
   speakerCount: true,
+  audioSource: true,
 };
 
 const CAPTION_FIELDS: Record<keyof CaptionItem, true> = {

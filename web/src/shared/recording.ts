@@ -13,6 +13,9 @@ export type AudioState = 'present' | 'deleted' | 'missing';
 
 export type CaptionState = 'streaming' | 'done' | 'failed';
 
+/** Where the session audio comes from: microphone, shared display/tab audio, or both mixed. */
+export type AudioSource = 'mic' | 'display' | 'mixed';
+
 export interface RecordingItem {
   id: string;
   title: string;
@@ -37,6 +40,7 @@ export interface RecordingItem {
     glossary?: string;
     transcriptionMode?: TranscriptionMode;
     speakerCount?: SpeakerCount;
+    audioSource?: AudioSource;
   };
 }
 
