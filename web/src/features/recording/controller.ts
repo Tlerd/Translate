@@ -429,7 +429,7 @@ export class ClassroomController {
       },
       sourceLanguage,
       targetLanguage,
-      minIntervalMs: 700,
+      minIntervalMs: 300,
       historyTurns: translationHistoryTurns,
       earlySegments: earlySegmentTranslation,
       pauseMs,

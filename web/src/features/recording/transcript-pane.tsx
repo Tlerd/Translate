@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ArrowDown } from 'lucide-react';
 import type { CaptionItem } from '@/shared/recording';
 import { displaySpeakerLabel, isSourceSpeakerLabel, SOURCE_SPEAKER_LABELS, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
+import type { ReadingDisplay } from './reading-prefs';
 import styles from './recording-ui.module.css';
 
 interface TranscriptPaneProps {
@@ -12,12 +13,16 @@ interface TranscriptPaneProps {
   speakerCount?: SpeakerCount;
   targetLanguage?: string;
   onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
+  /** Full-screen reading: a centred column with scalable text. */
+  reading?: { scale: number; display: ReadingDisplay };
 }
 
-export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange }: TranscriptPaneProps) {
+export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange, reading }: TranscriptPaneProps) {
+  const scale = reading?.scale ?? 1;
+  const display = reading?.display ?? 'both';
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(!reading);
   const [pendingSpeakerId, setPendingSpeakerId] = useState<number | null>(null);
   const [speakerError, setSpeakerError] = useState<string | null>(null);
 
@@ -95,6 +100,7 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
       className={styles.transcriptPane}
       onScroll={handleScroll}
       onTouchMove={handleScroll}
+      style={reading ? { padding: '24px max(16px, calc((100% - 880px) / 2)) 48px' } : undefined}
     >
       {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
       {captions.map((cap) => {
@@ -186,14 +192,16 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
               </div>
             </div>
 
-            {/* Original source */}
-            <div
-              data-testid="caption-source"
-              className={styles.captionText}
-              style={{ fontWeight: 500, fontSize: '0.96rem', lineHeight: 1.5, color: 'var(--text-primary)' }}
-            >
-              {cap.source}
-            </div>
+            {/* Original source (the translation stands alone when only it is wanted and exists) */}
+            {(display !== 'translation' || !cap.translation) && (
+              <div
+                data-testid="caption-source"
+                className={styles.captionText}
+                style={{ fontWeight: 500, fontSize: `${0.96 * scale}rem`, lineHeight: 1.5, color: 'var(--text-primary)' }}
+              >
+                {cap.source}
+              </div>
+            )}
 
             {cap.sourceHistory?.length ? (
               <details className={styles.sourceHistory} style={{ marginTop: 4 }}>
@@ -210,14 +218,14 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
             ) : null}
 
             {/* Translation */}
-            {targetLanguage !== 'none' && (cap.translation || isStreaming) && (
+            {targetLanguage !== 'none' && display !== 'source' && (cap.translation || isStreaming) && (
               <div
                 className={styles.captionTranslation}
                 data-testid="caption-translation"
                 style={{
                   marginTop: 8,
                   padding: '2px 0 2px 12px',
-                  fontSize: '1.04rem',
+                  fontSize: `${1.04 * scale}rem`,
                   lineHeight: 1.55,
                   fontWeight: 500,
                   color: 'var(--text-primary)',
