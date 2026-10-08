@@ -1,283 +1,195 @@
 'use client';
 
-import React from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Cloud,
+  Cpu,
+  SunMoon,
+  type LucideIcon,
+} from 'lucide-react';
 import { AiSettings } from '@/features/settings/ai-settings';
 import { TranslationConnectionTest } from '@/features/settings/translation-connection-test';
 import { SpeechConnectionTest } from '@/features/settings/speech-connection-test';
-import { Settings, Zap, Mic, BarChart3, SunMoon } from 'lucide-react';
+import { useSettingsSections } from '@/features/settings/use-settings-sections';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAccount } from '@/components/account-context';
+import shared from '@/features/settings/settings-shared.module.css';
+import styles from './settings.module.css';
+
+interface SettingsGroupLink {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const GROUPS: readonly SettingsGroupLink[] = [
+  { id: 'appearance-account', label: 'Chung', icon: SunMoon },
+  { id: 'ai-config', label: 'Mô hình AI', icon: Cpu },
+  { id: 'connection-tests', label: 'Kiểm tra kết nối', icon: Activity },
+  { id: 'usage-cost', label: 'Chi phí', icon: BarChart3 },
+];
+
+const GROUP_IDS = GROUPS.map((group) => group.id);
 
 export default function SettingsPage() {
   const { accountControls } = useAccount();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { activeId, scrollToSection } = useSettingsSections(scrollRef, GROUP_IDS);
+
+  // On phones the tab bar scrolls sideways, so keep the active tab in view. Only the tab list
+  // moves: scrollIntoView would also scroll the page and cancel a smooth scroll in progress.
+  useEffect(() => {
+    const link = document.getElementById(`settings-nav-${activeId}`);
+    const list = link?.closest('ul');
+    if (!link || !list || list.scrollWidth <= list.clientWidth) return;
+    const linkBox = link.getBoundingClientRect();
+    const left = linkBox.left - list.getBoundingClientRect().left + list.scrollLeft - (list.clientWidth - linkBox.width) / 2;
+    list.scrollTo({ left: Math.max(0, left), behavior: 'auto' });
+  }, [activeId]);
 
   return (
-    <div
-      style={{
-        height: '100%',
-        overflowY: 'auto',
-        scrollBehavior: 'smooth',
-        backgroundColor: 'var(--bg-primary)',
-      }}
-    >
-      {/* Quick Navigation Anchor Bar */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-          backgroundColor: 'var(--bg-glass)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid var(--border-subtle)',
-          padding: '10px 20px',
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 860,
-            margin: '0 auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            gap: 10,
-            overflowX: 'auto',
-            paddingBottom: 2,
-          }}
-        >
-          <a
-            href="#appearance-account"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <SunMoon size={14} color="var(--accent)" />
-            <span>Giao diện & Tài khoản</span>
-          </a>
-
-          <a
-            href="#ai-config"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Settings size={14} color="var(--accent)" />
-            <span>Cấu hình AI</span>
-          </a>
-
-          <a
-            href="#translation-test"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Zap size={14} color="var(--accent)" />
-            <span>Thử nghiệm Dịch</span>
-          </a>
-
-          <a
-            href="#speech-test"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Mic size={14} color="var(--accent)" />
-            <span>Kiểm tra Nhận giọng</span>
-          </a>
-
-          <Link
-            href="/usage"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <BarChart3 size={14} color="var(--accent)" />
-            <span>Chi phí dịch</span>
+    <div ref={scrollRef} className={styles.scroll}>
+      <div className={styles.layout}>
+        <header className={styles.pageHeader}>
+          <div className={styles.titleBlock}>
+            <h1 className={styles.pageTitle}>Cài đặt</h1>
+            <p className={styles.pageSubtitle}>Giao diện, mô hình AI, kiểm tra kết nối và chi phí dịch.</p>
+          </div>
+          <Link href="/library" className={`${shared.btn} ${shared.btnSecondary}`}>
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span>Về phòng học</span>
           </Link>
+        </header>
+
+        <nav className={styles.nav} aria-label="Các mục cài đặt">
+          <ul className={styles.navList}>
+            {GROUPS.map(({ id, label, icon: Icon }) => {
+              const isActive = id === activeId;
+              return (
+                <li key={id} className={styles.navItem}>
+                  <a
+                    id={`settings-nav-${id}`}
+                    href={`#${id}`}
+                    className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
+                    aria-current={isActive ? 'true' : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      scrollToSection(id);
+                    }}
+                  >
+                    <Icon size={18} aria-hidden="true" />
+                    <span>{label}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className={styles.content}>
+          <section id="appearance-account" className={styles.group} aria-labelledby="settings-group-general">
+            <div className={styles.groupHeader}>
+              <h2 id="settings-group-general" className={styles.groupTitle}>Chung</h2>
+              <p className={styles.groupDescription}>Giao diện hiển thị, tài khoản đăng nhập và đồng bộ dữ liệu.</p>
+            </div>
+            <div className={styles.groupBody}>
+              <section className={shared.card} aria-labelledby="settings-appearance-title">
+                <div className={shared.cardHead}>
+                  <div className={shared.cardHeadMain}>
+                    <span className={shared.cardIcon}>
+                      <SunMoon size={18} aria-hidden="true" />
+                    </span>
+                    <div className={shared.cardText}>
+                      <h3 id="settings-appearance-title" className={shared.cardTitle}>Giao diện</h3>
+                      <p className={shared.cardDescription}>Chuyển giữa giao diện sáng và tối.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.settingRow}>
+                  <span className={styles.settingLabel}>Chế độ Sáng / Tối</span>
+                  <ThemeToggle />
+                </div>
+              </section>
+
+              <section className={shared.card} aria-labelledby="settings-account-title">
+                <div className={shared.cardHead}>
+                  <div className={shared.cardHeadMain}>
+                    <span className={shared.cardIcon}>
+                      <Cloud size={18} aria-hidden="true" />
+                    </span>
+                    <div className={shared.cardText}>
+                      <h3 id="settings-account-title" className={shared.cardTitle}>Tài khoản &amp; đồng bộ</h3>
+                      <p className={shared.cardDescription}>Phiên làm việc và đồng bộ dữ liệu lên đám mây.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.settingRow}>
+                  <span className={styles.settingLabel}>Phiên làm việc</span>
+                  <div className={styles.accountSlot}>
+                    {accountControls || <span className={styles.accountEmpty}>Chưa đăng nhập</span>}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="ai-config" className={styles.group} aria-labelledby="settings-group-ai">
+            <div className={styles.groupHeader}>
+              <h2 id="settings-group-ai" className={styles.groupTitle}>Mô hình AI</h2>
+              <p className={styles.groupDescription}>
+                Bộ nhận diện giọng nói, ngôn ngữ mặc định, khoảng nghỉ chốt câu và model tóm tắt.
+              </p>
+            </div>
+            <AiSettings />
+          </section>
+
+          <section id="connection-tests" className={styles.group} aria-labelledby="settings-group-connection">
+            <div className={styles.groupHeader}>
+              <h2 id="settings-group-connection" className={styles.groupTitle}>Kiểm tra kết nối</h2>
+              <p className={styles.groupDescription}>
+                Thử dịch và nhận giọng để xác nhận khóa API và quyền dùng model trước khi bắt đầu buổi học.
+              </p>
+            </div>
+            <div className={styles.groupBody}>
+              <TranslationConnectionTest />
+              <SpeechConnectionTest />
+            </div>
+          </section>
+
+          <section id="usage-cost" className={styles.group} aria-labelledby="settings-group-usage">
+            <div className={styles.groupHeader}>
+              <h2 id="settings-group-usage" className={styles.groupTitle}>Chi phí</h2>
+              <p className={styles.groupDescription}>Theo dõi số request và token đã ghi nhận cho các lượt dịch.</p>
+            </div>
+            <div className={styles.groupBody}>
+              <section className={shared.card} aria-labelledby="settings-usage-title">
+                <div className={shared.cardHead}>
+                  <div className={shared.cardHeadMain}>
+                    <span className={shared.cardIcon}>
+                      <BarChart3 size={18} aria-hidden="true" />
+                    </span>
+                    <div className={shared.cardText}>
+                      <h3 id="settings-usage-title" className={shared.cardTitle}>Chi phí dịch &amp; token</h3>
+                      <p className={shared.cardDescription}>
+                        Xem input, output và thinking token đã ghi nhận, kèm số request theo từng ngày.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <Link href="/usage" className={`${shared.btn} ${shared.btnPrimary} ${styles.usageLink}`}>
+                  <span>Xem chi phí dịch</span>
+                  <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              </section>
+            </div>
+          </section>
         </div>
       </div>
-
-      {/* Appearance & Account Section */}
-      <section
-        id="appearance-account"
-        style={{
-          maxWidth: 860,
-          margin: '0 auto',
-          padding: '24px 20px 0',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}
-      >
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 18,
-          }}
-        >
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <SunMoon size={18} color="var(--accent)" />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  Giao diện & Tài khoản
-                </h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Tùy chỉnh giao diện hiển thị sáng/tối và quản lý tài khoản đăng nhập, đồng bộ dữ liệu
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 16,
-              paddingTop: 14,
-              borderTop: '1px solid var(--border-subtle)',
-            }}
-          >
-            {/* Theme toggle card */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Chế độ Sáng / Tối
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Chuyển đổi giao diện Sáng hoặc Tối
-                </div>
-              </div>
-              <ThemeToggle />
-            </div>
-
-            {/* Account controls card */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                gap: 12,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Tài khoản & Đăng xuất
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Phiên làm việc và đồng bộ đám mây
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                {accountControls || (
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Chưa đăng nhập
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Main Settings Sections */}
-      <AiSettings />
-      <TranslationConnectionTest />
-      <SpeechConnectionTest />
     </div>
   );
 }

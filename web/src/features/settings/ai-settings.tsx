@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Save,
   Cpu,
-  ArrowLeft,
   Mic,
   Clock,
   Sparkles,
@@ -26,6 +25,41 @@ import {
   type TranscriptionMode,
 } from '@/shared/transcription';
 import { inputLanguages, OUTPUT_LANGUAGES } from '@/shared/languages';
+import shared from './settings-shared.module.css';
+import styles from './ai-settings.module.css';
+
+interface RecentLanguagesProps {
+  codes: string[];
+  selected: string;
+  direction: 'đầu vào' | 'đầu ra';
+  getLabel: (code: string) => string;
+  onPick: (code: string) => void;
+}
+
+/** Quick picks for the three most recent languages in one direction. */
+function RecentLanguages({ codes, selected, direction, getLabel, onPick }: RecentLanguagesProps) {
+  if (codes.length === 0) return null;
+  return (
+    <div className={shared.chipRow} role="group" aria-label={`Ngôn ngữ ${direction} gần đây`}>
+      <span className={shared.chipRowLabel}>Gần đây:</span>
+      {codes.map((code) => {
+        const isSelected = selected === code;
+        return (
+          <button
+            key={code}
+            type="button"
+            className={`${shared.chip} ${isSelected ? shared.chipActive : ''}`}
+            aria-pressed={isSelected}
+            title={`Chọn nhanh ngôn ngữ ${direction}: ${getLabel(code)}`}
+            onClick={() => onPick(code)}
+          >
+            {getLabel(code)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function AiSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -46,11 +80,7 @@ export function AiSettings() {
   };
 
   if (!settings) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Đang tải cấu hình AI...
-      </div>
-    );
+    return <div className={styles.loading}>Đang tải cấu hình AI...</div>;
   }
 
   const summaryModels = modelData?.models.filter((m) => m.allowedTasks.includes('summarize')) || [];
@@ -74,6 +104,16 @@ export function AiSettings() {
     ? settings.recentTargetLanguages.slice(0, 3)
     : ['vi', 'en', 'ko'];
 
+  const pickSourceLanguage = (code: string) => {
+    const nextRecent = [code, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
+    setSettings({ ...settings, sourceLanguage: code, recentSourceLanguages: nextRecent });
+  };
+
+  const pickTargetLanguage = (code: string) => {
+    const nextRecent = [code, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
+    setSettings({ ...settings, targetLanguage: code, recentTargetLanguages: nextRecent });
+  };
+
   const handleSwapLanguages = () => {
     if (!settings) return;
     const { sourceLanguage, targetLanguage } = settings;
@@ -89,616 +129,280 @@ export function AiSettings() {
     });
   };
 
+  const swapDisabled = settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none';
+  const transcriptionLocked =
+    settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider);
+
   return (
-    <div
-      id="ai-config"
-      style={{
-        maxWidth: 860,
-        margin: '0 auto',
-        padding: '24px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-      }}
-    >
-      {/* Top Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 16,
-          paddingBottom: 16,
-          borderBottom: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--accent)',
-              marginBottom: 4,
-            }}
-          >
-            <Cpu size={14} />
-            <span>Trung tâm cấu hình AI</span>
-          </div>
-          <h2
-            style={{
-              fontSize: '1.5rem',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.02em',
-              margin: 0,
-            }}
-          >
-            Cấu Hình Model & Tham Số
-          </h2>
-          <p
-            style={{
-              fontSize: '0.88rem',
-              color: 'var(--text-secondary)',
-              marginTop: 4,
-              marginBottom: 0,
-              lineHeight: 1.5,
-            }}
-          >
-            Thiết lập mô hình nhận diện giọng nói, model dịch sát nút theo thời gian thực và thời gian chốt câu.
-          </p>
-        </div>
-
-        <Link
-          href="/library"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '9px 16px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            color: 'var(--text-primary)',
-            boxShadow: 'var(--shadow-sm)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <ArrowLeft size={16} />
-          <span>Về phòng học</span>
-        </Link>
-      </div>
-
-      {/* Save Success Alert */}
+    <div className={styles.root}>
       {savedMessage && (
-        <div
-          role="status"
-          style={{
-            padding: '12px 18px',
-            backgroundColor: 'rgba(34, 197, 94, 0.12)',
-            border: '1px solid var(--success)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--success)',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            boxShadow: '0 2px 8px rgba(34, 197, 94, 0.2)',
-          }}
-        >
-          <CheckCircle2 size={18} />
+        <div role="status" className={`${shared.notice} ${shared.noticeSuccess}`}>
+          <CheckCircle2 size={18} aria-hidden="true" />
           <span>Đã lưu cài đặt thành công! Thiết lập mới sẽ áp dụng ngay cho các buổi học.</span>
         </div>
       )}
 
-      {/* Model Architecture Info Card */}
-      <div
-        style={{
-          padding: '14px 18px',
-          background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%)',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          gap: 14,
-          alignItems: 'flex-start',
-        }}
-      >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            backgroundColor: 'rgba(56, 189, 248, 0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            marginTop: 2,
-          }}
-        >
-          <Cpu size={18} color="var(--accent)" />
-        </div>
-        <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-            Kiến trúc trực tiếp từ giọng nói (Direct Speech Translation):
-          </strong>
-          <div style={{ marginTop: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span>
-              • <strong style={{ color: 'var(--accent)' }}>Phần A (Nhận diện & Dịch trực tiếp):</strong> Dùng Gemini 3.5 Translate Live hoặc Soniox stt-rt-v5 dịch trực tiếp từ sóng âm micro ra ngôn ngữ đích đã chọn, không cần mô hình dịch chữ trung gian.
-            </span>
-            <span>
-              • <strong style={{ color: 'var(--text-primary)' }}>Phần B (Tóm tắt & Mindmap):</strong> Dùng Gemini phân tích sâu và trích xuất điểm chính sau khi kết thúc buổi ghi.
-            </span>
-          </div>
+      <div className={`${shared.notice} ${shared.noticeInfo}`}>
+        <Cpu size={18} aria-hidden="true" />
+        <div className={styles.intro}>
+          <strong className={styles.introTitle}>Kiến trúc trực tiếp từ giọng nói (Direct Speech Translation)</strong>
+          <ul className={styles.introList}>
+            <li>
+              <strong>Phần A (Nhận diện &amp; Dịch trực tiếp):</strong> Dùng Gemini 3.5 Translate Live hoặc Soniox stt-rt-v5 dịch trực tiếp từ sóng âm micro ra ngôn ngữ đích đã chọn, không cần mô hình dịch chữ trung gian.
+            </li>
+            <li>
+              <strong>Phần B (Tóm tắt &amp; Mindmap):</strong> Dùng Gemini phân tích sâu và trích xuất điểm chính sau khi kết thúc buổi ghi.
+            </li>
+          </ul>
         </div>
       </div>
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {/* 0. Ngôn ngữ chính (Đầu vào & Đầu ra) */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Languages size={17} color="var(--accent)" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                Ngôn ngữ chính mặc định
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Thiết lập ngôn ngữ đầu vào và đầu ra mặc định cho các buổi học mới
+      <form onSubmit={handleSave} className={styles.form}>
+        {/* Ngôn ngữ chính (đầu vào & đầu ra) */}
+        <section className={shared.card} aria-labelledby="ai-language-title">
+          <div className={shared.cardHead}>
+            <div className={shared.cardHeadMain}>
+              <span className={shared.cardIcon}>
+                <Languages size={18} aria-hidden="true" />
               </span>
+              <div className={shared.cardText}>
+                <h3 id="ai-language-title" className={shared.cardTitle}>Ngôn ngữ chính mặc định</h3>
+                <p className={shared.cardDescription}>
+                  Ngôn ngữ đầu vào và đầu ra mặc định cho các buổi học mới.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-            {/* Đầu vào chính */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Ngôn ngữ đầu vào chính:
-                </span>
-                <select
-                  value={settings.sourceLanguage}
-                  onChange={(e) => {
-                    const nextVal = e.target.value;
-                    const nextRecent = [nextVal, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== nextVal)].slice(0, 3);
-                    setSettings({ ...settings, sourceLanguage: nextVal, recentSourceLanguages: nextRecent });
-                  }}
-                  style={{
-                    padding: '9px 12px',
-                    backgroundColor: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.86rem',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {inputLanguages(settings.speechProvider).map((opt) => (
-                    <option key={opt.code} value={opt.code}>
-                      {opt.name} ({opt.code})
-                    </option>
-                  ))}
-                </select>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                  Chọn &ldquo;Tự nhận biết ngôn ngữ&rdquo; để hệ thống tự động xác định giọng nói.
-                </span>
-              </label>
-
-              {/* 3 ngôn ngữ đầu vào gần đây */}
-              {recentSourceLangs.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 500 }}>Gần đây:</span>
-                  {recentSourceLangs.map((code) => {
-                    const isSelected = settings.sourceLanguage === code;
-                    return (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => {
-                          const nextRecent = [code, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
-                          setSettings({ ...settings, sourceLanguage: code, recentSourceLanguages: nextRecent });
-                        }}
-                        style={{
-                          padding: '3px 8px',
-                          fontSize: '0.74rem',
-                          borderRadius: 'var(--radius-sm)',
-                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                          backgroundColor: isSelected ? 'var(--accent-subtle, rgba(99, 102, 241, 0.12))' : 'var(--bg-primary)',
-                          color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          fontWeight: isSelected ? 600 : 400,
-                          transition: 'all 0.15s ease',
-                        }}
-                        title={`Chọn nhanh ngôn ngữ đầu vào: ${getLanguageLabel(code)}`}
-                      >
-                        {getLanguageLabel(code)}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Đầu ra chính */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Ngôn ngữ đầu ra chính:
-                </span>
-                <select
-                  value={settings.targetLanguage}
-                  onChange={(e) => {
-                    const nextVal = e.target.value;
-                    const nextRecent = [nextVal, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== nextVal)].slice(0, 3);
-                    setSettings({ ...settings, targetLanguage: nextVal, recentTargetLanguages: nextRecent });
-                  }}
-                  style={{
-                    padding: '9px 12px',
-                    backgroundColor: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.86rem',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {OUTPUT_LANGUAGES.map((opt) => (
-                    <option key={opt.code} value={opt.code}>
-                      {opt.name} ({opt.code})
-                    </option>
-                  ))}
-                </select>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                  Chọn &ldquo;Không dịch&rdquo; nếu chỉ muốn chép lời thoại gốc mà không cần dịch.
-                </span>
-              </label>
-
-              {/* 3 ngôn ngữ đầu ra gần đây */}
-              {recentTargetLangs.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 500 }}>Gần đây:</span>
-                  {recentTargetLangs.map((code) => {
-                    const isSelected = settings.targetLanguage === code;
-                    return (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => {
-                          const nextRecent = [code, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
-                          setSettings({ ...settings, targetLanguage: code, recentTargetLanguages: nextRecent });
-                        }}
-                        style={{
-                          padding: '3px 8px',
-                          fontSize: '0.74rem',
-                          borderRadius: 'var(--radius-sm)',
-                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                          backgroundColor: isSelected ? 'var(--accent-subtle, rgba(99, 102, 241, 0.12))' : 'var(--bg-primary)',
-                          color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          fontWeight: isSelected ? 600 : 400,
-                          transition: 'all 0.15s ease',
-                        }}
-                        title={`Chọn nhanh ngôn ngữ đầu ra: ${getLanguageLabel(code)}`}
-                      >
-                        {getLanguageLabel(code)}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Swap languages button */}
-          <div style={{ display: 'flex', justifyContent: 'flex-start', paddingTop: 4 }}>
-            <button
-              type="button"
-              onClick={handleSwapLanguages}
-              disabled={settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'}
-              title={
-                settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
-                  ? 'Không thể hoán đổi khi ngôn ngữ là Tự động hoặc Không dịch'
-                  : 'Hoán đổi ngôn ngữ đầu vào và đầu ra'
-              }
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 12px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                color: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
-                  ? 'var(--text-muted)'
-                  : 'var(--text-primary)',
-                cursor: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
-                  ? 'not-allowed'
-                  : 'pointer',
-                opacity: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none' ? 0.6 : 1,
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <ArrowLeftRight size={14} />
-              <span>Hoán đổi ngôn ngữ ({settings.sourceLanguage} ⇄ {settings.targetLanguage})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 1. Nhận giọng (Speech Provider) */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Mic size={17} color="var(--accent)" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                1. Nhận diện giọng nói (Speech Recognition)
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Công nghệ chuyển lời nói thành văn bản trực tiếp
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="speech-provider" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Bộ nhận diện giọng nói:
-            </label>
-            <select
-              id="speech-provider"
-              required
-              value={settings.speechProvider}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  speechProvider: e.target.value as AppSettings['speechProvider'],
-                  ...(['nemotron', 'soniox'].includes(e.target.value) ? { transcriptionMode: 'verbatim' as const } : {}),
-                })
-              }
-              style={{
-                padding: '10px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.88rem',
-              }}
-            >
-              <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
-              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (dịch 60+ ngôn ngữ, tách người nói)</option>
-              <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
-              <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
-              <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
-            </select>
-          </div>
-
-          {settings.speechProvider === 'google-flash-live' && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              <code>{FLASH_LIVE_MODEL}</code> kết nối Live API, hiện chữ trực tiếp. Tự động gia hạn kết nối cho các buổi học dài.
-            </p>
-          )}
-          {settings.speechProvider === 'google' && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Gemini 3.5 Translate Live nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Tự động gia hạn phiên kết nối cho các buổi học dài.
-            </p>
-          )}
-          {settings.speechProvider === 'soniox' && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Soniox stt-rt-v5 nhận diện và dịch hai chiều trực tiếp giữa Tiếng Nhật và Tiếng Việt từ sóng âm micro với độ trễ cực thấp. Key cấu hình trong SONIOX_API_KEY.
-            </p>
-          )}
-          {settings.speechProvider === 'nemotron' && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Nhận giọng trực tiếp trên máy chủ riêng, có tiếng Việt và tiếng Nhật. Chi phí phụ thuộc máy chủ; không có phí API theo giờ âm thanh. Lưu cài đặt rồi kiểm tra kết nối bên dưới.
-            </p>
-          )}
-          {!isLiveSpeechProvider(settings.speechProvider) && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              <code>{TRANSCRIPTION_MODEL}</code> nhận giọng theo từng đoạn. Chữ xuất hiện sau khoảng nghỉ hoặc mỗi 15 giây khi nói liên tục.
-            </p>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label htmlFor="transcription-mode" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Chế độ phiên âm (Transcription mode)
-              </label>
+          <div className={shared.grid}>
+            <div className={shared.field}>
+              <label htmlFor="source-language" className={shared.label}>Ngôn ngữ đầu vào chính</label>
               <select
-                id="transcription-mode"
-                disabled={settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider)}
-                required
-                aria-describedby="transcription-mode-help"
-                value={
-                  settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider)
-                    ? 'verbatim'
-                    : settings.transcriptionMode
-                }
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    transcriptionMode: e.target.value as TranscriptionMode,
-                  })
-                }
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.88rem',
-                  opacity: settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider) ? 0.6 : 1,
-                }}
+                id="source-language"
+                className={shared.control}
+                value={settings.sourceLanguage}
+                onChange={(e) => pickSourceLanguage(e.target.value)}
               >
-                <option value="smart">smart - bỏ ừ/à, chuẩn văn viết</option>
-                <option value="verbatim">verbatim - nguyên văn từng từ</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label htmlFor="speaker-count" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Số người nói dự kiến:
-              </label>
-              <select
-                id="speaker-count"
-                disabled={settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron'}
-                value={settings.speakerCount}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    speakerCount: Number(e.target.value) as SpeakerCount,
-                  })
-                }
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.88rem',
-                  opacity: settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron' ? 0.6 : 1,
-                }}
-              >
-                {SPEAKER_COUNTS.map((count) => (
-                  <option key={count} value={count}>
-                    {count} người nói
+                {inputLanguages(settings.speechProvider).map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
                   </option>
                 ))}
               </select>
+              <RecentLanguages
+                codes={recentSourceLangs}
+                selected={settings.sourceLanguage}
+                direction="đầu vào"
+                getLabel={getLanguageLabel}
+                onPick={pickSourceLanguage}
+              />
+              <p className={shared.hint}>
+                Chọn &ldquo;Tự nhận biết ngôn ngữ&rdquo; để hệ thống tự động xác định giọng nói.
+              </p>
+            </div>
+
+            <div className={shared.field}>
+              <label htmlFor="target-language" className={shared.label}>Ngôn ngữ đầu ra chính</label>
+              <select
+                id="target-language"
+                className={shared.control}
+                value={settings.targetLanguage}
+                onChange={(e) => pickTargetLanguage(e.target.value)}
+              >
+                {OUTPUT_LANGUAGES.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+              <RecentLanguages
+                codes={recentTargetLangs}
+                selected={settings.targetLanguage}
+                direction="đầu ra"
+                getLabel={getLanguageLabel}
+                onPick={pickTargetLanguage}
+              />
+              <p className={shared.hint}>
+                Chọn &ldquo;Không dịch&rdquo; nếu chỉ muốn chép lời thoại gốc mà không cần dịch.
+              </p>
             </div>
           </div>
-          <span id="transcription-mode-help" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {settings.speechProvider === 'soniox'
-              ? 'Soniox nhận giọng thường; chưa bật smart Google, dịch Soniox hoặc phân biệt giọng tự động. Gán người nói thủ công khi cần.'
-              : settings.speechProvider === 'nemotron'
-              ? 'Nemotron nhận dạng nguyên văn. Gán người nói thủ công khi cần; chưa bật phân biệt giọng tự động.'
-              : 'Lưu ý: Chế độ Flash Live chỉ hỗ trợ verbatim và gán Speaker thủ công khi cần. Chi phí khoảng 0,005 USD/phút.'}
-          </span>
-        </div>
 
-        {/* 2. Khoảng Nghỉ Để Chốt Câu (Pause Duration) */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+          <div className={styles.swapRow}>
+            <button
+              type="button"
+              className={`${shared.btn} ${shared.btnSecondary}`}
+              onClick={handleSwapLanguages}
+              disabled={swapDisabled}
+              title={
+                swapDisabled
+                  ? 'Không thể hoán đổi khi ngôn ngữ là Tự động hoặc Không dịch'
+                  : 'Hoán đổi ngôn ngữ đầu vào và đầu ra'
+              }
             >
-              <Clock size={17} color="var(--accent)" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                2. Khoảng nghỉ để chốt câu (Silence Boundary)
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Thời gian im lặng cần thiết trước khi chốt câu hoàn chỉnh
+              <ArrowLeftRight size={16} aria-hidden="true" />
+              <span>Hoán đổi ngôn ngữ ({settings.sourceLanguage} ⇄ {settings.targetLanguage})</span>
+            </button>
+            {swapDisabled && (
+              <p className={shared.hint}>
+                Không thể hoán đổi khi ngôn ngữ là Tự động hoặc Không dịch.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* 1. Nhận giọng (speech provider) */}
+        <section className={shared.card} aria-labelledby="ai-speech-title">
+          <div className={shared.cardHead}>
+            <div className={shared.cardHeadMain}>
+              <span className={shared.cardIcon}>
+                <Mic size={18} aria-hidden="true" />
               </span>
+              <div className={shared.cardText}>
+                <h3 id="ai-speech-title" className={shared.cardTitle}>1. Nhận diện giọng nói (Speech Recognition)</h3>
+                <p className={shared.cardDescription}>Công nghệ chuyển lời nói thành văn bản trực tiếp.</p>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
-            {/* Chế độ Giảng bài */}
-            <div
-              style={{
-                padding: '14px 16px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label
-                  htmlFor="pause-lecture"
-                  style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-                >
-                  Chế độ Giảng bài:
+          <div className={shared.cardBody}>
+            <div className={shared.field}>
+              <label htmlFor="speech-provider" className={shared.label}>Bộ nhận diện giọng nói</label>
+              <select
+                id="speech-provider"
+                className={shared.control}
+                required
+                value={settings.speechProvider}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    speechProvider: e.target.value as AppSettings['speechProvider'],
+                    ...(['nemotron', 'soniox'].includes(e.target.value) ? { transcriptionMode: 'verbatim' as const } : {}),
+                  })
+                }
+              >
+                <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
+                <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (dịch 60+ ngôn ngữ, tách người nói)</option>
+                <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
+                <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
+                <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
+              </select>
+
+              <div className={styles.providerNote}>
+                <div className={styles.tagRow}>
+                  <span className={shared.badge}>
+                    {isLiveSpeechProvider(settings.speechProvider) ? 'Trực tiếp' : 'Theo đoạn'}
+                  </span>
+                </div>
+                {settings.speechProvider === 'google-flash-live' && (
+                  <p className={styles.providerText}>
+                    <code className={shared.code}>{FLASH_LIVE_MODEL}</code> kết nối Live API, hiện chữ trực tiếp. Tự động gia hạn kết nối cho các buổi học dài.
+                  </p>
+                )}
+                {settings.speechProvider === 'google' && (
+                  <p className={styles.providerText}>
+                    Gemini 3.5 Translate Live nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Tự động gia hạn phiên kết nối cho các buổi học dài.
+                  </p>
+                )}
+                {settings.speechProvider === 'soniox' && (
+                  <p className={styles.providerText}>
+                    Soniox stt-rt-v5 nhận diện và dịch hai chiều trực tiếp giữa Tiếng Nhật và Tiếng Việt từ sóng âm micro với độ trễ cực thấp. Key cấu hình trong SONIOX_API_KEY.
+                  </p>
+                )}
+                {settings.speechProvider === 'nemotron' && (
+                  <p className={styles.providerText}>
+                    Nhận giọng trực tiếp trên máy chủ riêng, có tiếng Việt và tiếng Nhật. Chi phí phụ thuộc máy chủ; không có phí API theo giờ âm thanh. Lưu cài đặt rồi kiểm tra kết nối bên dưới.
+                  </p>
+                )}
+                {!isLiveSpeechProvider(settings.speechProvider) && (
+                  <p className={styles.providerText}>
+                    <code className={shared.code}>{TRANSCRIPTION_MODEL}</code> nhận giọng theo từng đoạn. Chữ xuất hiện sau khoảng nghỉ hoặc mỗi 10 giây khi nói liên tục.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.rows}>
+              <div className={`${shared.field} ${shared.fieldInline}`}>
+                <label htmlFor="transcription-mode" className={shared.label}>
+                  Chế độ phiên âm (Transcription mode)
                 </label>
-                <span
-                  style={{
-                    fontSize: '0.88rem',
-                    fontWeight: 700,
-                    color: 'var(--accent)',
-                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                  }}
+                <select
+                  id="transcription-mode"
+                  className={shared.control}
+                  disabled={transcriptionLocked}
+                  required
+                  aria-describedby="transcription-mode-help"
+                  value={transcriptionLocked ? 'verbatim' : settings.transcriptionMode}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      transcriptionMode: e.target.value as TranscriptionMode,
+                    })
+                  }
                 >
-                  {(settings.pauseMs / 1000).toFixed(1)}s
-                </span>
+                  <option value="smart">smart - bỏ ừ/à, chuẩn văn viết</option>
+                  <option value="verbatim">verbatim - nguyên văn từng từ</option>
+                </select>
+              </div>
+
+              <div className={`${shared.field} ${shared.fieldInline}`}>
+                <label htmlFor="speaker-count" className={shared.label}>Số người nói dự kiến</label>
+                <select
+                  id="speaker-count"
+                  className={shared.control}
+                  disabled={settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron'}
+                  value={settings.speakerCount}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      speakerCount: Number(e.target.value) as SpeakerCount,
+                    })
+                  }
+                >
+                  {SPEAKER_COUNTS.map((count) => (
+                    <option key={count} value={count}>
+                      {count} người nói
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <p id="transcription-mode-help" className={shared.hint}>
+              {settings.speechProvider === 'soniox'
+                ? 'Soniox nhận giọng thường; chưa bật smart Google, dịch Soniox hoặc phân biệt giọng tự động. Gán người nói thủ công khi cần.'
+                : settings.speechProvider === 'nemotron'
+                ? 'Nemotron nhận dạng nguyên văn. Gán người nói thủ công khi cần; chưa bật phân biệt giọng tự động.'
+                : 'Lưu ý: Chế độ Flash Live chỉ hỗ trợ verbatim và gán Speaker thủ công khi cần. Chi phí khoảng 0,005 USD/phút.'}
+            </p>
+          </div>
+        </section>
+
+        {/* 2. Khoảng nghỉ để chốt câu (pause duration) */}
+        <section className={shared.card} aria-labelledby="ai-silence-title">
+          <div className={shared.cardHead}>
+            <div className={shared.cardHeadMain}>
+              <span className={shared.cardIcon}>
+                <Clock size={18} aria-hidden="true" />
+              </span>
+              <div className={shared.cardText}>
+                <h3 id="ai-silence-title" className={shared.cardTitle}>2. Khoảng nghỉ để chốt câu (Silence Boundary)</h3>
+                <p className={shared.cardDescription}>Thời gian im lặng cần thiết trước khi chốt câu hoàn chỉnh.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={shared.grid}>
+            <div className={styles.sliderCard}>
+              <div className={styles.sliderHead}>
+                <label htmlFor="pause-lecture" className={shared.label}>Chế độ giảng bài</label>
+                <span className={shared.valuePill}>{(settings.pauseMs / 1000).toFixed(1)}s</span>
               </div>
               <input
                 id="pause-lecture"
                 type="range"
+                className={shared.range}
                 min={600}
                 max={2000}
                 step={100}
@@ -707,48 +411,19 @@ export function AiSettings() {
                   setSettings({ ...settings, pauseMs: Number(e.target.value) })
                 }
                 aria-label="Khoảng nghỉ để chốt câu, giây"
-                style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Phù hợp với giọng nói giảng bài liên tục (0.6s - 2.0s)
-              </span>
+              <p className={shared.hint}>Phù hợp với giọng nói giảng bài liên tục (0.6s - 2.0s).</p>
             </div>
 
-            {/* Chế độ Hội thoại */}
-            <div
-              style={{
-                padding: '14px 16px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label
-                  htmlFor="pause-reading"
-                  style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-                >
-                  Chế độ Hội thoại:
-                </label>
-                <span
-                  style={{
-                    fontSize: '0.88rem',
-                    fontWeight: 700,
-                    color: 'var(--accent)',
-                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                  }}
-                >
-                  {(settings.readingPauseMs / 1000).toFixed(1)}s
-                </span>
+            <div className={styles.sliderCard}>
+              <div className={styles.sliderHead}>
+                <label htmlFor="pause-reading" className={shared.label}>Chế độ hội thoại</label>
+                <span className={shared.valuePill}>{(settings.readingPauseMs / 1000).toFixed(1)}s</span>
               </div>
               <input
                 id="pause-reading"
                 type="range"
+                className={shared.range}
                 min={600}
                 max={10000}
                 step={100}
@@ -757,100 +432,45 @@ export function AiSettings() {
                   setSettings({ ...settings, readingPauseMs: Number(e.target.value) })
                 }
                 aria-label="Khoảng nghỉ để chốt câu khi hội thoại, giây"
-                style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Thời gian chờ ngắt câu phù hợp cho giao tiếp và hội thoại (0.6s - 10.0s)
-              </span>
+              <p className={shared.hint}>Thời gian chờ ngắt câu phù hợp cho giao tiếp và hội thoại (0.6s - 10.0s).</p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* 4. Model Tóm Tắt & Sinh Ảnh */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Sparkles size={17} color="var(--accent)" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                3. Tóm tắt & Minh họa (Phần B)
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Tạo bản ghi chép tổng kết bài học và hình ảnh minh họa
+        {/* 3. Tóm tắt & sinh ảnh */}
+        <section className={shared.card} aria-labelledby="ai-summary-title">
+          <div className={shared.cardHead}>
+            <div className={shared.cardHeadMain}>
+              <span className={shared.cardIcon}>
+                <Sparkles size={18} aria-hidden="true" />
               </span>
+              <div className={shared.cardText}>
+                <h3 id="ai-summary-title" className={shared.cardTitle}>3. Tóm tắt &amp; minh họa (Phần B)</h3>
+                <p className={shared.cardDescription}>Tạo bản ghi chép tổng kết bài học và hình ảnh minh họa.</p>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-            {/* Summary Model Display */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Model tóm tắt bài học:
-              </label>
-              <div
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--accent)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
+          <div className={shared.grid}>
+            <div className={shared.field}>
+              <span id="summary-model-label" className={shared.label}>Model tóm tắt bài học</span>
+              <div className={styles.readonly} role="group" aria-labelledby="summary-model-label">
                 <span>{modelData?.defaults.summarize || 'google:gemini-3.8-flash'}</span>
-                <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                  (Cố định tại Server)
-                </span>
+                <span className={styles.readonlyNote}>(Cố định tại Server)</span>
               </div>
               {summaryModels.length > 0 && (
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Hỗ trợ: {summaryModels.map((m) => m.name).join(', ')}
-                </span>
+                <p className={shared.hint}>Hỗ trợ: {summaryModels.map((m) => m.name).join(', ')}</p>
               )}
             </div>
 
-            {/* Image Model Select */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Model sinh ảnh minh họa:
-              </label>
+            <div className={shared.field}>
+              <label htmlFor="image-model" className={shared.label}>Model sinh ảnh minh họa</label>
               <select
+                id="image-model"
+                className={shared.control}
                 value={settings.imageModel}
                 onChange={(e) => setSettings({ ...settings, imageModel: e.target.value })}
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.88rem',
-                }}
               >
                 {imageModels.map((m) => (
                   <option key={m.key} value={m.key}>
@@ -860,57 +480,15 @@ export function AiSettings() {
               </select>
             </div>
           </div>
-        </div>
+        </section>
 
-
-
-        {/* Action Button Bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            paddingTop: 8,
-          }}
-        >
-          <button
-            type="submit"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              padding: '12px 32px',
-              backgroundColor: 'var(--bg-active)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              fontWeight: 600,
-              fontSize: '0.95rem',
-              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.4)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Save size={18} />
+        <div className={shared.actionRow}>
+          <button type="submit" className={`${shared.btn} ${shared.btnPrimary}`}>
+            <Save size={18} aria-hidden="true" />
             <span>Lưu cài đặt</span>
           </button>
-
-          <Link
-            href="/library"
-            style={{
-              padding: '12px 22px',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-secondary)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              textDecoration: 'none',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Hủy & Quay lại
+          <Link href="/library" className={`${shared.btn} ${shared.btnSecondary}`}>
+            Hủy &amp; Quay lại
           </Link>
         </div>
       </form>

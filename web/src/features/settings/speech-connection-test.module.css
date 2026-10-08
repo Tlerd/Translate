@@ -1,0 +1,11 @@
+/* Speech connection test: only the status line needs rules of its own.
+   The card, button and notice come from settings-shared.module.css. */
+
+.statusText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.checkingIcon {
+  color: var(--accent);
+}

@@ -1,0 +1,292 @@
+/* Settings page layout. The page is its own scroll container inside the app shell.
+   Phones (under 960px): one column, with a sticky tab bar that scrolls sideways.
+   Laptops (960px and up): a sticky left navigation beside a content column of at most 760px.
+   Colors come from the theme tokens in globals.css. */
+
+.scroll {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overscroll-behavior: contain;
+}
+
+.scroll :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+  /* The shell already reserves 60px for the bottom nav on phones; this keeps the last card clear of
+     the home indicator as well. */
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- Header ---------- */
+
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-width: 0;
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.pageSubtitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* ---------- Navigation: phone tab bar ---------- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-width: 0;
+  /* Full-bleed bar: cancel the layout gutter so the glass background reaches both edges. */
+  margin: 0 -16px;
+  padding: 8px 16px;
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.navList {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.navList::-webkit-scrollbar {
+  display: none;
+}
+
+.navItem {
+  flex: 0 0 auto;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.navLink svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.navLinkActive,
+.navLinkActive svg {
+  color: #fff;
+}
+
+.navLinkActive {
+  border-color: var(--bg-active);
+  background: var(--bg-active);
+}
+
+/* ---------- Content ---------- */
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+  width: 100%;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.groupHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.groupDescription {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.groupBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.settingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-width: 0;
+}
+
+.settingLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.accountSlot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.accountEmpty {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.usageLink {
+  align-self: flex-start;
+  text-decoration: none;
+}
+
+/* ---------- Laptop: sidebar and content column ---------- */
+
+@media (min-width: 960px) {
+  .layout {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 760px);
+    grid-template-areas:
+      'head head'
+      'nav content';
+    align-items: start;
+    column-gap: 40px;
+    row-gap: 24px;
+    /* 1000px of columns plus 32px padding on each side. */
+    max-width: 1064px;
+    margin: 0 auto;
+    padding: 32px 32px 56px;
+  }
+
+  .pageHeader {
+    grid-area: head;
+  }
+
+  .nav {
+    grid-area: nav;
+    position: sticky;
+    top: 32px;
+    z-index: auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-bottom: 0;
+  }
+
+  .navList {
+    flex-direction: column;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .navLink {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    border-color: transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+  }
+
+  .navLink:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+  }
+
+  .navLinkActive,
+  .navLinkActive:hover {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .navLinkActive svg {
+    color: var(--accent);
+  }
+
+  .content {
+    grid-area: content;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navLink {
+    transition: none;
+  }
+}
