@@ -49,7 +49,7 @@ describe('translation token usage diagnostics', () => {
     expect(console.info).toHaveBeenCalledWith('[translation-usage]', expect.objectContaining({
       requestId: request.requestId, captionId: 7, revision: 3, modelKey: request.modelKey,
       status: 'completed', usageStatus: 'reported', inputTokens: 100, outputTokens: 2, cachedInputTokens: 0, thinkingTokens: 0, totalTokens: 102,
-      requestKind: 'final', historyTurns: 0, thinkingLevel: null,
+      requestKind: 'final', historyTurns: 0, thinkingLevel: 'low',
     }));
     const logged = JSON.stringify(vi.mocked(console.info).mock.calls);
     for (const content of ['private source', 'private situation', 'private glossary', 'private-test-key', 'Xin chào']) expect(logged).not.toContain(content);
@@ -119,7 +119,7 @@ describe('translation token usage diagnostics', () => {
     expect((sdk.lastConfig as { config?: { thinkingConfig?: { thinkingLevel?: unknown } } })?.config?.thinkingConfig?.thinkingLevel).toBeDefined();
   });
 
-  it('leaves thinking level undefined for final requests with auto thinking', async () => {
+  it('uses the light default thinking level for final requests with auto thinking', async () => {
     sdk.generateContentStream.mockResolvedValue((async function* () {
       yield { text: 'Toàn câu', usageMetadata: { promptTokenCount: 80, candidatesTokenCount: 10, totalTokenCount: 90 } };
     })());
@@ -137,8 +137,8 @@ describe('translation token usage diagnostics', () => {
 
     expect(receivedRecord).toBeDefined();
     expect(receivedRecord?.requestKind).toBe('final');
-    expect(receivedRecord?.thinkingLevel).toBeNull();
-    expect((sdk.lastConfig as { config?: { thinkingConfig?: unknown } })?.config?.thinkingConfig).toBeUndefined();
+    expect(receivedRecord?.thinkingLevel).toBe('low');
+    expect((sdk.lastConfig as { config?: { thinkingConfig?: unknown } })?.config?.thinkingConfig).toBeDefined();
   });
 
   it('builds usage record accurately from parameters', () => {

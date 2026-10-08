@@ -14,6 +14,7 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock('@google/genai', () => ({
+  ThinkingLevel: { MINIMAL: 'MINIMAL', LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' },
   GoogleGenAI: class {
     models = { generateContentStream: sdk.generateContentStream };
     constructor(config: unknown) { void config; }

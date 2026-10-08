@@ -5,6 +5,8 @@ import { isAllowedSpeakerLabel, TRANSCRIPTION_MODEL, type SpeakerCount, type Tra
 
 /** Quiet laptop/phone microphones sit well under the old 0.015 gate. */
 const QUIET_SPEECH_RMS = 0.006;
+/** Longest stretch of continuous speech sent as one request; shorter means text appears sooner. */
+export const MAX_SEGMENT_SECONDS = 10;
 
 /** Unary transcription: ordered WAV segments, never a live WebSocket session. */
 export class GeminiTranscribeRecognizer {
@@ -51,8 +53,8 @@ export class GeminiTranscribeRecognizer {
     this.resampler ??= new Pcm16kResampler(rate);
     const samples = this.resampler.push(input);
     this.append(samples, startMs);
-    // A maximum of 15 seconds bounds request size and latency during continuous speech.
-    if (this.sampleCount >= 15 * 16000 || (this.sampleCount >= 16000 && this.silenceSamples >= this.pauseMs * 16)) this.finalizeUtterance();
+    // The maximum bounds request size and latency during continuous speech.
+    if (this.sampleCount >= MAX_SEGMENT_SECONDS * 16000 || (this.sampleCount >= 16000 && this.silenceSamples >= this.pauseMs * 16)) this.finalizeUtterance();
   }
 
   private append(samples: Float32Array, startMs?: number): void {

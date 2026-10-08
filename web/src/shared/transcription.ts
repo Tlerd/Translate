@@ -42,12 +42,23 @@ export function normalizeTranscriptionMode(value: unknown): TranscriptionMode {
   return value === 'smart' ? 'smart' : 'verbatim';
 }
 
+/** Labels assigned from the audio source when microphone and shared-screen audio are mixed. */
+export const SOURCE_SPEAKER_LABELS = { mic: 'src_mic', display: 'src_display' } as const;
+export type SourceSpeakerLabel = typeof SOURCE_SPEAKER_LABELS[keyof typeof SOURCE_SPEAKER_LABELS];
+
+export function isSourceSpeakerLabel(label: string | undefined): label is SourceSpeakerLabel {
+  return label === SOURCE_SPEAKER_LABELS.mic || label === SOURCE_SPEAKER_LABELS.display;
+}
+
 export function isAllowedSpeakerLabel(label: string, count: SpeakerCount): boolean {
+  if (isSourceSpeakerLabel(label)) return true;
   const match = /^spk_([1-8])$/.exec(label);
   return Boolean(match && Number(match[1]) <= count);
 }
 
 export function displaySpeakerLabel(label: string): string {
+  if (label === SOURCE_SPEAKER_LABELS.mic) return 'Tôi';
+  if (label === SOURCE_SPEAKER_LABELS.display) return 'Cuộc họp';
   const match = /^spk_([1-8])$/.exec(label);
   return match ? `Speaker ${match[1]}` : label;
 }

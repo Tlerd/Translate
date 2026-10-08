@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ArrowDown } from 'lucide-react';
 import type { CaptionItem } from '@/shared/recording';
-import { displaySpeakerLabel, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
+import { displaySpeakerLabel, isSourceSpeakerLabel, SOURCE_SPEAKER_LABELS, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
 import styles from './recording-ui.module.css';
 
 interface TranscriptPaneProps {
@@ -58,6 +58,9 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
     }
   }, [captions, autoScroll]);
 
+  // Source labels ("Tôi", "Cuộc họp") only appear for mixed microphone + screen recordings.
+  const hasSourceLabels = captions.some((cap) => isSourceSpeakerLabel(cap.speakerLabel));
+
   const getSpeakerColor = (label?: string) => {
     if (!label) return '#6366f1';
     const colors = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6', '#14b8a6'];
@@ -98,6 +101,10 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
         const isHighlighted = highlightCaptionId === cap.id;
         const isStreaming = cap.state === 'streaming';
         const speakerNumber = cap.speakerLabel ? cap.speakerLabel.replace('spk_', '') : '1';
+        const isSource = isSourceSpeakerLabel(cap.speakerLabel);
+        // Avatar shows the number for Speaker N, or the initial for a source label.
+        const avatarText = isSource ? (cap.speakerLabel === SOURCE_SPEAKER_LABELS.mic ? 'T' : 'CH') : speakerNumber;
+        const speakerName = cap.speakerLabel ? displaySpeakerLabel(cap.speakerLabel) : `Speaker ${speakerNumber}`;
 
         return (
           <div
@@ -124,9 +131,9 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
                     fontWeight: 700,
                     flexShrink: 0,
                   }}
-                  title={`Người nói ${speakerNumber}`}
+                  title={isSource ? speakerName : `Người nói ${speakerNumber}`}
                 >
-                  {speakerNumber}
+                  {avatarText}
                 </div>
 
                 {onSpeakerChange ? (
@@ -147,15 +154,21 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
                       padding: 0,
                     }}
                   >
-                    <option value="">Speaker {speakerNumber}</option>
-                    {cap.speakerLabel && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
+                    <option value="">{isSource ? 'Chưa gán' : `Speaker ${speakerNumber}`}</option>
+                    {(hasSourceLabels || isSource) && (
+                      <>
+                        <option value={SOURCE_SPEAKER_LABELS.mic}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.mic)}</option>
+                        <option value={SOURCE_SPEAKER_LABELS.display}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.display)}</option>
+                      </>
+                    )}
+                    {cap.speakerLabel && !isSource && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
                       <option value={cap.speakerLabel} disabled>{displaySpeakerLabel(cap.speakerLabel)} (nhãn cũ)</option>
                     )}
                     {SPEAKER_COUNTS.slice(0, speakerCount).map(count => <option key={count} value={`spk_${count}`}>Speaker {count}</option>)}
                   </select>
                 ) : (
                   <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                    Speaker {speakerNumber}
+                    {speakerName}
                   </span>
                 )}
               </div>
