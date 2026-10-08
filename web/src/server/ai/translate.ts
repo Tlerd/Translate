@@ -10,6 +10,21 @@ import { streamOpenAiText } from './providers/openai';
 import type { TranslateRequest } from '@/shared/ai-contracts';
 import type { TranslationUsageRecord } from '@/server/cloud/translation-usage-store';
 
+type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+
+/**
+ * Live captions are one or two sentences, so deep reasoning only adds seconds of delay.
+ * Partial segments use the fastest level; final text uses a light one for quality.
+ */
+export function defaultTranslationThinkingLevel(
+  requestKind: string | undefined,
+  supported: readonly ThinkingLevel[] | undefined
+): ThinkingLevel | undefined {
+  if (!supported) return undefined;
+  const order: ThinkingLevel[] = requestKind && requestKind !== 'final' ? ['minimal', 'low'] : ['low', 'minimal'];
+  return order.find((level) => supported.includes(level));
+}
+
 export function buildUsageRecord(params: {
   req: TranslateRequest;
   modelKey: string;
@@ -65,11 +80,7 @@ export async function* executeTranslation(
     currentUtterance: req.text,
   });
 
-  const effectiveThinkingLevel =
-    req.thinkingLevel ??
-    (req.requestKind && req.requestKind !== 'final' && resolved.model.thinkingLevels?.includes('minimal')
-      ? 'minimal'
-      : undefined);
+  const effectiveThinkingLevel = req.thinkingLevel ?? defaultTranslationThinkingLevel(req.requestKind, resolved.model.thinkingLevels);
 
   const startedAt = Date.now();
   let usage: ProviderTokenUsage | undefined;

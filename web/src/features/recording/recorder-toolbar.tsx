@@ -353,6 +353,7 @@ export function RecorderToolbar({ onStart, onStop }: RecorderToolbarProps) {
               ? 'chưa có'
               : new Date(state.lastTranscriptAt).toLocaleTimeString()}
           </span>
+          {state.finalizeLatencyMs !== null && <span className={styles.diagnosticDetail}>Chốt câu: {state.finalizeLatencyMs}ms</span>}
           {state.translationLatencyMs !== null && <span className={styles.diagnosticDetail}>Dịch: {state.translationLatencyMs}ms</span>}
         </div>
       )}

@@ -15,6 +15,8 @@ import { fetchModels, streamTranslate } from '@/lib/api-client';
 import { loadSettings } from '@/storage/recordings';
 import type { ModelsResponse } from '@/shared/ai-contracts';
 import type { TranslationMetrics } from '@/shared/usage';
+import shared from './settings-shared.module.css';
+import styles from './translation-connection-test.module.css';
 
 const PRESET_SAMPLES = [
   {
@@ -175,112 +177,39 @@ export function TranslationConnectionTest() {
     setStatus('idle');
   };
 
+  const running = status === 'running';
+
   return (
-    <section
-      id="translation-test"
-      aria-label="Kiểm tra và chạy thử model dịch"
-      style={{
-        margin: '0 auto 20px',
-        padding: '22px 24px',
-        maxWidth: 860,
-        backgroundColor: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        boxShadow: 'var(--shadow-sm)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 18,
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 8,
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Languages size={18} color="var(--accent)" />
-          </div>
-          <div>
-            <h2
-              style={{
-                fontSize: '1.05rem',
-                fontWeight: 600,
-                margin: 0,
-                color: 'var(--text-primary)',
-              }}
-            >
-              Thử Nghiệm Tốc Độ & Luồng Dịch (Translation Test)
-            </h2>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Đo đạc độ trễ nhận byte đầu tiên (TTFB) và tốc độ stream theo thời gian thực
-            </span>
+    <section id="translation-test" aria-label="Kiểm tra và chạy thử model dịch" className={shared.card}>
+      <div className={shared.cardHead}>
+        <div className={shared.cardHeadMain}>
+          <span className={shared.cardIcon}>
+            <Languages size={18} aria-hidden="true" />
+          </span>
+          <div className={shared.cardText}>
+            <h3 className={shared.cardTitle}>Thử nghiệm dịch</h3>
+            <p className={shared.cardDescription}>Đo độ trễ nhận byte đầu tiên (TTFB) và tốc độ stream theo thời gian thực.</p>
           </div>
         </div>
-
-        <span
-          style={{
-            fontSize: '0.78rem',
-            backgroundColor: 'rgba(56, 189, 248, 0.1)',
-            color: 'var(--accent)',
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid rgba(56, 189, 248, 0.3)',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <Sparkles size={13} />
-          <span>Real-time SSE Stream</span>
-        </span>
+        <div className={shared.cardHeadAside}>
+          <span className={`${shared.badge} ${shared.badgeInfo}`}>
+            <Sparkles size={14} aria-hidden="true" />
+            <span>Stream SSE</span>
+          </span>
+        </div>
       </div>
 
-      <p
-        style={{
-          color: 'var(--text-secondary)',
-          fontSize: '0.86rem',
-          margin: 0,
-          lineHeight: 1.5,
-        }}
-      >
-        Kiểm tra trực tiếp model dịch với Google AI API: kiểm tra quyền gọi API, đo độ trễ mạng và quan sát văn bản dịch stream từng từ trước khi bắt đầu bài học.
+      <p className={shared.hint}>
+        Kiểm tra trực tiếp model dịch với Google AI API: quyền gọi API, độ trễ mạng và văn bản dịch stream từng từ trước khi bắt đầu bài học.
       </p>
 
-      {/* Model & Parameters Selection Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 14,
-        }}
-      >
-        {/* Model Selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label
-            htmlFor="test-translation-model"
-            style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-          >
-            Model dịch thử nghiệm:
-          </label>
+      {/* Model, thinking level and language pair */}
+      <div className={shared.grid}>
+        <div className={shared.field}>
+          <label htmlFor="test-translation-model" className={shared.label}>Model dịch thử nghiệm</label>
           <select
             id="test-translation-model"
+            className={shared.control}
             value={selectedModel}
             onChange={(e) => {
               const newKey = e.target.value;
@@ -295,15 +224,7 @@ export function TranslationConnectionTest() {
                 setThinkingLevel('auto');
               }
             }}
-            disabled={status === 'running'}
-            style={{
-              padding: '10px 14px',
-              backgroundColor: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-primary)',
-              fontSize: '0.88rem',
-            }}
+            disabled={running}
           >
             {translationModels.map((m) => (
               <option key={m.key} value={m.key}>
@@ -313,28 +234,15 @@ export function TranslationConnectionTest() {
           </select>
         </div>
 
-        {/* Thinking Level Selector */}
         {supportedThinkingLevels.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label
-              htmlFor="test-thinking-level"
-              style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-            >
-              Mức suy luận (Thinking Level):
-            </label>
+          <div className={shared.field}>
+            <label htmlFor="test-thinking-level" className={shared.label}>Mức suy luận (Thinking Level)</label>
             <select
               id="test-thinking-level"
+              className={shared.control}
               value={thinkingLevel}
               onChange={(e) => setThinkingLevel(e.target.value)}
-              disabled={status === 'running'}
-              style={{
-                padding: '10px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.88rem',
-              }}
+              disabled={running}
             >
               <option value="auto">Tự động (Theo mặc định model)</option>
               {supportedThinkingLevels.map((lvl) => (
@@ -355,31 +263,18 @@ export function TranslationConnectionTest() {
           </div>
         )}
 
-        {/* Direction Selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label
-            htmlFor="test-language-pair"
-            style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-          >
-            Cặp ngôn ngữ:
-          </label>
+        <div className={shared.field}>
+          <label htmlFor="test-language-pair" className={shared.label}>Cặp ngôn ngữ</label>
           <select
             id="test-language-pair"
+            className={shared.control}
             value={`${sourceLang}->${targetLang}`}
             onChange={(e) => {
               const [src, tgt] = e.target.value.split('->');
               setSourceLang(src);
               setTargetLang(tgt);
             }}
-            disabled={status === 'running'}
-            style={{
-              padding: '10px 14px',
-              backgroundColor: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-primary)',
-              fontSize: '0.88rem',
-            }}
+            disabled={running}
           >
             <option value="ja->vi">Tiếng Nhật → Tiếng Việt (Mặc định)</option>
             <option value="en->vi">Tiếng Anh → Tiếng Việt</option>
@@ -388,46 +283,21 @@ export function TranslationConnectionTest() {
         </div>
       </div>
 
-      {/* Preset Quick Samples */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span
-          style={{
-            fontSize: '0.82rem',
-            color: 'var(--text-secondary)',
-            fontWeight: 500,
-          }}
-        >
-          Câu mẫu thử nhanh:
-        </span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {PRESET_SAMPLES.map((sample, idx) => (
+      {/* Preset samples */}
+      <div className={styles.presetBlock}>
+        <span id="test-presets-label" className={shared.label}>Câu mẫu thử nhanh</span>
+        <div className={styles.presetList} role="group" aria-labelledby="test-presets-label">
+          {PRESET_SAMPLES.map((sample) => (
             <button
-              key={idx}
+              key={sample.label}
               type="button"
+              className={shared.chip}
               onClick={() => {
                 setInputText(sample.text);
                 setSourceLang(sample.source);
                 setTargetLang(sample.target);
               }}
-              disabled={status === 'running'}
-              style={{
-                padding: '6px 12px',
-                fontSize: '0.8rem',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-full)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent)';
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border-color)';
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
+              disabled={running}
             >
               {sample.label}
             </button>
@@ -435,259 +305,143 @@ export function TranslationConnectionTest() {
         </div>
       </div>
 
-      {/* Input Text Area */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label
-          htmlFor="test-input-text"
-          style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-        >
-          Văn bản cần dịch thử:
-        </label>
+      <div className={shared.field}>
+        <label htmlFor="test-input-text" className={shared.label}>Văn bản cần dịch thử</label>
         <textarea
           id="test-input-text"
+          className={`${shared.control} ${shared.textarea}`}
           rows={3}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="Nhập câu tiếng Nhật hoặc ngoại ngữ cần dịch thử..."
-          disabled={status === 'running'}
-          style={{
-            padding: '12px 14px',
-            backgroundColor: 'var(--bg-primary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--text-primary)',
-            fontSize: '0.88rem',
-            lineHeight: 1.5,
-            resize: 'vertical',
-          }}
+          disabled={running}
         />
       </div>
 
-      <details>
-        <summary>Thử số câu ngữ cảnh</summary>
-        <p>Chỉ áp dụng cho lượt thử này, không đổi cài đặt buổi học. Mỗi dòng là một cặp nguồn/bản dịch; ưu tiên các dòng cuối.</p>
-        <label htmlFor="test-history-limit">Số câu ngữ cảnh thử:</label>{' '}
-        <select id="test-history-limit" value={historyLimit} disabled={status === 'running'} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
-          {[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} câu</option>)}
-        </select>
-        <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-          <label htmlFor="test-history-text">Các câu trước (nguồn → bản dịch):</label>
-          <textarea id="test-history-text" value={historyText} rows={6} disabled={status === 'running'}
-            onChange={(e) => setHistoryText(e.target.value)} placeholder="今日は授業です。 → Hôm nay có giờ học." />
+      <details className={shared.disclosure}>
+        <summary className={shared.disclosureSummary}>Thử số câu ngữ cảnh</summary>
+        <div className={shared.disclosureBody}>
+          <p className={shared.hint}>
+            Chỉ áp dụng cho lượt thử này, không đổi cài đặt buổi học. Mỗi dòng là một cặp nguồn/bản dịch; ưu tiên các dòng cuối.
+          </p>
+          <div className={shared.field}>
+            <label htmlFor="test-history-limit" className={shared.label}>Số câu ngữ cảnh thử</label>
+            <select
+              id="test-history-limit"
+              className={shared.control}
+              value={historyLimit}
+              disabled={running}
+              onChange={(e) => setHistoryLimit(Number(e.target.value))}
+            >
+              {[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} câu</option>)}
+            </select>
+          </div>
+          <div className={shared.field}>
+            <label htmlFor="test-history-text" className={shared.label}>Các câu trước (nguồn → bản dịch)</label>
+            <textarea
+              id="test-history-text"
+              className={`${shared.control} ${shared.textarea}`}
+              value={historyText}
+              rows={6}
+              disabled={running}
+              onChange={(e) => setHistoryText(e.target.value)}
+              placeholder="今日は授業です。 → Hôm nay có giờ học."
+            />
+          </div>
         </div>
       </details>
 
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        {status === 'running' ? (
-          <button
-            type="button"
-            onClick={handleStop}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 20px',
-              backgroundColor: 'var(--danger, #ef4444)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
-            }}
-          >
-            <Square size={16} />
+      {/* Actions */}
+      <div className={shared.actionRow}>
+        {running ? (
+          <button type="button" className={`${shared.btn} ${shared.btnDanger}`} onClick={handleStop}>
+            <Square size={16} aria-hidden="true" />
             <span>Dừng thử nghiệm</span>
           </button>
         ) : (
           <button
             type="button"
+            className={`${shared.btn} ${shared.btnPrimary}`}
             onClick={() => void handleRunTest()}
             disabled={!inputText.trim()}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 22px',
-              backgroundColor: 'var(--bg-active)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              cursor: inputText.trim() ? 'pointer' : 'not-allowed',
-              opacity: inputText.trim() ? 1 : 0.6,
-              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)',
-              transition: 'all 0.15s ease',
-            }}
           >
-            <Play size={16} />
+            <Play size={16} aria-hidden="true" />
             <span>Chạy thử dịch</span>
           </button>
         )}
 
-        {status === 'running' && (
-          <span
-            style={{
-              fontSize: '0.85rem',
-              color: 'var(--accent)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Loader2 size={16} className="animate-spin" />
+        {running && (
+          <span role="status" className={styles.runningText}>
+            <Loader2 size={16} aria-hidden="true" className={shared.spin} />
             <span>Đang gửi yêu cầu & nhận stream dịch...</span>
           </span>
         )}
       </div>
 
-      {/* Output & Metrics Section */}
-      {(status === 'running' || translatedText || status === 'error' || status === 'success') && (
-        <div
-          style={{
-            padding: '16px 18px',
-            backgroundColor: 'var(--bg-primary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          {/* Header metrics bar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 10,
-              fontSize: '0.84rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      {/* Output and metrics */}
+      {(running || translatedText || status === 'error' || status === 'success') && (
+        <div className={styles.result}>
+          <div className={styles.metricsBar}>
+            <div className={styles.metricGroup}>
               {status === 'success' && (
-                <span
-                  style={{
-                    color: 'var(--success)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontWeight: 600,
-                  }}
-                >
-                  <CheckCircle2 size={16} /> Hoàn tất
+                <span className={`${shared.badge} ${shared.badgeSuccess}`}>
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  <span>Hoàn tất</span>
                 </span>
               )}
-              {status === 'running' && (
-                <span
-                  style={{
-                    color: 'var(--accent)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontWeight: 600,
-                  }}
-                >
-                  <Sparkles size={16} /> Đang dịch stream...
+              {running && (
+                <span className={`${shared.badge} ${shared.badgeInfo}`}>
+                  <Sparkles size={16} aria-hidden="true" />
+                  <span>Đang dịch stream...</span>
                 </span>
               )}
               {status === 'error' && (
-                <span
-                  style={{
-                    color: 'var(--danger)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontWeight: 600,
-                  }}
-                >
-                  <AlertCircle size={16} /> Gặp lỗi
+                <span className={`${shared.badge} ${shared.badgeError}`}>
+                  <AlertCircle size={16} aria-hidden="true" />
+                  <span>Gặp lỗi</span>
                 </span>
               )}
               {usedModel && (
-                <span
-                  style={{
-                    color: 'var(--text-muted)',
-                    fontSize: '0.8rem',
-                    backgroundColor: 'var(--bg-secondary)',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                  }}
-                >
-                  Model: <code>{usedModel}</code>
+                <span className={styles.metaText}>
+                  Model: <code className={shared.code}>{usedModel}</code>
                 </span>
               )}
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                color: 'var(--text-secondary)',
-                fontSize: '0.82rem',
-              }}
-            >
+            <div className={styles.metricValues}>
               {ttfbMs !== null && (
-                <span
-                  title="Thời gian từ khi bấm đến khi nhận token dịch đầu tiên"
-                  style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                >
-                  <Clock size={14} color="var(--accent)" />
-                  TTFB: <strong style={{ color: 'var(--text-primary)' }}>{ttfbMs} ms</strong>
+                <span title="Thời gian từ khi bấm đến khi nhận token dịch đầu tiên" className={styles.metric}>
+                  <Clock size={14} color="currentColor" aria-hidden="true" />
+                  TTFB: <strong>{ttfbMs} ms</strong>
                 </span>
               )}
               {totalTimeMs !== null && (
-                <span title="Tổng thời gian hoàn tất bản dịch">
-                  Tổng thời gian: <strong style={{ color: 'var(--text-primary)' }}>{totalTimeMs} ms</strong>
+                <span title="Tổng thời gian hoàn tất bản dịch" className={styles.metric}>
+                  Tổng thời gian: <strong>{totalTimeMs} ms</strong>
                 </span>
               )}
             </div>
           </div>
 
-          {usage && <p data-testid="translation-test-usage" style={{ margin: 0, fontSize: '0.82rem' }}>
-            Request: {usage.requestId} · Ngữ cảnh thực gửi: {usage.historyTurns} · Prompt: {usage.promptVersion}<br />
-            Input: {usage.inputTokens ?? 'chưa rõ'} · Output: {usage.outputTokens ?? 'chưa rõ'} · Thinking: {usage.thinkingTokens ?? 'không báo cáo'} · Cache: {usage.cachedInputTokens ?? 'không báo cáo'}
-          </p>}
+          {usage && (
+            <p data-testid="translation-test-usage" className={shared.hint}>
+              Request: {usage.requestId} · Ngữ cảnh thực gửi: {usage.historyTurns} · Prompt: {usage.promptVersion}<br />
+              Input: {usage.inputTokens ?? 'chưa rõ'} · Output: {usage.outputTokens ?? 'chưa rõ'} · Thinking: {usage.thinkingTokens ?? 'không báo cáo'} · Cache: {usage.cachedInputTokens ?? 'không báo cáo'}
+            </p>
+          )}
 
-          {/* Translated text result */}
           {translatedText && (
-            <div
-              data-testid="translation-test-output"
-              style={{
-                fontSize: '0.96rem',
-                color: 'var(--text-primary)',
-                lineHeight: 1.65,
-                padding: '12px 16px',
-                backgroundColor: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-sm)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                borderLeft: '3px solid var(--accent)',
-              }}
-            >
+            <div data-testid="translation-test-output" className={styles.output}>
               {translatedText}
             </div>
           )}
 
-          {/* Error Message */}
           {status === 'error' && (
-            <div
-              style={{
-                padding: '12px 14px',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid var(--danger)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--danger)',
-                fontSize: '0.86rem',
-                lineHeight: 1.5,
-              }}
-            >
-              <strong>Lỗi dịch:</strong> {errorMessage}
+            <div role="alert" className={`${shared.notice} ${shared.noticeError}`}>
+              <AlertCircle size={18} aria-hidden="true" />
+              <div>
+                <strong>Lỗi dịch:</strong> {errorMessage}
+              </div>
             </div>
           )}
         </div>

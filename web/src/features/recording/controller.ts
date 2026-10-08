@@ -3,6 +3,7 @@ import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/lan
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { AdaptiveVoiceDetector } from './voice-activity';
+import { chooseSpeakerLabel, SourceActivityTracker } from './source-attribution';
 import { NemotronRecognizer } from './nemotron-recognition';
 import { SonioxRecognizer } from './soniox-recognition';
 import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
@@ -31,6 +32,9 @@ import type {
   AudioSegmentKind,
 } from '@/shared/recording';
 import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, liveTranscriptionModel, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
+
+/** Silence sent to Gemini after speech stops before the utterance is closed (Live API guide: at least 500 ms). */
+const GEMINI_SILENCE_TAIL_MS = 600;
 
 export interface ControllerState {
   recordingId: string | null;
@@ -61,6 +65,8 @@ export interface ControllerState {
   lastTranscriptAt: number | null;
   transcriptCount: number;
   translationLatencyMs: number | null;
+  /** Time from asking the recognizer to close an utterance until its final text arrived. */
+  finalizeLatencyMs: number | null;
   speakerStatus: 'idle' | 'working' | 'done' | 'error' | 'unavailable';
   speakerMessage: string | null;
   micDeviceLabel: string | null;
@@ -118,7 +124,7 @@ export class ClassroomController {
     earlySegmentTranslation: false,
     speechProvider: 'google-transcribe', transcriptionMode: 'verbatim', speakerCount: 1,
     micState: 'idle', receivedAudioMs: 0,
-    lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
+    lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null, finalizeLatencyMs: null,
     speakerStatus: 'idle', speakerMessage: null,
     micDeviceLabel: null,
     audioSource: 'mic', displayState: 'none',
@@ -158,6 +164,7 @@ export class ClassroomController {
   private configRevision = 1;
   private activeBlockId = 1;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private finalizeRequestedAt: number | null = null;
   private pcmVoiceActive = false;
   private voiceDetector = new AdaptiveVoiceDetector();
   private pcmLastVoiceTime = 0;
@@ -176,6 +183,8 @@ export class ClassroomController {
   private speakerAbort: AbortController | null = null;
   private recordingConfig: RecordingItem['config'] | null = null;
   private displayEndedUnsubscribe: (() => void) | null = null;
+  private sourceTracker: SourceActivityTracker | null = null;
+  private sourceLevelTimer: ReturnType<typeof setInterval> | null = null;
   // Screen-share audio granted for this start but not yet owned by the recorder.
   private undeliveredDisplayStream: MediaStream | null = null;
 
@@ -355,7 +364,7 @@ export class ClassroomController {
       speechProvider, transcriptionMode, speakerCount,
       audioSource, displayState: audioSource === 'mic' ? 'none' : 'live',
       micState: 'idle', receivedAudioMs: 0,
-      lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
+      lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null, finalizeLatencyMs: null,
       speakerStatus: 'idle', speakerMessage: null,
       micDeviceLabel: null,
     };
@@ -501,6 +510,7 @@ export class ClassroomController {
       // timeline. Use the recorder's actual start for captions and lesson time.
       this.startTime = this.audioRecorder.startedAt || Date.now();
       this.state.durationMs = 0;
+      this.startSourceTracking(audioSource, currentEpoch);
       this.durationIntervalId = setInterval(() => {
         if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
         this.state.durationMs = Date.now() - this.startTime;
@@ -524,6 +534,10 @@ export class ClassroomController {
         onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing, translation) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
           this.state.lastTranscriptAt = Date.now();
+          if (isFinal && this.finalizeRequestedAt !== null) {
+            this.state.finalizeLatencyMs = this.state.lastTranscriptAt - this.finalizeRequestedAt;
+            this.finalizeRequestedAt = null;
+          }
           this.state.transcriptCount++;
           this.speechRetries = 0;
           const previousSnapshot = this.seenSpeechSnapshots.get(providerItemId);
@@ -553,11 +567,12 @@ export class ClassroomController {
             this.assembler!.finalizeCurrentUtterance(true);
           }
           const captionId = existingLocation?.captionId ?? this.assembler!.currentCaptionId;
-          if (timing?.speakerLabel) this.captionSpeakers.set(captionId, timing.speakerLabel);
           const currentCaptionId = this.assembler!.currentCaptionId;
           const blockId = existingLocation?.blockId ?? this.activeBlockId;
           const isLateResult = captionId < currentCaptionId;
           const startMs = existingLocation?.startMs ?? timing?.startMs ?? Math.max(0, currentMs - 2000);
+          const speakerLabel = this.speakerLabelFor(timing?.speakerLabel, isFinal, startMs, currentMs);
+          if (speakerLabel) this.captionSpeakers.set(captionId, speakerLabel);
           this.speechItemLocations.delete(providerItemId);
           this.speechItemLocations.set(providerItemId, { captionId, blockId, startMs });
           if (this.speechItemLocations.size > 256) {
@@ -641,6 +656,7 @@ export class ClassroomController {
           if (isVoice) { this.pcmLastVoiceTime = now; this.pcmVoiceActive = true; }
           else if (this.pcmVoiceActive && now - this.pcmLastVoiceTime > (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)) {
             this.pcmVoiceActive = false;
+            this.finalizeRequestedAt = now;
             this.speechRecognizer?.finalizeUtterance();
           }
           return;
@@ -660,14 +676,16 @@ export class ClassroomController {
         } else {
           // Below threshold
           if (this.pcmVoiceActive) {
+            // Gemini closes an utterance only after this much silence; 500 ms is the lowest the Live API guide advises.
             const silenceMs = this.state.speechProvider === 'nemotron'
               ? (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
-              : 900;
+              : GEMINI_SILENCE_TAIL_MS;
             if (now - this.pcmLastVoiceTime <= silenceMs) {
               forwardPcm({ samples, rate, startMs });
             } else {
               this.pcmVoiceActive = false;
               if (this.pcmReady && this.speechRecognizer) {
+                this.finalizeRequestedAt = now;
                 this.speechRecognizer.finalizeUtterance();
               }
             }
@@ -851,6 +869,30 @@ export class ClassroomController {
 
   private static clampPause(ms: number): number {
     return Math.max(600, Math.min(10_000, Math.round(ms)));
+  }
+
+  /** In mixed mode, "Tôi" and "Cuộc họp" come from which source was loud while the caption was spoken. */
+  private startSourceTracking(audioSource: AudioSource, epoch: number): void {
+    this.stopSourceTracking();
+    if (audioSource !== 'mixed') return;
+    const tracker = new SourceActivityTracker();
+    this.sourceTracker = tracker;
+    this.sourceLevelTimer = setInterval(() => {
+      if (this.sessionEpoch !== epoch || this.state.state !== 'recording') return;
+      const levels = this.audioRecorder?.audioInput?.levels();
+      if (levels) tracker.record(Date.now() - this.startTime, levels.mic, levels.display);
+    }, 100);
+  }
+
+  private stopSourceTracking(): void {
+    if (this.sourceLevelTimer) clearInterval(this.sourceLevelTimer);
+    this.sourceLevelTimer = null;
+    this.sourceTracker = null;
+  }
+
+  /** Source labels are only assigned to final text so an early guess never sticks to a caption. */
+  private speakerLabelFor(providerLabel: string | undefined, isFinal: boolean, startMs: number, endMs: number): string | undefined {
+    return chooseSpeakerLabel(providerLabel, isFinal ? this.sourceTracker?.attribute(startMs, endMs) : undefined);
   }
 
   private clearSilenceTimer(): void {
@@ -1154,6 +1196,7 @@ export class ClassroomController {
     this.clearSpeechTimers();
     this.displayEndedUnsubscribe?.();
     this.displayEndedUnsubscribe = null;
+    this.stopSourceTracking();
     this.state.displayState = 'none';
     const stopErrors: string[] = [];
     if (this.pcmCapture) {
