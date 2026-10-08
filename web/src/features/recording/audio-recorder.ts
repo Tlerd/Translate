@@ -3,6 +3,13 @@
  * and measures audio level using Web Audio AnalyserNode.
  */
 
+import { AudioInput, type AudioSource } from './audio-input';
+
+export interface AudioRecorderStartOptions {
+  source?: AudioSource;
+  displayStream?: MediaStream;
+}
+
 export interface AudioRecorderCallbacks {
   onChunk: (blob: Blob, sequence: number, timestampMs: number, mimeType: string, segmentIndex?: number) => Promise<void> | void;
   onVolume: (volume: number) => void; // 0.0 to 1.0
@@ -18,6 +25,7 @@ export class WebAudioRecorder {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private volumeIntervalId: ReturnType<typeof setInterval> | null = null;
+  private input: AudioInput | null = null;
 
   private currentSegmentIndex = 1;
   private startTime = 0;
@@ -34,8 +42,10 @@ export class WebAudioRecorder {
   public get stream(): MediaStream | null { return this.mediaStream; }
   public get startedAt(): number { return this.startTime; }
   public get segmentIndex(): number { return this.currentSegmentIndex; }
+  public get audioInput(): AudioInput | null { return this.input; }
   public async resume(): Promise<void> {
     if (this.audioContext?.state === 'suspended') await this.audioContext.resume();
+    if (this.input) await this.input.resume();
   }
 
   public static getBestSupportedMimeType(): string {
@@ -57,8 +67,13 @@ export class WebAudioRecorder {
     return '';
   }
 
-  public async start(timesliceMs = 2000): Promise<string> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+  public async start(timesliceMs = 2000, options: AudioRecorderStartOptions = {}): Promise<string> {
+    const source = options.source ?? 'mic';
+    const displayStream = options.displayStream;
+    if (source === 'display' && !displayStream) {
+      throw new Error('Thiếu luồng âm thanh màn hình.');
+    }
+    if (source !== 'display' && (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia)) {
       throw new Error('Trình duyệt không hỗ trợ thu âm từ micro.');
     }
 
@@ -68,22 +83,37 @@ export class WebAudioRecorder {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: { ideal: 1 },
-        },
-      });
-      this.mediaStream = stream;
-      this.callbacks.onMicInfo?.(stream.getAudioTracks?.()[0]?.label || 'Micro mặc định của hệ thống');
-      for (const track of stream.getAudioTracks?.() ?? stream.getTracks()) {
-        track.addEventListener?.('mute', () => this.callbacks.onMicState?.('muted'));
-        track.addEventListener?.('unmute', () => this.callbacks.onMicState?.('live'));
-        track.addEventListener?.('ended', () => { if (this.isRecording) this.callbacks.onMicState?.('ended'); });
+      let stream: MediaStream;
+      if (source === 'display') {
+        const input = new AudioInput({ displayStream });
+        this.input = input;
+        stream = input.stream;
+        this.mediaStream = stream;
+        this.callbacks.onMicInfo?.(input.label);
+        this.callbacks.onMicState?.('live');
+      } else {
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: { ideal: 1 },
+          },
+        });
+        const input = source === 'mixed' ? new AudioInput({ micStream, displayStream }) : null;
+        this.input = input;
+        stream = input ? input.stream : micStream;
+        this.mediaStream = stream;
+        this.callbacks.onMicInfo?.(
+          input ? input.label : (micStream.getAudioTracks?.()[0]?.label || 'Micro mặc định của hệ thống'),
+        );
+        for (const track of micStream.getAudioTracks?.() ?? micStream.getTracks()) {
+          track.addEventListener?.('mute', () => this.callbacks.onMicState?.('muted'));
+          track.addEventListener?.('unmute', () => this.callbacks.onMicState?.('live'));
+          track.addEventListener?.('ended', () => { if (this.isRecording) this.callbacks.onMicState?.('ended'); });
+        }
+        this.callbacks.onMicState?.('live');
       }
-      this.callbacks.onMicState?.('live');
 
       // Audio analysis for volume level
       try {
@@ -189,9 +219,11 @@ export class WebAudioRecorder {
 
     const recorder = this.mediaRecorder;
     const stream = this.mediaStream;
+    const input = this.input;
     const lastIndex = this.currentSegmentIndex;
     this.mediaRecorder = null;
     this.mediaStream = null;
+    this.input = null;
     if (recorder && recorder.state !== 'inactive') {
       try {
         await new Promise<void>((resolve) => {
@@ -215,6 +247,7 @@ export class WebAudioRecorder {
       }
     }
 
+    input?.dispose();
     if (stream) {
       for (const track of stream.getTracks()) {
         track.stop();
