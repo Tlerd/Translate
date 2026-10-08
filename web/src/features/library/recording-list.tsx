@@ -64,7 +64,7 @@ export function RecordingRowItem({
       await softDeleteRecording(recording.id);
       onRefresh();
       if (isSelected) {
-        router.push('/app');
+        router.push('/library');
       }
     }
   };

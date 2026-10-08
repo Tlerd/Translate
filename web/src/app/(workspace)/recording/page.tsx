@@ -99,7 +99,7 @@ export default function LiveRecordingPage() {
     const recordingId = state.recordingId;
     try {
       await stopRecording();
-      router.push(recordingId ? `/recordings/${recordingId}` : '/collections');
+      router.push(recordingId ? `/recordings/${recordingId}` : '/library');
     } catch (err) {
       console.error('Lỗi dừng thu:', err);
       setEndingSession(false);
@@ -123,7 +123,7 @@ export default function LiveRecordingPage() {
   return (
     <div className={styles.room}>
       <header className={styles.header}>
-        <Link href="/collections" onClick={handleBack} className={styles.backBtn} title="Quay về thư viện" aria-label="Quay về thư viện">
+        <Link href="/library" onClick={handleBack} className={styles.backBtn} title="Quay về thư viện" aria-label="Quay về thư viện">
           <ArrowLeft size={18} />
         </Link>
         <div className={styles.headerText}>

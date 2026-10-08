@@ -49,7 +49,7 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
       if (recordingId) {
         router.push(`/recordings/${recordingId}`);
       } else {
-        router.push('/collections');
+        router.push('/library');
       }
     } catch (err) {
       console.error('Lỗi dừng thu:', err);

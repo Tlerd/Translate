@@ -119,7 +119,7 @@ export default function RecordingDetailPage({
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
         <p style={{ color: 'var(--text-muted)' }}>Không tìm thấy bản ghi #{id}.</p>
         <Link
-          href="/app"
+          href="/library"
           style={{
             padding: '8px 16px',
             backgroundColor: 'var(--bg-active)',
@@ -178,7 +178,7 @@ export default function RecordingDetailPage({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <Link
-            href="/collections"
+            href="/library"
             style={{
               display: 'flex',
               alignItems: 'center',
