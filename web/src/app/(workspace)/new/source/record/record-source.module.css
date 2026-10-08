@@ -122,6 +122,13 @@
   color: var(--text-secondary);
 }
 
+.fieldHint {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 .select {
   width: 100%;
   min-height: 46px;

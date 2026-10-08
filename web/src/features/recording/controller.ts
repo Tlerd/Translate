@@ -700,7 +700,7 @@ export class ClassroomController {
     const callbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
     const targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
     recognizer = this.state.speechProvider === 'soniox'
-      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage)
+      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount)
       : this.state.speechProvider === 'nemotron'
       ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
       : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider), targetLanguage);

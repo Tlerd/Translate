@@ -516,7 +516,7 @@ export function AiSettings() {
               }}
             >
               <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
-              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (Dịch 2 chiều Nhật - Việt)</option>
+              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (dịch 60+ ngôn ngữ, tách người nói)</option>
               <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
               <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
               <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>

@@ -19,7 +19,7 @@ export async function POST(req: Request): Promise<Response> {
   let parsed: z.infer<typeof schema>;
   try {
     const result = schema.safeParse(await boundedJson(req, 2048));
-    if (!result.success || !inputLanguage(result.data.languageCode, 'soniox')) return sonioxErrorResponse(400, 'UNSUPPORTED_MODEL', 'Chọn tiếng Nhật hoặc tiếng Việt cho Soniox.');
+    if (!result.success || !inputLanguage(result.data.languageCode, 'soniox')) return sonioxErrorResponse(400, 'UNSUPPORTED_MODEL', 'Soniox chưa hỗ trợ ngôn ngữ này.');
     parsed = result.data;
   } catch (error) {
     return sonioxErrorResponse(error instanceof JsonRequestError ? error.status : 400, error instanceof JsonRequestError && error.status === 413 ? 'INPUT_TOO_LARGE' : 'INTERNAL_ERROR', 'Yêu cầu cấp phiên Soniox không hợp lệ.');
