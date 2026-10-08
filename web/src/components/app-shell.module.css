@@ -239,6 +239,14 @@
     transform: translateX(0);
   }
 
+  /* A closed drawer must not leak its shadow onto the left edge of the page. */
+  .sidebarClosed {
+    box-shadow: none;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, visibility 0s linear 0.25s;
+  }
+
   .backdrop {
     display: block;
     position: fixed;

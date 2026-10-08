@@ -203,11 +203,12 @@ export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8,
                 data-testid="caption-translation"
                 style={{
                   marginTop: 8,
-                  paddingTop: 8,
-                  fontSize: '0.92rem',
-                  lineHeight: 1.5,
-                  color: 'var(--text-secondary)',
-                  borderTop: 'none',
+                  padding: '2px 0 2px 12px',
+                  fontSize: '1.04rem',
+                  lineHeight: 1.55,
+                  fontWeight: 500,
+                  color: 'var(--text-primary)',
+                  borderLeft: '3px solid var(--accent)',
                 }}
               >
                 {cap.translation || (isStreaming ? '...' : '')}

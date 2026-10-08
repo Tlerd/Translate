@@ -1,30 +1,40 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Mic, Youtube, FileText, Globe, FileAudio, BookOpen, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, FileAudio, Loader2, Mic } from 'lucide-react';
 import { useRecording } from '@/features/recording/recording-context';
+import { inputLanguages, OUTPUT_LANGUAGES } from '@/shared/languages';
+import { saveSettings } from '@/storage/recordings';
+import type { SpeechProvider } from '@/shared/transcription';
 import styles from './record-source.module.css';
+
+const ENGINES: Array<{ id: SpeechProvider; name: string; hint: string }> = [
+  { id: 'google-flash-live', name: 'Gemini 3 Flash Live', hint: 'Hiện chữ ngay khi đang nói, dịch theo từng câu.' },
+  { id: 'google', name: 'Gemini 3.5 Translate Live', hint: 'Nhận giọng và dịch trực tiếp trong một luồng.' },
+  { id: 'google-transcribe', name: 'Gemini 3.5 Transcribe', hint: 'Phiên âm theo đoạn sau mỗi lần ngắt câu, ổn định nhất.' },
+  { id: 'soniox', name: 'Soniox', hint: 'Dịch hai chiều Nhật ⇄ Việt.' },
+];
 
 export default function RecordSourcePage() {
   const router = useRouter();
-  const { state, startRecording } = useRecording();
-  const [contextText, setContextText] = useState('');
+  const { state, startRecording, setLanguages, swapLanguages } = useRecording();
   const [isStarting, setIsStarting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'record' | 'youtube' | 'pdf' | 'web' | 'file' | 'book'>('record');
+  const [error, setError] = useState<string | null>(null);
+  // Language names come from Intl.DisplayNames, which differs between the server and the browser.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const sources = mounted ? inputLanguages(state.speechProvider) : [];
+  const targets = mounted ? OUTPUT_LANGUAGES : [];
+  const canSwap = state.targetLanguage !== 'none';
 
   const handleStart = async () => {
     if (isStarting) return;
     setIsStarting(true);
+    setError(null);
     try {
-      if (contextText.trim()) {
-        try {
-          sessionStorage.setItem('recording_pre_context', contextText.trim());
-        } catch {
-          // ignore
-        }
-      }
       await startRecording({
         speechProvider: state.speechProvider,
         transcriptionMode: state.transcriptionMode,
@@ -38,153 +48,111 @@ export default function RecordSourcePage() {
       });
       router.push('/recording');
     } catch (err) {
-      console.error('Lỗi khởi động ghi âm:', err);
-      alert(err instanceof Error ? err.message : String(err));
+      setError(err instanceof Error ? err.message : String(err));
       setIsStarting(false);
     }
   };
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
+    <div className={styles.page}>
       <div className={styles.container}>
-        {/* Top Back Row */}
         <div className={styles.topRow}>
           <Link href="/collections" className={styles.backBtn} title="Quay lại Thư viện">
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </Link>
+          <Link href="/app?action=upload" className={styles.altLink}>
+            <FileAudio size={15} />
+            <span>Tải tệp âm thanh / video</span>
+          </Link>
         </div>
 
-        {/* Centered Title */}
-        <h1 className={styles.pageTitle}>Nhập nguồn</h1>
+        <header className={styles.hero}>
+          <span className={styles.heroIcon} aria-hidden><Mic size={22} /></span>
+          <h1 className={styles.pageTitle}>Ghi âm &amp; dịch trực tiếp</h1>
+          <p className={styles.pageSub}>Chọn ngôn ngữ và bộ nhận giọng, rồi bấm Bắt đầu. Âm thanh luôn được lưu trên máy bạn.</p>
+        </header>
 
-        {/* Source Switch Tabs */}
-        <div className={styles.tabsContainer} role="tablist" aria-label="Chọn nguồn tài liệu">
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'youtube' ? styles.sourceTabActive : ''}`}
-            onClick={() => {
-              setActiveTab('youtube');
-              alert('Tính năng nhập từ YouTube đang được phát triển.');
-              setActiveTab('record');
-            }}
-          >
-            <Youtube size={15} color="#ef4444" />
-            <span>YouTube</span>
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'pdf' ? styles.sourceTabActive : ''}`}
-            onClick={() => {
-              setActiveTab('pdf');
-              alert('Tính năng nhập từ PDF đang được phát triển.');
-              setActiveTab('record');
-            }}
-          >
-            <FileText size={15} color="#f59e0b" />
-            <span>PDF</span>
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'web' ? styles.sourceTabActive : ''}`}
-            onClick={() => {
-              setActiveTab('web');
-              alert('Tính năng nhập từ Trang web đang được phát triển.');
-              setActiveTab('record');
-            }}
-          >
-            <Globe size={15} color="#8b5cf6" />
-            <span>Trang web</span>
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'file' ? styles.sourceTabActive : ''}`}
-            onClick={() => {
-              setActiveTab('file');
-              router.push('/app?action=upload');
-            }}
-          >
-            <FileAudio size={15} color="#10b981" />
-            <span>Tệp video / âm thanh</span>
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'record' ? styles.sourceTabActive : ''}`}
-            onClick={() => setActiveTab('record')}
-          >
-            <Mic size={15} />
-            <span>Ghi âm trực tiếp</span>
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.sourceTab} ${activeTab === 'book' ? styles.sourceTabActive : ''}`}
-            onClick={() => {
-              setActiveTab('book');
-              alert('Tính năng nhập từ Sách đang được thử nghiệm Beta.');
-              setActiveTab('record');
-            }}
-          >
-            <BookOpen size={15} color="#38bdf8" />
-            <span>Sách</span>
-            <span className={styles.badgeBeta}>Beta</span>
-          </button>
-        </div>
-
-        {/* Context Input Section */}
-        <div className={styles.sectionBox}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Nhập ngữ cảnh giúp ghi âm chính xác hơn!</h2>
-            <p className={styles.sectionDesc}>
-              Bạn có thể nhập tối đa 10.000 ký tự về thuật ngữ chuyên ngành hoặc tài liệu liên quan.
-            </p>
+        <section className={styles.card} aria-labelledby="lang-title">
+          <h2 id="lang-title" className={styles.cardTitle}>Ngôn ngữ</h2>
+          <div className={styles.langRow}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Người nói bằng</span>
+              <select
+                className={styles.select}
+                value={state.sourceLanguage}
+                onChange={(e) => setLanguages(e.target.value, state.targetLanguage)}
+                disabled={isStarting}
+              >
+                {!mounted && <option value={state.sourceLanguage}>{state.sourceLanguage}</option>}
+                {sources.map((opt) => <option key={opt.code} value={opt.code}>{opt.name}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={styles.swapBtn}
+              onClick={() => void swapLanguages()}
+              disabled={isStarting || !canSwap}
+              aria-label="Đổi chiều dịch"
+              title="Đổi chiều dịch"
+            >
+              <ArrowLeftRight size={18} />
+            </button>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Dịch sang</span>
+              <select
+                className={styles.select}
+                value={state.targetLanguage}
+                onChange={(e) => setLanguages(state.sourceLanguage, e.target.value)}
+                disabled={isStarting}
+              >
+                {!mounted && <option value={state.targetLanguage}>{state.targetLanguage}</option>}
+                {targets.map((opt) => <option key={opt.code} value={opt.code}>{opt.name}</option>)}
+              </select>
+            </label>
           </div>
+        </section>
 
-          <div className={styles.textareaWrapper}>
-            <textarea
-              className={styles.contextInput}
-              placeholder="Nhập văn bản thuật ngữ, nội dung bài giảng hoặc bối cảnh cần hỗ trợ dịch..."
-              maxLength={10000}
-              value={contextText}
-              onChange={(e) => setContextText(e.target.value)}
-              disabled={isStarting}
-            />
-            <span className={styles.charCounter}>{contextText.length} / 10000</span>
+        <section className={styles.card} aria-labelledby="engine-title">
+          <h2 id="engine-title" className={styles.cardTitle}>Bộ nhận giọng</h2>
+          <div className={styles.engineList} role="radiogroup" aria-labelledby="engine-title">
+            {ENGINES.map((engine) => {
+              const active = state.speechProvider === engine.id;
+              return (
+                <label key={engine.id} className={`${styles.engine} ${active ? styles.engineActive : ''}`}>
+                  <input
+                    type="radio"
+                    name="speech-provider"
+                    className={styles.engineInput}
+                    checked={active}
+                    disabled={isStarting}
+                    onChange={() => void saveSettings({ speechProvider: engine.id })}
+                  />
+                  <span className={styles.engineName}>{engine.name}</span>
+                  <span className={styles.engineHint}>{engine.hint}</span>
+                </label>
+              );
+            })}
           </div>
-        </div>
+        </section>
 
-        {/* Recording Quota & Diagnostic Information Card */}
-        <div className={styles.quotaCard}>
-          <div className={styles.quotaHeader}>Hãy kiểm tra xem bạn còn đủ thời gian ghi âm không!</div>
-          <div className={styles.quotaNotice}>Nếu hết thời gian trong khi ghi âm, quá trình có thể bị gián đoạn.</div>
-          <div className={styles.quotaStats}>
-            <span>Thời gian ghi âm còn lại:</span>
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Không giới hạn (Lưu thiết bị)</span>
-          </div>
-        </div>
+        {error && <div role="alert" className={styles.error}>{error}</div>}
+      </div>
 
-        {/* Primary Start Button */}
-        <div className={styles.startBtnWrapper}>
-          <button
-            type="button"
-            className={styles.startBtn}
-            onClick={handleStart}
-            disabled={isStarting}
-          >
-            {isStarting ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                <span>Đang khởi động…</span>
-              </>
-            ) : (
-              <span>Bắt đầu</span>
-            )}
-          </button>
-        </div>
+      <div className={styles.startBar}>
+        <button type="button" className={styles.startBtn} onClick={handleStart} disabled={isStarting}>
+          {isStarting ? (
+            <>
+              <Loader2 size={18} className={styles.spin} />
+              <span>Đang khởi động micro…</span>
+            </>
+          ) : (
+            <>
+              <Mic size={18} />
+              <span>Bắt đầu ghi âm</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

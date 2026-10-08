@@ -35,7 +35,12 @@ export function languageName(code: string): string {
 function catalogue(codes: string[]): LanguageOption[] {
   return [...new Set(codes.map(code => canonicalLanguage(code) ?? code))]
     .map(code => ({ code, name: languageName(code) }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    .sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name), 'en') || a.code.localeCompare(b.code, 'en'));
+}
+// ICU data for 'vi' differs between Node and browsers, which reorders the list
+// and breaks hydration. Fold diacritics first so the order is the same everywhere.
+function sortKey(name: string): string {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 }
 export const PRIMARY_INPUT_CODES = ['auto', 'vi-VN', 'ja-JP', 'en-US'] as const;
 export const TRANSCRIBE_LANGUAGES = catalogue(transcribeCodes);
