@@ -24,8 +24,7 @@
   gap: 12px;
 }
 
-.backBtn,
-.altLink {
+.backBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -41,12 +40,7 @@
   transition: background 0.15s ease;
 }
 
-.altLink {
-  color: var(--text-secondary);
-}
-
-.backBtn:hover,
-.altLink:hover {
+.backBtn:hover {
   background: var(--bg-hover);
 }
 
@@ -278,8 +272,6 @@
   .container { padding: 16px 14px 16px; }
   .langRow { grid-template-columns: 1fr; }
   .swapBtn { justify-self: center; transform: rotate(90deg); }
-  .altLink span { display: none; }
-  .altLink { padding: 0 12px; }
   .startBar { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
 

@@ -13,6 +13,7 @@ import { getDb } from './db';
 import type {
   RecordingItem,
   CaptionItem,
+  SummaryItem,
   WebExportBundle,
   ApkExportJson,
   ClassroomMode,
@@ -65,6 +66,67 @@ export async function exportRecordingData(recordingId: string): Promise<ExportDa
   };
 }
 
+// Typed key maps: adding a field to RecordingItem or its config without listing it here is a compile error.
+const RECORDING_FIELDS: Record<keyof RecordingItem, true> = {
+  id: true,
+  title: true,
+  createdAt: true,
+  endedAt: true,
+  mode: true,
+  sourceLanguage: true,
+  targetLanguage: true,
+  state: true,
+  durationMs: true,
+  audioState: true,
+  audioDeletedAt: true,
+  deletedAt: true,
+  audioMimeType: true,
+  folder: true,
+  category: true,
+  config: true,
+};
+
+const CONFIG_FIELDS: Record<keyof RecordingItem['config'], true> = {
+  translationModelKey: true,
+  summaryModelKey: true,
+  imageModelKey: true,
+  context: true,
+  glossary: true,
+  transcriptionMode: true,
+  speakerCount: true,
+};
+
+const CAPTION_FIELDS: Record<keyof CaptionItem, true> = {
+  id: true, recordingId: true, blockId: true, startMs: true, endMs: true, source: true, revision: true,
+  isFinal: true, translation: true, targetSourceRevision: true, translationModelKey: true, state: true,
+  error: true, skipReason: true, speakerLabel: true, sourceHistory: true,
+};
+
+const SUMMARY_FIELDS: Record<keyof SummaryItem, true> = {
+  id: true, recordingId: true, sourceHash: true, preset: true, modelKey: true, title: true,
+  overview: true, sections: true, generatedAt: true,
+};
+
+function pickKnownFields<T extends object>(source: T, fields: Record<keyof T, true>): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of Object.keys(fields) as Array<keyof T>) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key];
+  }
+  return out;
+}
+
+/**
+ * Keep only fields known to RecordingItem (and its config). Unknown fields from an
+ * imported file would fail the strict cloud schema and break every later sync.
+ */
+export function sanitizeRecording(raw: RecordingItem): RecordingItem {
+  const sanitized = pickKnownFields(raw, RECORDING_FIELDS);
+  if (raw.config && typeof raw.config === 'object') {
+    sanitized.config = pickKnownFields(raw.config, CONFIG_FIELDS) as RecordingItem['config'];
+  }
+  return sanitized as RecordingItem;
+}
+
 /**
  * Import a WebExportBundle into Dexie.
  * If recording ID already exists, creates a new unique ID and remaps children.
@@ -86,7 +148,7 @@ export async function importWebBundle(
   }
 
   const newRecording: RecordingItem = {
-    ...bundle.recording,
+    ...sanitizeRecording(bundle.recording),
     id: targetId,
     title: existing ? `${bundle.recording.title} (Bản nhập)` : bundle.recording.title,
     createdAt: bundle.recording.createdAt || new Date().toISOString(),
@@ -98,9 +160,9 @@ export async function importWebBundle(
   if (Array.isArray(bundle.captions)) {
     for (const cap of bundle.captions) {
       await saveCaption({
-        ...cap,
+        ...pickKnownFields(cap, CAPTION_FIELDS),
         recordingId: targetId,
-      });
+      } as CaptionItem);
     }
   }
 
@@ -108,10 +170,10 @@ export async function importWebBundle(
   if (bundle.summary) {
     const newSummaryId = `sum_${targetId}`;
     await saveSummary({
-      ...bundle.summary,
+      ...pickKnownFields(bundle.summary, SUMMARY_FIELDS),
       id: newSummaryId,
       recordingId: targetId,
-    });
+    } as SummaryItem);
 
     // Import image
     if (bundle.hasImage && (imageBlob || bundle.imageFileName)) {

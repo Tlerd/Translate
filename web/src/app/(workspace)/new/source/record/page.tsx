@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowLeftRight, FileAudio, Loader2, Mic } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Loader2, Mic } from 'lucide-react';
 import { useRecording } from '@/features/recording/recording-context';
 import { inputLanguages, OUTPUT_LANGUAGES } from '@/shared/languages';
 import { saveSettings } from '@/storage/recordings';
@@ -60,10 +60,6 @@ export default function RecordSourcePage() {
           <Link href="/collections" className={styles.backBtn} title="Quay lại Thư viện">
             <ArrowLeft size={16} />
             <span>Quay lại</span>
-          </Link>
-          <Link href="/app?action=upload" className={styles.altLink}>
-            <FileAudio size={15} />
-            <span>Tải tệp âm thanh / video</span>
           </Link>
         </div>
 

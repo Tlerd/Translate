@@ -19,19 +19,17 @@ import {
   Pencil,
   Radio,
   Mic,
-  FileAudio,
-  Youtube,
-  FileText,
-  Globe,
   BarChart3,
   BookOpen,
 } from 'lucide-react';
 import {
   listRecordings,
   getCustomFolders,
+  getLibraryFolders,
   saveCustomFolders,
   deleteCustomFolder,
   renameCustomFolder,
+  LIBRARY_PAGE_LIMIT,
 } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingRowItem } from './recording-list';
@@ -65,8 +63,8 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
   const loadList = useCallback(async () => {
     try {
       const [items, folders] = await Promise.all([
-        listRecordings(100),
-        getCustomFolders(),
+        listRecordings(LIBRARY_PAGE_LIMIT),
+        getLibraryFolders(),
       ]);
       setRecordings(items);
       setCustomFolders(folders);
@@ -81,12 +79,13 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
       setShowNewFolderInput(false);
       return;
     }
-    if (!customFolders.includes(trimmed)) {
-      const next = [...customFolders, trimmed];
-      await saveCustomFolders(next);
-      setCustomFolders(next);
-      setOpenFolders((prev) => ({ ...prev, [trimmed]: true }));
+    // Write only the stored custom list; folders used by recordings are not persisted here.
+    const stored = await getCustomFolders();
+    if (!stored.includes(trimmed)) {
+      await saveCustomFolders([...stored, trimmed]);
     }
+    await loadList();
+    setOpenFolders((prev) => ({ ...prev, [trimmed]: true }));
     setNewFolderName('');
     setShowNewFolderInput(false);
   };
@@ -294,106 +293,6 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
               <span>Ghi âm trực tiếp</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                router.push('/app?action=upload');
-                onCloseMobile?.();
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 12px',
-                background: 'none',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.84rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <FileAudio size={15} color="#10b981" />
-              <span>Tệp âm thanh / video</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                alert('Tính năng nhập từ YouTube đang được phát triển.');
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 12px',
-                background: 'none',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-muted)',
-                fontSize: '0.84rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <Youtube size={15} color="#ef4444" />
-              <span>YouTube</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                alert('Tính năng nhập tài liệu PDF đang được phát triển.');
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 12px',
-                background: 'none',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-muted)',
-                fontSize: '0.84rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <FileText size={15} color="#f59e0b" />
-              <span>PDF</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                alert('Tính năng nhập trang web đang được phát triển.');
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 12px',
-                background: 'none',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-muted)',
-                fontSize: '0.84rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <Globe size={15} color="#8b5cf6" />
-              <span>Trang web</span>
-            </button>
           </div>
         )}
       </div>
