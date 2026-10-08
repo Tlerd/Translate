@@ -1,6 +1,15 @@
 'use client';
 
-import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -14,13 +23,15 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   Star,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import type { LibraryEntry, SyncState } from './library-query';
-import { formatClock, formatDay, formatDuration, languageBadge } from './library-format';
+import { formatClock, formatDay, formatDuration, formatTrashRemaining, languageBadge, trashDaysLeft } from './library-format';
 import { FolderMenuItems, focusFirstMenuItem, handleMenuNavigation, useDismissible } from './library-menu';
+import { createLongPress, type LongPressController } from './long-press';
 import styles from './library-view.module.css';
 
 export interface LibraryRowProps {
@@ -28,13 +39,21 @@ export interface LibraryRowProps {
   /** Show the calendar day next to the time (used for the older groups). */
   showDay: boolean;
   selected: boolean;
+  /** True while any row is selected. On touch screens a tap then toggles the row instead of opening it. */
+  selectionActive: boolean;
   folders: readonly string[];
   onSelect: (id: string, range: boolean) => void;
+  /** Touch and pen long press on a row: the row becomes selected. */
+  onLongPress: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onToggleStar: (id: string) => void;
   onToggleArchive: (id: string) => void;
   onMove: (id: string, folder: string | null) => void;
   onTrash: (id: string) => void;
+  /** Set only in the trash view: the current time, used for the days-left label. */
+  trashNow?: number;
+  onRestore: (id: string) => void;
+  onDeleteForever: (id: string) => void;
 }
 
 type SyncLabelState = Exclude<SyncState, 'local'>;
@@ -49,25 +68,56 @@ function hasShift(event: Event): boolean {
   return event instanceof MouseEvent && event.shiftKey;
 }
 
+/** Controls inside the row keep their own pointer behaviour, so they never start a long press. */
+const PRESS_IGNORED_SELECTOR = 'button, input, [role="menu"]';
+/** Clicks on these belong to the control itself; the title link is handled by its own onClick. */
+const TAP_IGNORED_SELECTOR = 'a, button, input, [role="menu"]';
+
+function isWithin(target: EventTarget | null, selector: string): boolean {
+  return target instanceof Element && target.closest(selector) !== null;
+}
+
+/** Evaluated at event time so a device switching input mode is handled correctly. */
+function isCoarsePointer(): boolean {
+  return window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
+function vibrate(): void {
+  try {
+    navigator.vibrate?.(10);
+  } catch {
+    // Vibration is optional; the selection works without it.
+  }
+}
+
 export const LibraryRow = memo(function LibraryRow({
   entry,
   showDay,
   selected,
+  selectionActive,
   folders,
   onSelect,
+  onLongPress,
   onRename,
   onToggleStar,
   onToggleArchive,
   onMove,
   onTrash,
+  trashNow,
+  onRestore,
+  onDeleteForever,
 }: LibraryRowProps) {
   const { recording, hasSummary, sync } = entry;
   const { id, title } = recording;
+  const inTrash = trashNow !== undefined;
   const isRecording = recording.state === 'recording';
   const isStarred = recording.category === 'priority';
   const isArchived = recording.category === 'archive';
   const href = isRecording ? '/recording' : `/recordings/${encodeURIComponent(id)}`;
-  const timeText = `${showDay ? `${formatDay(recording.createdAt)} ` : ''}${formatClock(recording.createdAt)}`;
+  // In the trash the date cell shows the days left instead of the creation time.
+  const timeText = trashNow !== undefined
+    ? formatTrashRemaining(trashDaysLeft(recording.deletedAt ?? '', trashNow))
+    : `${showDay ? `${formatDay(recording.createdAt)} ` : ''}${formatClock(recording.createdAt)}`;
 
   const [renaming, setRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -75,6 +125,71 @@ export const LibraryRow = memo(function LibraryRow({
   const menuCellRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Set when a long press fired; the click after it is swallowed, and the native context menu is blocked.
+  const longPressFiredRef = useRef(false);
+  const swallowClickRef = useRef(false);
+  // A long press fires on a timer, so the callback reads the latest id and handler from a ref.
+  const latestRef = useRef({ id, onLongPress });
+  useEffect(() => {
+    latestRef.current = { id, onLongPress };
+  }, [id, onLongPress]);
+  const [longPress] = useState<LongPressController>(() =>
+    createLongPress({
+      onLongPress: () => {
+        longPressFiredRef.current = true;
+        vibrate();
+        const latest = latestRef.current;
+        latest.onLongPress(latest.id);
+      },
+    }),
+  );
+  useEffect(() => {
+    return () => {
+      longPress.end();
+    };
+  }, [longPress]);
+
+  const onRowPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    swallowClickRef.current = false;
+    if (event.pointerType === 'mouse' || isRecording) return;
+    if (isWithin(event.target, PRESS_IGNORED_SELECTOR)) return;
+    longPressFiredRef.current = false;
+    longPress.start(event.clientX, event.clientY);
+  };
+
+  const onRowPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    longPress.move(event.clientX, event.clientY);
+  };
+
+  const onRowPointerUp = () => {
+    if (longPress.end()) swallowClickRef.current = true;
+  };
+
+  const onRowPointerCancel = () => {
+    longPress.end();
+  };
+
+  const onRowContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (longPressFiredRef.current) event.preventDefault();
+  };
+
+  /** Click handling shared by the title link and the empty parts of the row. */
+  const handleTap = (event: ReactMouseEvent<Element>) => {
+    if (swallowClickRef.current) {
+      swallowClickRef.current = false;
+      event.preventDefault();
+      return;
+    }
+    if (!selectionActive || !isCoarsePointer()) return;
+    event.preventDefault();
+    onSelect(id, false);
+  };
+
+  const onRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (isWithin(event.target, TAP_IGNORED_SELECTOR)) return;
+    handleTap(event);
+  };
 
   const closeMenu = useCallback((restoreFocus: boolean) => {
     setMenuOpen(false);
@@ -117,7 +232,16 @@ export const LibraryRow = memo(function LibraryRow({
   };
 
   return (
-    <div className={`${styles.row} ${selected ? styles.rowSelected : ''}`}>
+    <div
+      className={`${styles.row} ${selected ? styles.rowSelected : ''} ${inTrash ? styles.rowTrashed : ''}`}
+      onPointerDown={onRowPointerDown}
+      onPointerMove={onRowPointerMove}
+      onPointerUp={onRowPointerUp}
+      onPointerCancel={onRowPointerCancel}
+      onPointerLeave={onRowPointerCancel}
+      onClick={onRowClick}
+      onContextMenu={onRowContextMenu}
+    >
       <div className={styles.rowLead}>
         <input
           type="checkbox"
@@ -127,16 +251,18 @@ export const LibraryRow = memo(function LibraryRow({
           aria-label={`Chọn buổi "${title}"`}
           onChange={(event) => onSelect(id, hasShift(event.nativeEvent))}
         />
-        <button
-          type="button"
-          className={`${styles.iconButton} ${isStarred ? styles.starOn : ''}`}
-          aria-pressed={isStarred}
-          aria-label={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
-          title={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
-          onClick={() => onToggleStar(id)}
-        >
-          <Star size={16} fill={isStarred ? 'currentColor' : 'none'} aria-hidden="true" />
-        </button>
+        {inTrash ? null : (
+          <button
+            type="button"
+            className={`${styles.iconButton} ${isStarred ? styles.starOn : ''}`}
+            aria-pressed={isStarred}
+            aria-label={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
+            title={isStarred ? 'Bỏ gắn sao' : 'Gắn sao'}
+            onClick={() => onToggleStar(id)}
+          >
+            <Star size={16} fill={isStarred ? 'currentColor' : 'none'} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className={styles.rowTitle}>
@@ -149,8 +275,13 @@ export const LibraryRow = memo(function LibraryRow({
             }}
             onCancel={() => setRenaming(false)}
           />
+        ) : inTrash ? (
+          // Trashed recordings are not opened from the list; restore them first.
+          <span className={styles.rowTitleMuted} title={title}>
+            {title || 'Chưa có tiêu đề'}
+          </span>
         ) : (
-          <Link href={href} className={styles.rowTitleLink} title={title}>
+          <Link href={href} className={styles.rowTitleLink} title={title} onClick={handleTap}>
             {title || 'Chưa có tiêu đề'}
           </Link>
         )}
@@ -209,7 +340,35 @@ export const LibraryRow = memo(function LibraryRow({
             className={styles.menu}
             onKeyDown={onMenuKeyDown}
           >
-            {panel === 'main' ? (
+            {inTrash ? (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    closeMenu(true);
+                    onRestore(id);
+                  }}
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  <span className={styles.menuItemLabel}>Khôi phục</span>
+                </button>
+                <div role="separator" className={styles.menuSeparator} />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                  onClick={() => {
+                    closeMenu(true);
+                    onDeleteForever(id);
+                  }}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  <span className={styles.menuItemLabel}>Xóa vĩnh viễn</span>
+                </button>
+              </>
+            ) : panel === 'main' ? (
               <>
                 <button type="button" role="menuitem" className={styles.menuItem} onClick={startRename}>
                   <Pencil size={14} aria-hidden="true" />

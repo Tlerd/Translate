@@ -239,6 +239,19 @@
     transform: translateX(0);
   }
 
+  /* The bottom nav (60px, fixed, above the drawer) would cover the drawer footer: sync status,
+     Cấu hình AI and Chi phí. Reserving the nav's height at the bottom keeps the footer above it.
+     The nav stays visible and tappable under the backdrop. The drawer's content box shrinks,
+     so its full-height child (LibraryNav) shrinks with it. */
+  .sidebarWrapper {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Pages that hide the bottom nav (recording detail, live recording) need no reserved space. */
+  .shell[data-bottom-nav='hidden'] .sidebarWrapper {
+    padding-bottom: 0;
+  }
+
   /* A closed drawer must not leak its shadow onto the left edge of the page. */
   .sidebarClosed {
     box-shadow: none;

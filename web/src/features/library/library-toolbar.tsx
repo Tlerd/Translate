@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type RefObject } from 'react';
 import Link from 'next/link';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import type { LibrarySort, LibraryView as LibraryViewKey } from './library-query';
 import { viewLabel } from './library-format';
 import { isTextEntry } from './library-menu';
@@ -16,6 +16,7 @@ const VIEW_ORDER: readonly LibraryViewKey[] = [
   'unsynced',
   'recording',
   'archived',
+  'trash',
 ];
 
 const SORT_OPTIONS: ReadonlyArray<{ value: LibrarySort; label: string }> = [
@@ -35,6 +36,8 @@ export interface LibraryFilterPatch {
 }
 
 export interface LibraryToolbarProps {
+  /** The library view owns this ref so it can focus the search field (mobile search tab). */
+  searchInputRef: RefObject<HTMLInputElement | null>;
   view: LibraryViewKey;
   folderLabel: string;
   counts: Record<LibraryViewKey, number>;
@@ -58,6 +61,7 @@ export interface LibraryToolbarProps {
 }
 
 export function LibraryToolbar({
+  searchInputRef,
   view,
   folderLabel,
   counts,
@@ -78,7 +82,6 @@ export function LibraryToolbar({
   onClearFilters,
   activeFilterCount,
 }: LibraryToolbarProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
   // Open at start when a filter is already on, so the active state is visible.
   const [filtersOpen, setFiltersOpen] = useState(activeFilterCount > 0);
   const [draft, setDraft] = useState(search);
@@ -106,11 +109,11 @@ export function LibraryToolbar({
       if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
       if (isTextEntry(event.target)) return;
       event.preventDefault();
-      inputRef.current?.focus();
+      searchInputRef.current?.focus();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [searchInputRef]);
 
   const clearSearch = () => {
     setDraft('');
@@ -149,8 +152,9 @@ export function LibraryToolbar({
             aria-pressed={view === key}
             onClick={() => onView(key)}
           >
+            {key === 'trash' ? <Trash2 size={14} aria-hidden="true" /> : null}
             {viewLabel(key)}
-            <span className={styles.chipCount}>{counts[key]}</span>
+            {key === 'trash' && counts[key] === 0 ? null : <span className={styles.chipCount}>{counts[key]}</span>}
           </button>
         ))}
       </div>
@@ -159,7 +163,7 @@ export function LibraryToolbar({
         <div className={styles.searchWrap}>
           <Search size={16} aria-hidden="true" className={styles.searchIcon} />
           <input
-            ref={inputRef}
+            ref={searchInputRef}
             type="search"
             className={styles.searchInput}
             placeholder="Tìm theo tiêu đề…"

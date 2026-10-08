@@ -3,7 +3,9 @@ import {
   formatClock,
   formatDay,
   formatDuration,
+  formatTrashRemaining,
   languageBadge,
+  trashDaysLeft,
   viewLabel,
 } from '@/features/library/library-format';
 
@@ -50,5 +52,37 @@ describe('library formatting', () => {
     expect(viewLabel('unsynced')).toBe('Chưa đồng bộ');
     expect(viewLabel('recording')).toBe('Đang ghi');
     expect(viewLabel('archived')).toBe('Lưu trữ');
+    expect(viewLabel('trash')).toBe('Thùng rác');
   });
 });
+
+describe('trash days left', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const DELETED = '2026-01-01T00:00:00.000Z';
+  const deletedMs = Date.parse(DELETED);
+
+  it('counts whole days left, rounding a partial day up', () => {
+    expect(trashDaysLeft(DELETED, deletedMs)).toBe(30);
+    expect(trashDaysLeft(DELETED, deletedMs + 1)).toBe(30);
+    expect(trashDaysLeft(DELETED, deletedMs + 28 * DAY)).toBe(2);
+    expect(trashDaysLeft(DELETED, deletedMs + 29 * DAY)).toBe(1);
+    expect(trashDaysLeft(DELETED, deletedMs + 30 * DAY - 1)).toBe(1);
+  });
+
+  it('is zero once the retention window has ended', () => {
+    expect(trashDaysLeft(DELETED, deletedMs + 30 * DAY)).toBe(0);
+    expect(trashDaysLeft(DELETED, deletedMs + 31 * DAY)).toBe(0);
+  });
+
+  it('has no countdown for a deletion date it cannot read', () => {
+    expect(trashDaysLeft('not a date', deletedMs)).toBe(Number.POSITIVE_INFINITY);
+    expect(formatTrashRemaining(trashDaysLeft('not a date', deletedMs))).toBe('Không rõ thời hạn');
+  });
+
+  it('formats the remaining days in Vietnamese', () => {
+    expect(formatTrashRemaining(30)).toBe('Còn 30 ngày');
+    expect(formatTrashRemaining(1)).toBe('Còn 1 ngày');
+    expect(formatTrashRemaining(0)).toBe('Hết hạn hôm nay');
+  });
+});
+

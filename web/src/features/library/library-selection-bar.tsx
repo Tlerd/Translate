@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Archive, ArchiveRestore, ChevronDown, Star, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, FolderInput, RotateCcw, Star, Trash2, X } from 'lucide-react';
 import { FolderMenuItems, focusFirstMenuItem, handleMenuNavigation, useDismissible } from './library-menu';
 import styles from './library-view.module.css';
 
@@ -18,6 +18,10 @@ export interface LibrarySelectionBarProps {
   onToggleStar: () => void;
   onToggleArchive: () => void;
   onTrash: () => void;
+  /** Trash view: the bar offers restore and permanent delete instead of the library actions. */
+  trash: boolean;
+  onRestore: () => void;
+  onDeleteForever: () => void;
 }
 
 export function LibrarySelectionBar({
@@ -32,6 +36,9 @@ export function LibrarySelectionBar({
   onToggleStar,
   onToggleArchive,
   onTrash,
+  trash,
+  onRestore,
+  onDeleteForever,
 }: LibrarySelectionBarProps) {
   const [moveOpen, setMoveOpen] = useState(false);
   const moveWrapRef = useRef<HTMLDivElement>(null);
@@ -64,6 +71,8 @@ export function LibrarySelectionBar({
     onMove(folder);
   };
 
+  // Laptop: one row. Phone (CSS): the count, "Chọn tất cả" and "Bỏ chọn" form the top line and the
+  // actions wrapper becomes a row of large equal buttons. The wrapper is display: contents on laptop.
   return (
     <div role="region" aria-label="Thao tác với các buổi đã chọn" className={styles.selectionBar}>
       <span className={styles.selectionCount} aria-live="polite">
@@ -71,56 +80,75 @@ export function LibrarySelectionBar({
       </span>
       <button
         type="button"
-        className={styles.barButton}
+        className={`${styles.barButton} ${styles.selectAllButton}`}
         onClick={onSelectAll}
         disabled={visibleCount === 0 || selectedCount === visibleCount}
       >
-        Chọn tất cả (đang hiện {visibleCount})
+        Chọn tất cả<span className={styles.barHint}> (đang hiện {visibleCount})</span>
       </button>
 
-      <div className={styles.moveWrap} ref={moveWrapRef}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className={styles.barButton}
-          aria-haspopup="menu"
-          aria-expanded={moveOpen}
-          onClick={() => setMoveOpen((open) => !open)}
-        >
-          Di chuyển
-          <ChevronDown size={14} aria-hidden="true" />
-        </button>
-        {moveOpen ? (
-          <div
-            ref={menuRef}
-            role="menu"
-            aria-label="Chuyển các buổi đã chọn tới thư mục"
-            className={styles.menuUp}
-            onKeyDown={onMenuKeyDown}
-          >
-            <FolderMenuItems
-              folders={folders}
-              current={undefined}
-              onPick={pickFolder}
-              onCreate={(name) => pickFolder(name)}
-            />
-          </div>
-        ) : null}
+      <div className={styles.barActions}>
+        {trash ? (
+          <>
+            <button type="button" className={styles.barButton} onClick={onRestore}>
+              <RotateCcw size={14} aria-hidden="true" />
+              Khôi phục
+            </button>
+            <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onDeleteForever}>
+              <Trash2 size={14} aria-hidden="true" />
+              Xóa vĩnh viễn
+            </button>
+          </>
+        ) : (
+          <>
+            <div className={styles.moveWrap} ref={moveWrapRef}>
+              <button
+                ref={triggerRef}
+                type="button"
+                className={styles.barButton}
+                aria-haspopup="menu"
+                aria-expanded={moveOpen}
+                onClick={() => setMoveOpen((open) => !open)}
+              >
+                <FolderInput size={14} aria-hidden="true" className={styles.barMoveIcon} />
+                Di chuyển
+                <ChevronDown size={14} aria-hidden="true" className={styles.barChevron} />
+              </button>
+              {moveOpen ? (
+                <div
+                  ref={menuRef}
+                  role="menu"
+                  aria-label="Chuyển các buổi đã chọn tới thư mục"
+                  className={styles.menuUp}
+                  onKeyDown={onMenuKeyDown}
+                >
+                  <FolderMenuItems
+                    folders={folders}
+                    current={undefined}
+                    onPick={pickFolder}
+                    onCreate={(name) => pickFolder(name)}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <button type="button" className={styles.barButton} onClick={onToggleStar}>
+              <Star size={14} aria-hidden="true" fill={allStarred ? 'currentColor' : 'none'} />
+              {allStarred ? 'Bỏ sao' : 'Gắn sao'}
+            </button>
+            <button type="button" className={styles.barButton} onClick={onToggleArchive}>
+              {allArchived ? <ArchiveRestore size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
+              {allArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
+            </button>
+            <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onTrash}>
+              <Trash2 size={14} aria-hidden="true" />
+              Xóa
+            </button>
+          </>
+        )}
       </div>
 
-      <button type="button" className={styles.barButton} onClick={onToggleStar}>
-        <Star size={14} aria-hidden="true" fill={allStarred ? 'currentColor' : 'none'} />
-        {allStarred ? 'Bỏ sao' : 'Gắn sao'}
-      </button>
-      <button type="button" className={styles.barButton} onClick={onToggleArchive}>
-        {allArchived ? <ArchiveRestore size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
-        {allArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
-      </button>
-      <button type="button" className={`${styles.barButton} ${styles.barButtonDanger}`} onClick={onTrash}>
-        <Trash2 size={14} aria-hidden="true" />
-        Xóa
-      </button>
-      <button type="button" className={styles.barButton} onClick={onClear}>
+      <button type="button" className={`${styles.barButton} ${styles.clearButton}`} onClick={onClear}>
         <X size={14} aria-hidden="true" />
         Bỏ chọn
       </button>

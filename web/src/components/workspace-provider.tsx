@@ -3,7 +3,6 @@
 import React from 'react';
 import { RecordingProvider } from '@/features/recording/recording-context';
 import { AppShell } from '@/components/app-shell';
-import { CloudSyncStatus } from '@/components/cloud-sync-status';
 import { AccountProvider } from '@/components/account-context';
 
 export function WorkspaceProvider({
@@ -13,17 +12,11 @@ export function WorkspaceProvider({
   children: React.ReactNode;
   accountControls: React.ReactNode;
 }) {
-  const combinedControls = (
-    <>
-      <CloudSyncStatus />
-      {accountControls}
-    </>
-  );
-
+  // CloudSyncStatus lives in the library navigator (sidebar footer), so it is not repeated here.
   return (
-    <AccountProvider accountControls={combinedControls}>
+    <AccountProvider accountControls={accountControls}>
       <RecordingProvider>
-        <AppShell accountControls={combinedControls}>
+        <AppShell accountControls={accountControls}>
           {children}
         </AppShell>
       </RecordingProvider>

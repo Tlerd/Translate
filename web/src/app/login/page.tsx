@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await auth();
   const owner = ownerEmail();
-  if (ownerSession(session)) redirect('/app');
+  if (ownerSession(session)) redirect('/library');
   const { error } = await searchParams;
   const configured = Boolean(process.env.AUTH_SECRET && process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && owner);
   const message = error === 'AccessDenied'
@@ -24,7 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <p>Đăng nhập để ghi âm, dịch và tạo ghi chú cho buổi học.</p>
       {message && <p role="alert" className={styles.error}>{message}</p>}
       {!configured && <p role="alert" className={styles.error}>Đăng nhập chưa được cấu hình đầy đủ. Vui lòng thử lại sau.</p>}
-      <form action={async () => { 'use server'; await signIn('google', { redirectTo: '/app' }); }}>
+      <form action={async () => { 'use server'; await signIn('google', { redirectTo: '/library' }); }}>
         <button className={styles.primary} type="submit" disabled={!configured}><span className={styles.google}>G</span> Tiếp tục với Google <ArrowRight size={18} /></button>
       </form>
       <p className={styles.hint}>Chỉ tài khoản được cấp quyền mới có thể vào ứng dụng. Bạn không cần dán API key trên web.</p>

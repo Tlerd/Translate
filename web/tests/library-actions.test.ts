@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { AppDatabase, resetDbInstance } from '@/storage/db';
 import {
@@ -6,8 +6,11 @@ import {
   batchUpdateCategory,
   batchUpdateFolder,
   createRecording,
+  deleteRecordingsPermanently,
   getRecording,
   restoreRecordingFields,
+  restoreRecordings,
+  updateRecording,
 } from '@/storage/recordings';
 
 const MODEL = 'google:gemini-3.1-flash-lite';
@@ -86,3 +89,58 @@ describe('library bulk actions and undo', () => {
     expect(restored?.category).toBe('inbox');
   });
 });
+
+describe('trash batch actions', () => {
+  beforeEach(() => {
+    resetDbInstance(new AppDatabase(`test_db_trash_actions_${Date.now()}_${Math.random()}`));
+  });
+
+  async function seedStopped(id: string, state: 'stopped' | 'recording' = 'stopped') {
+    await seed(id);
+    await updateRecording(id, { state });
+  }
+
+  it('restores only the listed recordings in one update and ignores unknown ids', async () => {
+    await seedStopped('rec_rs_1');
+    await seedStopped('rec_rs_2');
+    await seedStopped('rec_rs_3');
+    await batchSoftDelete(['rec_rs_1', 'rec_rs_2', 'rec_rs_3']);
+
+    await restoreRecordings(['rec_rs_1', 'rec_rs_2', 'missing_id']);
+
+    expect((await getRecording('rec_rs_1'))?.deletedAt).toBeUndefined();
+    expect((await getRecording('rec_rs_2'))?.deletedAt).toBeUndefined();
+    expect((await getRecording('rec_rs_3'))?.deletedAt).toBeTruthy();
+    expect(await getRecording('missing_id')).toBeUndefined();
+  });
+
+  it('does nothing when asked to restore no recordings', async () => {
+    await seedStopped('rec_rs_empty');
+    await batchSoftDelete(['rec_rs_empty']);
+    await restoreRecordings([]);
+    expect((await getRecording('rec_rs_empty'))?.deletedAt).toBeTruthy();
+  });
+
+  it('permanently deletes the listed recordings and tolerates a missing id', async () => {
+    await seedStopped('rec_pd_1');
+    await seedStopped('rec_pd_2');
+
+    await expect(deleteRecordingsPermanently(['rec_pd_1', 'missing_id', 'rec_pd_2'])).resolves.toBeUndefined();
+
+    expect(await getRecording('rec_pd_1')).toBeUndefined();
+    expect(await getRecording('rec_pd_2')).toBeUndefined();
+  });
+
+  it('keeps deleting after one recording fails, then reports the failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await seedStopped('rec_pf_live', 'recording');
+    await seedStopped('rec_pf_done');
+
+    await expect(deleteRecordingsPermanently(['rec_pf_live', 'rec_pf_done'])).rejects.toThrow('1 mục');
+
+    expect(await getRecording('rec_pf_live')).toBeDefined();
+    expect(await getRecording('rec_pf_done')).toBeUndefined();
+    vi.restoreAllMocks();
+  });
+});
+
