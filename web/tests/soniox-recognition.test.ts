@@ -45,7 +45,7 @@ describe('Soniox WebSocket lifecycle', () => {
   });
   it.each([44_100, 48_000])('configures before PCM and resamples %i Hz to mono PCM16', async (rate) => {
     const { recognizer, socket, onTranscript } = await connected();
-    expect(JSON.parse(socket.sent[0] as string)).toMatchObject({ api_key: 'temporary', model: SONIOX_MODEL, language_hints: ['vi'], sample_rate: 16000, audio_format: 'pcm_s16le', enable_endpoint_detection: false });
+    expect(JSON.parse(socket.sent[0] as string)).toMatchObject({ api_key: 'temporary', model: SONIOX_MODEL, language_hints: ['vi'], sample_rate: 16000, audio_format: 'pcm_s16le', enable_endpoint_detection: true, max_endpoint_delay_ms: 900, endpoint_latency_adjustment_level: 2 });
     expect(socket.url).toBe(SONIOX_WEBSOCKET_URL);
     recognizer.pushPcm(new Float32Array(rate / 10).fill(0.25), rate, 420_000);
     expect((socket.sent[1] as Uint8Array).byteLength).toBeGreaterThan(3100);
@@ -97,6 +97,19 @@ describe('Soniox WebSocket lifecycle', () => {
     socket.close(); await stopping;
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0][2]).toEqual({ retryable: false });
+  });
+  it('falls back to plain endpoint config after Soniox rejects the tuning fields', async () => {
+    SonioxRecognizer.endpointTuningRejected = false;
+    try {
+      const first = await connected();
+      first.socket.message({ error_type: 'invalid_request', error_code: 400 });
+      expect(first.onError.mock.calls[0][2]).toEqual({ retryable: true });
+      expect(SonioxRecognizer.endpointTuningRejected).toBe(true);
+      const second = await connected();
+      const config = JSON.parse(second.socket.sent[0] as string);
+      expect(config.enable_endpoint_detection).toBe(false);
+      expect(config.max_endpoint_delay_ms).toBeUndefined();
+    } finally { SonioxRecognizer.endpointTuningRejected = false; }
   });
   it('rejects closed streams without finished and bounds socket backpressure', async () => {
     const { recognizer, socket, onError } = await connected();

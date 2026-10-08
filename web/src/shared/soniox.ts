@@ -34,6 +34,24 @@ export function sonioxLanguage(code: string): string | null {
   return SONIOX_BASE_CODES.has(mapped) ? mapped : null;
 }
 
+/**
+ * Let Soniox end utterances itself instead of waiting for our silence timer, so continuous
+ * speech (a lecture, a meeting) still produces short captions and early translations.
+ * The delay follows the user's pause setting within Soniox's accepted 500-3000 ms range.
+ */
+export function sonioxEndpointConfig(pauseMs: number): {
+  enable_endpoint_detection: true;
+  max_endpoint_delay_ms: number;
+  endpoint_latency_adjustment_level: 2;
+} {
+  const delay = Number.isFinite(pauseMs) ? Math.round(pauseMs) : 900;
+  return {
+    enable_endpoint_detection: true,
+    max_endpoint_delay_ms: Math.min(1500, Math.max(500, delay)),
+    endpoint_latency_adjustment_level: 2,
+  };
+}
+
 export type SonioxTranslationConfig =
   | { type: 'two_way'; language_a: string; language_b: string }
   | { type: 'one_way'; target_language: string };

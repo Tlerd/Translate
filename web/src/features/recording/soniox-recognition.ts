@@ -1,12 +1,15 @@
 import { signalWithTimeout } from '@/shared/abort-signal';
-import { SONIOX_MODEL, SONIOX_WEBSOCKET_URL, SonioxSpeechError, sonioxErrorRetryable, sonioxLanguage, sonioxTranslationPair } from '@/shared/soniox';
+import { SONIOX_MODEL, SONIOX_WEBSOCKET_URL, SonioxSpeechError, sonioxEndpointConfig, sonioxErrorRetryable, sonioxLanguage, sonioxTranslationPair } from '@/shared/soniox';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
 import { SonioxTranscript, type SonioxToken } from './soniox-transcript';
 
 let connectionSequence = 0;
 
+
 export class SonioxRecognizer {
+  /** If Soniox ever rejects the endpoint tuning fields, later sessions fall back to the plain config. */
+  static endpointTuningRejected = false;
   private socket: WebSocket | null = null;
   private request: AbortController | null = null;
   private generation = 0;
@@ -24,13 +27,16 @@ export class SonioxRecognizer {
   private cancelStart: (() => void) | null = null;
   private finished = false;
   private failure: SonioxSpeechError | null = null;
+  private usedEndpointTuning = false;
+  private receivedTokens = false;
 
   constructor(
     private callbacks: SpeechRecognitionCallbacks,
     private languageCode = 'ja-JP',
     private recordingId?: string,
     private targetLanguageCode?: string,
-    private speakerCount = 1
+    private speakerCount = 1,
+    private pauseMs = 900
   ) {}
 
   async start(epoch: number, languageCode = this.languageCode, targetLanguageCode = this.targetLanguageCode): Promise<void> {
@@ -42,6 +48,7 @@ export class SonioxRecognizer {
     this.transcript = new SonioxTranscript(`soniox-${Date.now().toString(36)}-${++connectionSequence}`, this.speakerCount);
     this.stopPromise = null; this.failure = null; this.finished = false;
     this.offset = null; this.sentMs = 0; this.pendingFinalize = false; this.audioSinceFinalize = false;
+    this.usedEndpointTuning = false; this.receivedTokens = false;
     this.status = 'connecting'; this.callbacks.onStateChange('reconnecting');
     const request = new AbortController(); this.request = request;
     try {
@@ -81,10 +88,11 @@ export class SonioxRecognizer {
               sample_rate: 16_000,
               num_channels: 1,
               ...(hints.length ? { language_hints: hints } : {}),
-              enable_endpoint_detection: false,
+              ...(SonioxRecognizer.endpointTuningRejected ? { enable_endpoint_detection: false } : sonioxEndpointConfig(this.pauseMs)),
               enable_speaker_diarization: this.speakerCount > 1,
               enable_language_identification: true,
             };
+            this.usedEndpointTuning = !SonioxRecognizer.endpointTuningRejected;
             if (translationPair) configPayload.translation = translationPair;
             socket.send(JSON.stringify(configPayload));
             this.status = 'listening'; this.callbacks.onStateChange('listening'); finish();
@@ -99,9 +107,14 @@ export class SonioxRecognizer {
             this.fail(new SonioxSpeechError('Soniox trả token không hợp lệ.', true)); return;
           }
           if (message.error_type || message.error_code) {
-            const error = new SonioxSpeechError('Soniox từ chối phiên nhận giọng. Kiểm tra key, quyền và số dư.', sonioxErrorRetryable(message.error_type ?? '', message.error_code ?? 0), message.error_type);
+            // An invalid-request rejection before any text arrived may be the endpoint tuning; retry without it.
+            const tuningSuspect = this.usedEndpointTuning && !this.receivedTokens
+              && (message.error_code === 400 || message.error_type === 'invalid_request');
+            if (tuningSuspect) SonioxRecognizer.endpointTuningRejected = true;
+            const error = new SonioxSpeechError('Soniox từ chối phiên nhận giọng. Kiểm tra key, quyền và số dư.', tuningSuspect || sonioxErrorRetryable(message.error_type ?? '', message.error_code ?? 0), message.error_type);
             finish(error); this.fail(error); return;
           }
+          if (message.tokens?.length) this.receivedTokens = true;
           if (message.tokens?.some((token) => token.text === '<fin>' || token.text === '<end>')) this.pendingFinalize = false;
           for (const snapshot of this.transcript.process(message)) {
             const offset = this.offset ?? 0;

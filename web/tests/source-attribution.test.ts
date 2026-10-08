@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseSpeakerLabel, SourceActivityTracker, SOURCE_ACTIVE_LEVEL } from '@/features/recording/source-attribution';
+import { chooseSpeakerLabel, CUT_CONFIRM_TICKS, CUT_MIN_GAP_TICKS, SourceActivityTracker, SourceCutDetector, sourceOfTick, SOURCE_ACTIVE_LEVEL } from '@/features/recording/source-attribution';
 import { displaySpeakerLabel, isAllowedSpeakerLabel, SOURCE_SPEAKER_LABELS } from '@/shared/transcription';
 
 const LOUD = SOURCE_ACTIVE_LEVEL * 4;
@@ -80,5 +80,60 @@ describe('chooseSpeakerLabel', () => {
   it('falls back to the provider label when the source is unclear', () => {
     expect(chooseSpeakerLabel('spk_1', undefined)).toBe('spk_1');
     expect(chooseSpeakerLabel(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe('sourceOfTick', () => {
+  it('picks the active source and settles overlaps by level', () => {
+    expect(sourceOfTick(LOUD, 0)).toBe('mic');
+    expect(sourceOfTick(0, LOUD)).toBe('display');
+    expect(sourceOfTick(0, 0)).toBeNull();
+    expect(sourceOfTick(LOUD, LOUD)).toBe('mic');
+    // Shared audio far louder than the microphone looks like speaker echo.
+    expect(sourceOfTick(LOUD, LOUD * 4)).toBe('display');
+  });
+});
+
+describe('SourceCutDetector', () => {
+  const feed = (detector: SourceCutDetector, ticks: number, mic: number, display: number): boolean[] =>
+    Array.from({ length: ticks }, () => detector.observe(mic, display));
+
+  it('cuts once when the user starts talking over the meeting', () => {
+    const detector = new SourceCutDetector();
+    expect(feed(detector, 20, 0, LOUD).some(Boolean)).toBe(false); // meeting only: first source, no cut
+    const results = feed(detector, 10, LOUD, 0);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(results.indexOf(true)).toBe(CUT_CONFIRM_TICKS - 1);
+  });
+
+  it('cuts again when the meeting takes over after the user', () => {
+    const detector = new SourceCutDetector();
+    feed(detector, 5, 0, LOUD);
+    feed(detector, 20, LOUD, 0);
+    expect(feed(detector, 10, 0, LOUD).filter(Boolean)).toHaveLength(1);
+  });
+
+  it('ignores a blip shorter than the confirmation window', () => {
+    const detector = new SourceCutDetector();
+    feed(detector, 20, 0, LOUD);
+    const blip = [...feed(detector, CUT_CONFIRM_TICKS - 1, LOUD, 0), ...feed(detector, 10, 0, LOUD)];
+    expect(blip.some(Boolean)).toBe(false);
+  });
+
+  it('does not treat silence as a source change', () => {
+    const detector = new SourceCutDetector();
+    feed(detector, 20, 0, LOUD);
+    expect(feed(detector, 30, 0, 0).some(Boolean)).toBe(false);
+    expect(feed(detector, 10, 0, LOUD).some(Boolean)).toBe(false);
+  });
+
+  it('spaces cuts apart', () => {
+    const detector = new SourceCutDetector();
+    feed(detector, 5, 0, LOUD);
+    const flips: boolean[] = [];
+    for (let i = 0; i < 4; i++) {
+      flips.push(...feed(detector, CUT_CONFIRM_TICKS, LOUD, 0), ...feed(detector, CUT_CONFIRM_TICKS, 0, LOUD));
+    }
+    expect(flips.filter(Boolean).length).toBeLessThan(flips.length / CUT_MIN_GAP_TICKS + 2);
   });
 });
