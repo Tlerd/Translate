@@ -321,7 +321,7 @@ describe('Gemini live recognizer', () => {
     socket.message({ setupComplete: {} });
     await starting;
 
-    expect(JSON.parse(socket.sent[0]).setup.translationConfig).toMatchObject({
+    expect(JSON.parse(socket.sent[0]).setup.generationConfig.translationConfig).toMatchObject({
       targetLanguageCode: 'vi-VN',
       echoTargetLanguage: true,
     });
@@ -388,6 +388,15 @@ describe('Pcm16kResampler', () => {
       socket.message({ serverContent: { interimInputTranscription: { text: 'こんにちは' } } });
       expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['こんにちは', false]);
       expect(new Set(onTranscript.mock.calls.map((call) => call[3])).size).toBe(1);
+    } finally { await recognizer.stop(0); }
+  });
+
+  it('sends translationConfig inside setup.generationConfig, never at the top of setup', async () => {
+    const { recognizer, socket } = await openRecognizer('gemini-3.5-transcribe-live', 33, vi.fn(), 'vi');
+    try {
+      const setup = JSON.parse(socket.sent[0]).setup;
+      expect(setup.generationConfig).toMatchObject({ responseModalities: ['TEXT'], translationConfig: { targetLanguageCode: 'vi' } });
+      expect(setup).not.toHaveProperty('translationConfig');
     } finally { await recognizer.stop(0); }
   });
 });

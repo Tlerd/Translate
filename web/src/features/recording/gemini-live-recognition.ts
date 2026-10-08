@@ -135,7 +135,7 @@ export class GeminiLiveRecognizer {
       };
       socket.onopen = () => {
         if (generation !== this.connectionGeneration) return finish(new Error('Gemini session was superseded.'));
-        const { responseModalities, ...config } = liveSpeechConfig(
+        const { responseModalities, translationConfig, ...config } = liveSpeechConfig(
           this.model,
           this.transcriptionMode,
           languageCode,
@@ -144,7 +144,8 @@ export class GeminiLiveRecognizer {
         socket.send(JSON.stringify({
           setup: {
             model: `models/${this.model}`,
-            generationConfig: { responseModalities },
+            // The Live API rejects translationConfig at the top of setup; it belongs in generationConfig.
+            generationConfig: { responseModalities, ...(translationConfig ? { translationConfig } : {}) },
             ...config,
           },
         }));
