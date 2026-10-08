@@ -21,6 +21,8 @@ interface RecordingContextValue {
   setLanguages: (source: string, target: string) => void;
   swapLanguages: () => Promise<void>;
   setReadingPauseMs: (milliseconds: number) => void;
+  reshareDisplay: () => Promise<void>;
+  getAudioLevels: () => { mic: number; display: number } | null;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -115,6 +117,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     stopRecording: () => controllerRef.current!.stop(),
     pauseApi: () => controllerRef.current!.pauseApi(),
     resumeApi: () => controllerRef.current!.resumeApi(),
+    reshareDisplay: () => controllerRef.current!.reshareDisplay(),
+    getAudioLevels: () => controllerRef.current!.getAudioLevels(),
     switchMode: (mode) => controllerRef.current!.switchMode(mode),
     setTranslationModel: updateTranslationModel,
     setTranslationThinkingLevel: updateTranslationThinkingLevel,

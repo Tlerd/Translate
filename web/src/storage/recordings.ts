@@ -9,10 +9,14 @@ import type {
   SummaryItem,
   ImageItem,
   AppSettings,
+  AudioSource,
   ClassroomMode,
 } from '@/shared/recording';
 import { DEFAULT_SETTINGS } from '@/shared/recording';
 import { isAllowedSpeakerLabel, normalizeSpeechProvider, normalizeSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
+
+/** Upper bound used by library lists; effectively no limit for a personal library. */
+export const LIBRARY_PAGE_LIMIT = 100_000;
 
 export interface CreateRecordingParams {
   id?: string;
@@ -27,6 +31,7 @@ export interface CreateRecordingParams {
   glossary?: string;
   transcriptionMode?: TranscriptionMode;
   speakerCount?: SpeakerCount;
+  audioSource?: AudioSource;
 }
 
 export async function createRecording(params: CreateRecordingParams): Promise<RecordingItem> {
@@ -54,6 +59,8 @@ export async function createRecording(params: CreateRecordingParams): Promise<Re
       glossary: params.glossary,
       transcriptionMode: params.transcriptionMode,
       speakerCount: params.speakerCount,
+      // Microphone-only sessions keep the original record shape so older tabs and builds read them unchanged.
+      ...(params.audioSource && params.audioSource !== 'mic' ? { audioSource: params.audioSource } : {}),
     },
   };
 
@@ -579,6 +586,49 @@ export async function getCustomFolders(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+/**
+ * Accent- and case-insensitive sort key for Vietnamese folder names.
+ * Does not rely on ICU locale data: NFD strip marks, lowercase, and map đ to d.
+ */
+function folderSortKey(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd');
+}
+
+/**
+ * Union of custom folder names and folder names used by recordings.
+ * Trims, drops empty values and duplicates, then sorts without locale data.
+ */
+export function mergeFolderNames(custom: string[], used: Array<string | undefined | null>): string[] {
+  const names = new Set<string>();
+  for (const value of [...custom, ...used]) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) names.add(trimmed);
+  }
+  return [...names].sort((a, b) => {
+    const ka = folderSortKey(a);
+    const kb = folderSortKey(b);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+/**
+ * Folders to display in the library. Includes folders that exist only on
+ * recordings (for example, synced from another device) and ignores trashed recordings.
+ */
+export async function getLibraryFolders(): Promise<string[]> {
+  const db = getDb();
+  const custom = await getCustomFolders();
+  const recordings = await db.recordings.toArray();
+  const used = recordings.filter(r => !r.deletedAt).map(r => r.folder);
+  return mergeFolderNames(custom, used);
 }
 
 export async function saveCustomFolders(folders: string[]): Promise<void> {

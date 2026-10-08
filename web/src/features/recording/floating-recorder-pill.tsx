@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRecording } from './recording-context';
 import styles from './floating-recorder-pill.module.css';
-import { Pause, Play, Square, ArrowLeftRight } from 'lucide-react';
+import { Monitor, Pause, Play, Square, ArrowLeftRight } from 'lucide-react';
 
 interface FloatingRecorderPillProps {
   onStop?: () => void;
@@ -26,6 +26,7 @@ function shortLangLabel(code: string): string {
 export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
   const router = useRouter();
   const { state, stopRecording, pauseApi, resumeApi, swapLanguages } = useRecording();
+  const capturesDisplay = state.audioSource !== 'mic';
   const [stopping, setStopping] = useState(false);
   const [swapping, setSwapping] = useState(false);
 
@@ -90,6 +91,17 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
 
       {/* Timer */}
       <span className={styles.timer}>{formatTimer(state.durationMs)}</span>
+
+      {capturesDisplay && (
+        <span
+          className={styles.sourceIcon}
+          title="Đang thu âm thanh màn hình"
+          role="img"
+          aria-label="Đang thu âm thanh màn hình"
+        >
+          <Monitor size={14} aria-hidden="true" />
+        </span>
+      )}
 
       {/* Divider */}
       <span className={styles.divider} />

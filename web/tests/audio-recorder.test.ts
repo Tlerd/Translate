@@ -73,3 +73,93 @@ describe('WebAudioRecorder', () => {
     expect(completed).toEqual([1]); expect(track.stop).toHaveBeenCalledOnce();
   });
 });
+
+class SourceTrack {
+  readonly stop = vi.fn();
+  readonly kind = 'audio';
+  addEventListener() {}
+}
+
+function sourceStream(tracks: SourceTrack[]): MediaStream {
+  return { getTracks: () => [...tracks], getAudioTracks: () => [...tracks] } as unknown as MediaStream;
+}
+
+class SourceAudioContext {
+  state: AudioContextState = 'running';
+  private readonly destinationTrack = new SourceTrack();
+  private readonly destinationStream = sourceStream([this.destinationTrack]);
+  close() { return Promise.resolve(); }
+  resume() { return Promise.resolve(); }
+  createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
+  createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
+  createAnalyser() { return { fftSize: 256, connect() {}, disconnect() {}, getByteTimeDomainData() {} }; }
+  createDynamicsCompressor() { return { connect() {}, disconnect() {} }; }
+  createMediaStreamDestination() { return { stream: this.destinationStream, connect() {}, disconnect() {} }; }
+}
+
+describe('WebAudioRecorder audio sources', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const callbacks = () => ({
+    onChunk: () => {},
+    onVolume: () => {},
+    onError: (error: string) => { throw new Error(error); },
+  });
+
+  it('display source records the display stream and never requests the microphone', async () => {
+    const getUserMedia = vi.fn();
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('AudioContext', SourceAudioContext);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const displayTrack = new SourceTrack();
+    const recorder = new WebAudioRecorder(callbacks());
+
+    await recorder.start(2000, { source: 'display', displayStream: sourceStream([displayTrack]) });
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(recorder.audioInput).not.toBeNull();
+
+    await recorder.stop();
+    expect(displayTrack.stop).toHaveBeenCalledOnce();
+    expect(recorder.audioInput).toBeNull();
+  });
+
+  it('display source without a display stream fails before touching the microphone', async () => {
+    const getUserMedia = vi.fn();
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const recorder = new WebAudioRecorder(callbacks());
+
+    await expect(recorder.start(2000, { source: 'display' })).rejects.toThrow('Thiếu luồng âm thanh màn hình.');
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('mixed source makes one microphone request and records only the mixed stream', async () => {
+    const micTrack = new SourceTrack();
+    const getUserMedia = vi.fn().mockResolvedValue(sourceStream([micTrack]));
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('AudioContext', SourceAudioContext);
+    const recorded: MediaStream[] = [];
+    class RecordingRecorder extends FakeMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        super(stream, options);
+        recorded.push(stream);
+      }
+    }
+    vi.stubGlobal('MediaRecorder', RecordingRecorder);
+    const displayTrack = new SourceTrack();
+    const recorder = new WebAudioRecorder(callbacks());
+
+    await recorder.start(2000, { source: 'mixed', displayStream: sourceStream([displayTrack]) });
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toBe(recorder.audioInput?.stream);
+    expect(recorder.stream).toBe(recorded[0]);
+
+    await recorder.stop();
+    expect(micTrack.stop).toHaveBeenCalledOnce();
+    expect(displayTrack.stop).toHaveBeenCalledOnce();
+  });
+});

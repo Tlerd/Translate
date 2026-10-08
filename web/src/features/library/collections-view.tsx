@@ -19,12 +19,14 @@ import {
 import {
   listRecordings,
   getCustomFolders,
+  getLibraryFolders,
   saveCustomFolders,
   updateRecordingCategory,
   batchUpdateFolder,
   batchSoftDelete,
   renameRecording,
   softDeleteRecording,
+  LIBRARY_PAGE_LIMIT,
 } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import type { RecordingItem } from '@/shared/recording';
@@ -65,8 +67,8 @@ export function CollectionsView() {
   const loadData = useCallback(async () => {
     try {
       const [items, folders] = await Promise.all([
-        listRecordings(200, 0, false),
-        getCustomFolders(),
+        listRecordings(LIBRARY_PAGE_LIMIT, 0, false),
+        getLibraryFolders(),
       ]);
       setRecordings(items);
       setCustomFolders(folders);
@@ -111,12 +113,13 @@ export function CollectionsView() {
       setShowNewFolder(false);
       return;
     }
-    if (!customFolders.includes(name)) {
-      const next = [...customFolders, name];
-      await saveCustomFolders(next);
-      setCustomFolders(next);
-      setSelectedFolder(name);
+    // Write only the stored custom list; folders used by recordings are not persisted here.
+    const stored = await getCustomFolders();
+    if (!stored.includes(name)) {
+      await saveCustomFolders([...stored, name]);
     }
+    await loadData();
+    setSelectedFolder(name);
     setNewFolderName('');
     setShowNewFolder(false);
   };

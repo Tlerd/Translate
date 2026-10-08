@@ -9,6 +9,7 @@ import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
 import { GeminiTranscribeRecognizer } from './gemini-transcribe-recognition';
 import { GeminiPcmCapture } from './gemini-pcm-capture';
 import { WebAudioRecorder } from './audio-recorder';
+import { DisplayCaptureError, requestDisplayAudio } from './audio-input';
 import { LiveUtteranceAssembler, type TranscriptSnapshot } from './utterance-assembler';
 import { LiveTranslationScheduler, type ScheduledTranslationEvent } from './translation-scheduler';
 import { streamTranslate } from '@/lib/api-client';
@@ -22,6 +23,7 @@ import {
   updateAudioSegment,
 } from '@/storage/recordings';
 import type {
+  AudioSource,
   ClassroomMode,
   RecordingState,
   CaptionItem,
@@ -62,6 +64,8 @@ export interface ControllerState {
   speakerStatus: 'idle' | 'working' | 'done' | 'error' | 'unavailable';
   speakerMessage: string | null;
   micDeviceLabel: string | null;
+  audioSource: AudioSource;
+  displayState: 'none' | 'live' | 'ended';
 }
 
 export interface StartOptions {
@@ -76,6 +80,16 @@ export interface StartOptions {
   readingPauseMs?: number;
   translationHistoryTurns?: number;
   earlySegmentTranslation?: boolean;
+  audioSource?: AudioSource;
+}
+
+function stopStreamTracks(stream: MediaStream): void {
+  for (const track of stream.getTracks()) track.stop();
+}
+
+/** Releases a screen share the user granted but that no recording will use. */
+function discardDisplayRequest(request: Promise<MediaStream> | undefined): void {
+  void request?.then(stopStreamTracks, () => undefined);
 }
 
 interface CapturedPcm { samples: Float32Array; rate: number; startMs: number }
@@ -107,6 +121,7 @@ export class ClassroomController {
     lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
     speakerStatus: 'idle', speakerMessage: null,
     micDeviceLabel: null,
+    audioSource: 'mic', displayState: 'none',
   };
 
   private listeners: Set<(state: ControllerState) => void> = new Set();
@@ -160,6 +175,9 @@ export class ClassroomController {
   private speakerTask: Promise<void> | null = null;
   private speakerAbort: AbortController | null = null;
   private recordingConfig: RecordingItem['config'] | null = null;
+  private displayEndedUnsubscribe: (() => void) | null = null;
+  // Screen-share audio granted for this start but not yet owned by the recorder.
+  private undeliveredDisplayStream: MediaStream | null = null;
 
   constructor() {
     this.checkStoragePersistence();
@@ -202,32 +220,53 @@ export class ClassroomController {
   }
 
   public async start(options: StartOptions = {}): Promise<string> {
-    if (this.stopping) await this.stopping;
-    if (this.starting) return this.starting;
-    if (this.state.state === 'recording' && this.state.recordingId) return this.state.recordingId;
+    // Must stay the first statement: getDisplayMedia needs the record-button gesture, so nothing may await before it.
+    const displayRequest = (options.audioSource ?? 'mic') === 'mic' ? undefined : requestDisplayAudio();
+    void displayRequest?.catch(() => undefined);
+    if (this.stopping) {
+      try {
+        await this.stopping;
+      } catch (error) {
+        discardDisplayRequest(displayRequest);
+        throw error;
+      }
+    }
+    if (this.starting) {
+      discardDisplayRequest(displayRequest);
+      return this.starting;
+    }
+    if (this.state.state === 'recording' && this.state.recordingId) {
+      discardDisplayRequest(displayRequest);
+      return this.state.recordingId;
+    }
     this.speakerAbort?.abort();
-    if (!isSpeakerCount(options.speakerCount ?? this.state.speakerCount)) throw new Error('Bắt buộc chọn số người nói từ 1 đến 8.');
+    if (!isSpeakerCount(options.speakerCount ?? this.state.speakerCount)) {
+      discardDisplayRequest(displayRequest);
+      throw new Error('Bắt buộc chọn số người nói từ 1 đến 8.');
+    }
     // Unlock Web Audio inside the record-button activation on iOS, before
     // IndexedDB or microphone permissions can yield.
     this.pcmCapture = new GeminiPcmCapture();
     this.pcmAttached = false;
     this.pcmPreparation = this.pcmCapture.prepare();
     void this.pcmPreparation.catch(() => undefined); // handled with start below
-    const task = this.startInternal(options);
+    const task = this.startInternal(options, displayRequest);
     this.starting = task;
     try {
       return await task;
     } catch (error) {
       await this.pcmCapture?.stop();
       this.pcmCapture = null;
+      this.releaseUndeliveredDisplay();
       throw error;
     } finally {
       if (this.starting === task) this.starting = null;
     }
   }
 
-  private async startInternal(options: StartOptions): Promise<string> {
+  private async startInternal(options: StartOptions, displayRequest?: Promise<MediaStream>): Promise<string> {
     if (this.state.state === 'recording') {
+      discardDisplayRequest(displayRequest);
       return this.state.recordingId!;
     }
 
@@ -240,7 +279,10 @@ export class ClassroomController {
     const speechProvider = options.speechProvider ?? this.state.speechProvider;
     const sourceLanguage = inputLanguage(options.sourceLanguage || this.state.sourceLanguage, speechProvider);
     const targetLanguage = canonicalLanguage(options.targetLanguage || this.state.targetLanguage);
-    if (!sourceLanguage || !targetLanguage) throw new Error('Chọn ngôn ngữ hợp lệ cho bộ nhận giọng trước khi thu.');
+    if (!sourceLanguage || !targetLanguage) {
+      discardDisplayRequest(displayRequest);
+      throw new Error('Chọn ngôn ngữ hợp lệ cho bộ nhận giọng trước khi thu.');
+    }
     const translationModelKey = options.translationModelKey || this.state.translationModelKey;
     const pauseMs = ClassroomController.clampPause(options.pauseMs ?? this.state.pauseMs);
     const readingPauseMs = ClassroomController.clampPause(options.readingPauseMs ?? this.state.readingPauseMs);
@@ -249,6 +291,11 @@ export class ClassroomController {
       : this.state.translationHistoryTurns;
     const earlySegmentTranslation = options.earlySegmentTranslation ?? this.state.earlySegmentTranslation;
 
+    const audioSource: AudioSource = options.audioSource ?? 'mic';
+    // Wait for the gesture-started capture before any recording row exists: a cancelled prompt rejects here and nothing is created.
+    const displayStream = displayRequest ? await displayRequest : undefined;
+    this.undeliveredDisplayStream = displayStream ?? null;
+
     const recording = await createRecording({
       mode,
       sourceLanguage,
@@ -256,6 +303,7 @@ export class ClassroomController {
       translationModelKey,
       transcriptionMode,
       speakerCount,
+      audioSource,
     });
 
     const recordingId = recording.id;
@@ -305,6 +353,7 @@ export class ClassroomController {
       translationHistoryTurns,
       earlySegmentTranslation,
       speechProvider, transcriptionMode, speakerCount,
+      audioSource, displayState: audioSource === 'mic' ? 'none' : 'live',
       micState: 'idle', receivedAudioMs: 0,
       lastTranscriptAt: null, transcriptCount: 0, translationLatencyMs: null,
       speakerStatus: 'idle', speakerMessage: null,
@@ -441,7 +490,13 @@ export class ClassroomController {
         },
       });
 
-      await this.audioRecorder.start(2000);
+      await this.audioRecorder.start(2000, { source: audioSource, displayStream });
+      // From here the recorder's AudioInput owns the display tracks; stop them only via recorder.stop().
+      this.undeliveredDisplayStream = null;
+      const audioInput = this.audioRecorder.audioInput;
+      if (audioInput) {
+        this.displayEndedUnsubscribe = audioInput.onDisplayEnded(() => this.handleDisplayEnded(currentEpoch));
+      }
       // Permission prompts and audio initialization are outside the file's
       // timeline. Use the recorder's actual start for captions and lesson time.
       this.startTime = this.audioRecorder.startedAt || Date.now();
@@ -929,6 +984,56 @@ export class ClassroomController {
     void write.finally(() => this.pendingCaptionWrites.delete(write));
   }
 
+  /** Shared display audio ended (sharing stopped or tab closed). The session keeps running. */
+  private handleDisplayEnded(epoch: number): void {
+    if (epoch !== this.sessionEpoch || this.state.state !== 'recording' || this.stopping) return;
+    this.state.displayState = 'ended';
+    this.notify();
+    // A display-only session has no other input, so hold API calls until audio returns.
+    if (this.state.audioSource === 'display') void this.pauseApi();
+  }
+
+  /** Must stay the first statement: the screen-share prompt has to run inside the user's click. */
+  public async reshareDisplay(): Promise<void> {
+    const request = requestDisplayAudio();
+    let stream: MediaStream;
+    try {
+      stream = await request;
+    } catch (err) {
+      if (err instanceof DisplayCaptureError && err.code !== 'cancelled') {
+        this.state.error = err.message;
+        this.notify();
+      }
+      return;
+    }
+    const audioInput = this.audioRecorder?.audioInput;
+    if (this.state.state !== 'recording' || this.stopping || !audioInput) {
+      stopStreamTracks(stream);
+      return;
+    }
+    try {
+      audioInput.replaceDisplay(stream);
+    } catch (err) {
+      stopStreamTracks(stream);
+      this.state.error = err instanceof Error ? err.message : String(err);
+      this.notify();
+      return;
+    }
+    this.state.displayState = 'live';
+    this.notify();
+    if (this.state.audioSource === 'display' && this.apiState === 'paused') await this.resumeApi();
+  }
+
+  public getAudioLevels(): { mic: number; display: number } | null {
+    return this.audioRecorder?.audioInput?.levels() ?? null;
+  }
+
+  private releaseUndeliveredDisplay(): void {
+    const stream = this.undeliveredDisplayStream;
+    this.undeliveredDisplayStream = null;
+    if (stream) stopStreamTracks(stream);
+  }
+
   public async pauseApi(): Promise<void> {
     // Cut input now, including while a resume is awaiting its socket handshake.
     const task = this.pauseApiInternal();
@@ -1047,6 +1152,9 @@ export class ClassroomController {
     this.clearSilenceTimer();
     this.pcmReady = false;
     this.clearSpeechTimers();
+    this.displayEndedUnsubscribe?.();
+    this.displayEndedUnsubscribe = null;
+    this.state.displayState = 'none';
     const stopErrors: string[] = [];
     if (this.pcmCapture) {
       try { await this.pcmCapture.stop(); } catch (error) { stopErrors.push(String(error)); }
@@ -1124,6 +1232,7 @@ export class ClassroomController {
       audioVolume: 0,
       speechState: 'stopped',
       micState: 'idle',
+      displayState: 'none',
       error: stopErrors.length ? `Đã dừng thu, nhưng nhận kết quả cuối gặp lỗi: ${stopErrors.join('; ')}` : this.state.error,
     };
     this.notify();

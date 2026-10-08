@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, RotateCcw, AudioLines } from 'lucide-react';
-import { listTrashRecordings, restoreRecording, deleteRecording, emptyTrash } from '@/storage/recordings';
+import { LIBRARY_PAGE_LIMIT, listTrashRecordings, restoreRecording, deleteRecording, emptyTrash } from '@/storage/recordings';
+import { dataEvent } from '@/storage/cloud-sync';
 import type { RecordingItem } from '@/shared/recording';
 
 export function TrashView() {
@@ -11,7 +12,7 @@ export function TrashView() {
 
   const loadTrash = useCallback(async () => {
     try {
-      const items = await listTrashRecordings(100);
+      const items = await listTrashRecordings(LIBRARY_PAGE_LIMIT);
       setTrashItems(items);
     } catch (err) {
       console.error('Lỗi tải thùng rác:', err);
@@ -22,6 +23,9 @@ export function TrashView() {
 
   useEffect(() => {
     void loadTrash();
+    const reload = () => { void loadTrash(); };
+    window.addEventListener(dataEvent, reload);
+    return () => window.removeEventListener(dataEvent, reload);
   }, [loadTrash]);
 
   const handleRestore = async (id: string) => {
