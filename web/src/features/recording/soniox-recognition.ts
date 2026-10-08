@@ -29,16 +29,17 @@ export class SonioxRecognizer {
     private callbacks: SpeechRecognitionCallbacks,
     private languageCode = 'ja-JP',
     private recordingId?: string,
-    private targetLanguageCode?: string
+    private targetLanguageCode?: string,
+    private speakerCount = 1
   ) {}
 
   async start(epoch: number, languageCode = this.languageCode, targetLanguageCode = this.targetLanguageCode): Promise<void> {
     if (this.socket || this.status === 'connecting') throw new SonioxSpeechError('Soniox đang kết nối.', false);
-    const language = sonioxLanguage(languageCode);
-    if (!language) throw new SonioxSpeechError('Soniox hỗ trợ đầu vào Nhật và Việt trong bản này.', false);
+    const language = languageCode === 'auto' ? null : sonioxLanguage(languageCode);
+    if (languageCode !== 'auto' && !language) throw new SonioxSpeechError('Soniox chưa hỗ trợ ngôn ngữ đầu vào này. Hãy chọn ngôn ngữ khác hoặc bộ nhận giọng khác.', false);
     const generation = ++this.generation;
     this.epoch = epoch; this.languageCode = languageCode; this.targetLanguageCode = targetLanguageCode;
-    this.transcript = new SonioxTranscript(`soniox-${Date.now().toString(36)}-${++connectionSequence}`);
+    this.transcript = new SonioxTranscript(`soniox-${Date.now().toString(36)}-${++connectionSequence}`, this.speakerCount);
     this.stopPromise = null; this.failure = null; this.finished = false;
     this.offset = null; this.sentMs = 0; this.pendingFinalize = false; this.audioSinceFinalize = false;
     this.status = 'connecting'; this.callbacks.onStateChange('reconnecting');
@@ -70,24 +71,21 @@ export class SonioxRecognizer {
           if (generation !== this.generation) return;
           try {
             const translationPair = sonioxTranslationPair(languageCode, targetLanguageCode);
+            const hints = translationPair?.type === 'two_way'
+              ? [translationPair.language_a, translationPair.language_b]
+              : language ? [language] : [];
             const configPayload: Record<string, unknown> = {
               api_key: session.token,
               model: SONIOX_MODEL,
               audio_format: 'pcm_s16le',
               sample_rate: 16_000,
               num_channels: 1,
-              language_hints: translationPair ? ['ja', 'vi'] : [language],
+              ...(hints.length ? { language_hints: hints } : {}),
               enable_endpoint_detection: false,
-              enable_speaker_diarization: false,
+              enable_speaker_diarization: this.speakerCount > 1,
               enable_language_identification: true,
             };
-            if (translationPair) {
-              configPayload.translation = {
-                type: translationPair.type,
-                language_a: translationPair.language_a,
-                language_b: translationPair.language_b,
-              };
-            }
+            if (translationPair) configPayload.translation = translationPair;
             socket.send(JSON.stringify(configPayload));
             this.status = 'listening'; this.callbacks.onStateChange('listening'); finish();
           } catch { finish(new SonioxSpeechError('Không gửi được cấu hình Soniox.', true)); }
@@ -113,7 +111,7 @@ export class SonioxRecognizer {
               this.epoch,
               snapshot.providerItemId,
               snapshot.revision,
-              { startMs: offset + (snapshot.startMs ?? this.sentMs), endMs: offset + (snapshot.endMs ?? this.sentMs) },
+              { startMs: offset + (snapshot.startMs ?? this.sentMs), endMs: offset + (snapshot.endMs ?? this.sentMs), speakerLabel: snapshot.speakerLabel },
               snapshot.translation
             );
           }

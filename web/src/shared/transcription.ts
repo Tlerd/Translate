@@ -20,7 +20,7 @@ export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechMode
 }
 
 export function speechProviderName(provider: SpeechProvider): string {
-  if (provider === 'soniox') return 'Soniox · stt-rt-v5 (Dịch 2 chiều Nhật - Việt)';
+  if (provider === 'soniox') return 'Soniox · stt-rt-v5 (dịch trực tiếp, 60+ ngôn ngữ)';
   if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
   if (provider === 'google-flash-live') return 'Gemini 3 Flash Live';
   return provider === 'google' ? 'Gemini 3.5 Translate Live' : 'Gemini 3.5 Transcribe';

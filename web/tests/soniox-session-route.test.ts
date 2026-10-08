@@ -35,7 +35,7 @@ describe('Soniox temporary session route', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(checkRateLimit).not.toHaveBeenCalled();
   });
-  it.each([{ languageCode: 'en-US' }, { languageCode: 'ja_JP' }, { languageCode: 'ja', model: 'different-model' }, { languageCode: 'vi', websocketUrl: 'wss://evil.example' }, { languageCode: 'ja', recordingId: '../secrets' }, null])('rejects invalid or injected request %j before any provider call', async body => {
+  it.each([{ languageCode: 'am-ET' }, { languageCode: 'ja_JP' }, { languageCode: 'ja', model: 'different-model' }, { languageCode: 'vi', websocketUrl: 'wss://evil.example' }, { languageCode: 'ja', recordingId: '../secrets' }, null])('rejects invalid or injected request %j before any provider call', async body => {
     expect((await POST(request(body))).status).toBe(400);
     expect(fetch).not.toHaveBeenCalled(); expect(checkRateLimit).not.toHaveBeenCalled();
   });

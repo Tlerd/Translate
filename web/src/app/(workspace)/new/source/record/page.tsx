@@ -7,14 +7,14 @@ import { ArrowLeft, ArrowLeftRight, FileAudio, Loader2, Mic } from 'lucide-react
 import { useRecording } from '@/features/recording/recording-context';
 import { inputLanguages, OUTPUT_LANGUAGES } from '@/shared/languages';
 import { saveSettings } from '@/storage/recordings';
-import type { SpeechProvider } from '@/shared/transcription';
+import { SPEAKER_COUNTS, type SpeechProvider } from '@/shared/transcription';
 import styles from './record-source.module.css';
 
 const ENGINES: Array<{ id: SpeechProvider; name: string; hint: string }> = [
   { id: 'google-flash-live', name: 'Gemini 3 Flash Live', hint: 'Hiện chữ ngay khi đang nói, dịch theo từng câu.' },
   { id: 'google', name: 'Gemini 3.5 Translate Live', hint: 'Nhận giọng và dịch trực tiếp trong một luồng.' },
   { id: 'google-transcribe', name: 'Gemini 3.5 Transcribe', hint: 'Phiên âm theo đoạn sau mỗi lần ngắt câu, ổn định nhất.' },
-  { id: 'soniox', name: 'Soniox', hint: 'Dịch hai chiều Nhật ⇄ Việt.' },
+  { id: 'soniox', name: 'Soniox', hint: 'Dịch trực tiếp 60+ ngôn ngữ, tự tách người nói.' },
 ];
 
 export default function RecordSourcePage() {
@@ -134,6 +134,24 @@ export default function RecordSourcePage() {
               );
             })}
           </div>
+        </section>
+
+        <section className={styles.card} aria-labelledby="speaker-title">
+          <h2 id="speaker-title" className={styles.cardTitle}>Người nói</h2>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Số người nói trong buổi này</span>
+            <select
+              className={styles.select}
+              value={state.speakerCount}
+              onChange={(e) => void saveSettings({ speakerCount: Number(e.target.value) as typeof state.speakerCount })}
+              disabled={isStarting}
+            >
+              {SPEAKER_COUNTS.map((count) => <option key={count} value={count}>{count === 1 ? '1 người (không tách)' : `${count} người`}</option>)}
+            </select>
+          </label>
+          <p className={styles.fieldHint}>
+            Từ 2 người trở lên, Soniox và Gemini 3.5 Transcribe tự tách người nói. Gemini Live chưa có tách người nói trực tiếp; sau buổi bạn có thể bấm &quot;Phân biệt lại người nói&quot;.
+          </p>
         </section>
 
         {error && <div role="alert" className={styles.error}>{error}</div>}

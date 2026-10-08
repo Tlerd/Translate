@@ -4,12 +4,15 @@ import { liveSpeechConfig } from '@/shared/live-speech-config';
 import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
 describe('model language catalogues', () => {
-  it('restricts the first Soniox integration to Japanese and Vietnamese, including locale aliases', () => {
-    expect(inputLanguages('soniox').map(item => item.code).sort()).toEqual(['auto', 'ja-JP', 'vi-VN']);
+  it('offers Soniox its 60+ languages, keeping locale aliases for Japanese and Vietnamese', () => {
+    const codes = inputLanguages('soniox').map(item => item.code);
+    expect(codes.length).toBeGreaterThan(60);
+    expect(codes).toEqual(expect.arrayContaining(['auto', 'ja-JP', 'vi-VN', 'en', 'ko', 'zh', 'fr']));
     for (const code of ['ja', 'ja-JP']) expect(inputLanguage(code, 'soniox')).toBe('ja-JP');
     for (const code of ['vi', 'vi-VN']) expect(inputLanguage(code, 'soniox')).toBe('vi-VN');
     expect(inputLanguage('auto', 'soniox')).toBe('auto');
-    expect(inputLanguage('en-US', 'soniox')).toBeNull();
+    expect(inputLanguage('en-US', 'soniox')).toBe('en');
+    expect(inputLanguage('am-ET', 'soniox')).toBeNull();
     expect(inputLanguage('ja_JP', 'soniox')).toBeNull();
   });
   it('offers the 32 ready Nemotron locales, including Japanese and Vietnamese, without adaptation-only languages', () => {

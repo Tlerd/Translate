@@ -162,4 +162,46 @@ describe('Soniox WebSocket lifecycle', () => {
       'Xin chào'
     );
   });
+
+  async function openWith(source: string, target: string | undefined, speakers: number, epoch: number) {
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new SonioxRecognizer(callbacks, source, 'lesson-x', target, speakers);
+    recognizers.push(recognizer);
+    FakeSocket.last = undefined;
+    const starting = recognizer.start(epoch);
+    await vi.waitFor(() => expect(FakeSocket.last).toBeDefined());
+    const socket = FakeSocket.last!;
+    socket.open(); await starting;
+    return { callbacks, socket, config: JSON.parse(socket.sent[0] as string) };
+  }
+
+  it('is no longer locked to Japanese and Vietnamese: any supported pair translates two-way', async () => {
+    const { config } = await openWith('en-US', 'ko', 1, 40);
+    expect(config.language_hints).toEqual(['en', 'ko']);
+    expect(config.translation).toEqual({ type: 'two_way', language_a: 'en', language_b: 'ko' });
+  });
+
+  it('auto-detects the source and translates everything into the chosen output language', async () => {
+    const { config } = await openWith('auto', 'vi', 1, 41);
+    expect(config.language_hints).toBeUndefined();
+    expect(config.enable_language_identification).toBe(true);
+    expect(config.translation).toEqual({ type: 'one_way', target_language: 'vi' });
+  });
+
+  it('turns on speaker diarization only for two or more speakers and labels each utterance', async () => {
+    expect((await openWith('ja-JP', 'vi', 1, 42)).config.enable_speaker_diarization).toBe(false);
+    const { callbacks, socket, config } = await openWith('ja-JP', 'vi', 2, 43);
+    expect(config.enable_speaker_diarization).toBe(true);
+    socket.message({ tokens: [
+      { text: 'こんにちは', translation_status: 'original', speaker: '2', is_final: true },
+      { text: 'Xin chào', translation_status: 'translation', speaker: '2', is_final: true },
+    ] });
+    expect(callbacks.onTranscript.mock.calls.at(-1)?.[5]).toMatchObject({ speakerLabel: 'spk_2' });
+  });
+
+  it('rejects an input language Soniox does not support', async () => {
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new SonioxRecognizer(callbacks, 'am-ET');
+    await expect(recognizer.start(44)).rejects.toThrow('chưa hỗ trợ');
+  });
 });

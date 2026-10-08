@@ -1,3 +1,5 @@
+import { sonioxSpeakerLabel } from '@/shared/soniox';
+
 export interface SonioxToken {
   text: string;
   is_final?: boolean;
@@ -5,6 +7,7 @@ export interface SonioxToken {
   end_ms?: number;
   translation_status?: 'original' | 'translation';
   language?: string;
+  speaker?: string | number;
 }
 
 export interface SonioxSnapshot {
@@ -15,6 +18,7 @@ export interface SonioxSnapshot {
   revision: number;
   startMs?: number;
   endMs?: number;
+  speakerLabel?: string;
 }
 
 /** Final tokens are append-only; provisional tokens replace the previous hypothesis. */
@@ -27,7 +31,17 @@ export class SonioxTranscript {
   private revision = 0;
   private emitted = false;
 
-  constructor(private readonly connectionId: string) {}
+  constructor(private readonly connectionId: string, private readonly speakerCount = 1) {}
+
+  /** The speaker who said most of the original text in this utterance. */
+  private dominantSpeaker(tokens: SonioxToken[]): string | undefined {
+    const weight = new Map<string, number>();
+    for (const token of tokens) {
+      const label = sonioxSpeakerLabel(token.speaker, this.speakerCount);
+      if (label) weight.set(label, (weight.get(label) ?? 0) + token.text.trim().length);
+    }
+    return [...weight.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  }
 
   process(message: { tokens?: SonioxToken[]; finished?: boolean }): SonioxSnapshot[] {
     const snapshots: SonioxSnapshot[] = [];
@@ -47,6 +61,7 @@ export class SonioxTranscript {
         revision: ++this.revision,
         startMs: starts.length ? Math.min(...starts) : undefined,
         endMs: ends.length ? Math.max(...ends) : undefined,
+        speakerLabel: this.dominantSpeaker(origTokens),
       });
       this.emitted = true;
     };
