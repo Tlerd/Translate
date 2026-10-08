@@ -11,7 +11,7 @@ import {
   Sparkles,
   Languages,
   CheckCircle2,
-  ExternalLink,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { fetchModels } from '@/lib/api-client';
 import { loadSettings, saveSettings } from '@/storage/recordings';
@@ -53,22 +53,41 @@ export function AiSettings() {
     );
   }
 
-  const translationOrder = [
-    'google:gemini-3.1-flash-lite',
-    'google:gemini-3.5-flash-lite',
-    'openai:gpt-4o-mini',
-  ];
-  const translationModels =
-    modelData?.models
-      .filter((m) => m.allowedTasks.includes('translate') && m.enabled)
-      .sort((a, b) => translationOrder.indexOf(a.key) - translationOrder.indexOf(b.key)) || [];
   const summaryModels = modelData?.models.filter((m) => m.allowedTasks.includes('summarize')) || [];
   const imageModels = modelData?.models.filter((m) => m.allowedTasks.includes('image')) || [];
 
-  const selectedTranslationModel = translationModels.find(
-    (m) => m.key === settings.translationModel
-  );
-  const thinkingLevels = selectedTranslationModel?.thinkingLevels ?? [];
+  const getLanguageLabel = (code: string) => {
+    if (code === 'auto') return 'Tự động';
+    if (code === 'none') return 'Không dịch';
+    const inOpt = inputLanguages(settings.speechProvider).find((opt) => opt.code === code);
+    if (inOpt) return inOpt.name;
+    const outOpt = OUTPUT_LANGUAGES.find((opt) => opt.code === code);
+    if (outOpt) return outOpt.name;
+    return code;
+  };
+
+  const recentSourceLangs = (settings.recentSourceLanguages && settings.recentSourceLanguages.length > 0)
+    ? settings.recentSourceLanguages.slice(0, 3)
+    : ['en', 'vi', 'ja'];
+
+  const recentTargetLangs = (settings.recentTargetLanguages && settings.recentTargetLanguages.length > 0)
+    ? settings.recentTargetLanguages.slice(0, 3)
+    : ['vi', 'en', 'ko'];
+
+  const handleSwapLanguages = () => {
+    if (!settings) return;
+    const { sourceLanguage, targetLanguage } = settings;
+    if (sourceLanguage === 'auto' || targetLanguage === 'none') return;
+    const nextRecentSrc = [targetLanguage, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== targetLanguage)].slice(0, 3);
+    const nextRecentTgt = [sourceLanguage, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== sourceLanguage)].slice(0, 3);
+    setSettings({
+      ...settings,
+      sourceLanguage: targetLanguage,
+      targetLanguage: sourceLanguage,
+      recentSourceLanguages: nextRecentSrc,
+      recentTargetLanguages: nextRecentTgt,
+    });
+  };
 
   return (
     <div
@@ -209,14 +228,14 @@ export function AiSettings() {
         </div>
         <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-            Kiến trúc hai giai đoạn độc lập:
+            Kiến trúc trực tiếp từ giọng nói (Direct Speech Translation):
           </strong>
           <div style={{ marginTop: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span>
-              • <strong style={{ color: 'var(--accent)' }}>Phần A (Dịch sát nút):</strong> Dùng Gemini 3.1 Flash-Lite tối ưu độ trễ và chi phí theo từng câu nói live.
+              • <strong style={{ color: 'var(--accent)' }}>Phần A (Nhận diện & Dịch trực tiếp):</strong> Dùng Gemini 3.5 Translate Live hoặc Soniox stt-rt-v5 dịch trực tiếp từ sóng âm micro ra ngôn ngữ đích đã chọn, không cần mô hình dịch chữ trung gian.
             </span>
             <span>
-              • <strong style={{ color: 'var(--text-primary)' }}>Phần B (Tóm tắt & Ảnh):</strong> Dùng Gemini 3.8 Flash phân tích sâu và trích xuất điểm chính sau khi kết thúc buổi.
+              • <strong style={{ color: 'var(--text-primary)' }}>Phần B (Tóm tắt & Mindmap):</strong> Dùng Gemini phân tích sâu và trích xuất điểm chính sau khi kết thúc buổi ghi.
             </span>
           </div>
         </div>
@@ -262,60 +281,176 @@ export function AiSettings() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {/* Đầu vào chính */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Ngôn ngữ đầu vào chính:
-              </span>
-              <select
-                value={settings.sourceLanguage}
-                onChange={(e) => setSettings({ ...settings, sourceLanguage: e.target.value })}
-                style={{
-                  padding: '9px 12px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.86rem',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {inputLanguages(settings.speechProvider).map((opt) => (
-                  <option key={opt.code} value={opt.code}>
-                    {opt.name} ({opt.code})
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                Chọn &ldquo;Tự nhận biết ngôn ngữ&rdquo; để hệ thống tự động xác định giọng nói.
-              </span>
-            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Ngôn ngữ đầu vào chính:
+                </span>
+                <select
+                  value={settings.sourceLanguage}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    const nextRecent = [nextVal, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== nextVal)].slice(0, 3);
+                    setSettings({ ...settings, sourceLanguage: nextVal, recentSourceLanguages: nextRecent });
+                  }}
+                  style={{
+                    padding: '9px 12px',
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.86rem',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {inputLanguages(settings.speechProvider).map((opt) => (
+                    <option key={opt.code} value={opt.code}>
+                      {opt.name} ({opt.code})
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                  Chọn &ldquo;Tự nhận biết ngôn ngữ&rdquo; để hệ thống tự động xác định giọng nói.
+                </span>
+              </label>
+
+              {/* 3 ngôn ngữ đầu vào gần đây */}
+              {recentSourceLangs.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 500 }}>Gần đây:</span>
+                  {recentSourceLangs.map((code) => {
+                    const isSelected = settings.sourceLanguage === code;
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => {
+                          const nextRecent = [code, ...(settings.recentSourceLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
+                          setSettings({ ...settings, sourceLanguage: code, recentSourceLanguages: nextRecent });
+                        }}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '0.74rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                          backgroundColor: isSelected ? 'var(--accent-subtle, rgba(99, 102, 241, 0.12))' : 'var(--bg-primary)',
+                          color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontWeight: isSelected ? 600 : 400,
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={`Chọn nhanh ngôn ngữ đầu vào: ${getLanguageLabel(code)}`}
+                      >
+                        {getLanguageLabel(code)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Đầu ra chính */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Ngôn ngữ đầu ra chính:
-              </span>
-              <select
-                value={settings.targetLanguage}
-                onChange={(e) => setSettings({ ...settings, targetLanguage: e.target.value })}
-                style={{
-                  padding: '9px 12px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.86rem',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {OUTPUT_LANGUAGES.map((opt) => (
-                  <option key={opt.code} value={opt.code}>
-                    {opt.name} ({opt.code})
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                Chọn &ldquo;Không dịch&rdquo; nếu chỉ muốn chép lời thoại gốc mà không cần dịch.
-              </span>
-            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Ngôn ngữ đầu ra chính:
+                </span>
+                <select
+                  value={settings.targetLanguage}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    const nextRecent = [nextVal, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== nextVal)].slice(0, 3);
+                    setSettings({ ...settings, targetLanguage: nextVal, recentTargetLanguages: nextRecent });
+                  }}
+                  style={{
+                    padding: '9px 12px',
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.86rem',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {OUTPUT_LANGUAGES.map((opt) => (
+                    <option key={opt.code} value={opt.code}>
+                      {opt.name} ({opt.code})
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                  Chọn &ldquo;Không dịch&rdquo; nếu chỉ muốn chép lời thoại gốc mà không cần dịch.
+                </span>
+              </label>
+
+              {/* 3 ngôn ngữ đầu ra gần đây */}
+              {recentTargetLangs.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 500 }}>Gần đây:</span>
+                  {recentTargetLangs.map((code) => {
+                    const isSelected = settings.targetLanguage === code;
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => {
+                          const nextRecent = [code, ...(settings.recentTargetLanguages ?? []).filter((c) => c !== code)].slice(0, 3);
+                          setSettings({ ...settings, targetLanguage: code, recentTargetLanguages: nextRecent });
+                        }}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '0.74rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                          backgroundColor: isSelected ? 'var(--accent-subtle, rgba(99, 102, 241, 0.12))' : 'var(--bg-primary)',
+                          color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontWeight: isSelected ? 600 : 400,
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={`Chọn nhanh ngôn ngữ đầu ra: ${getLanguageLabel(code)}`}
+                      >
+                        {getLanguageLabel(code)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Swap languages button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-start', paddingTop: 4 }}>
+            <button
+              type="button"
+              onClick={handleSwapLanguages}
+              disabled={settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'}
+              title={
+                settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
+                  ? 'Không thể hoán đổi khi ngôn ngữ là Tự động hoặc Không dịch'
+                  : 'Hoán đổi ngôn ngữ đầu vào và đầu ra'
+              }
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                color: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
+                  ? 'var(--text-muted)'
+                  : 'var(--text-primary)',
+                cursor: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none'
+                  ? 'not-allowed'
+                  : 'pointer',
+                opacity: settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none' ? 0.6 : 1,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <ArrowLeftRight size={14} />
+              <span>Hoán đổi ngôn ngữ ({settings.sourceLanguage} ⇄ {settings.targetLanguage})</span>
+            </button>
           </div>
         </div>
 
@@ -380,10 +515,10 @@ export function AiSettings() {
                 fontSize: '0.88rem',
               }}
             >
-              <option value="google">Gemini 3.5 Transcribe Live · trực tiếp</option>
+              <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
+              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (Dịch 2 chiều Nhật - Việt)</option>
               <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
               <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
-              <option value="soniox">Soniox · stt-rt-v5 · trực tiếp</option>
               <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
             </select>
           </div>
@@ -395,12 +530,12 @@ export function AiSettings() {
           )}
           {settings.speechProvider === 'google' && (
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Live hiện chữ trực tiếp, hỗ trợ verbatim/smart. Kết nối được tự động gia hạn trước giới hạn 10 phút của Google.
+              Gemini 3.5 Translate Live nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Tự động gia hạn phiên kết nối cho các buổi học dài.
             </p>
           )}
           {settings.speechProvider === 'soniox' && (
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Nhận giọng Việt/Nhật trực tiếp; STT khoảng 0,12 USD/giờ phiên, phí thực tế theo token. Phí dịch chữ tính riêng theo model đang chọn. Key chỉ cấu hình phía server trong SONIOX_API_KEY. <a href="https://console.soniox.com" target="_blank" rel="noreferrer">Soniox Console</a>. Lưu rồi kiểm tra bên dưới.
+              Soniox stt-rt-v5 nhận diện và dịch hai chiều trực tiếp giữa Tiếng Nhật và Tiếng Việt từ sóng âm micro với độ trễ cực thấp. Key cấu hình trong SONIOX_API_KEY.
             </p>
           )}
           {settings.speechProvider === 'nemotron' && (
@@ -491,234 +626,7 @@ export function AiSettings() {
           </span>
         </div>
 
-        {/* 2. Model Dịch Sát Nút & Thinking Level */}
-        <div
-          style={{
-            padding: '20px 22px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Languages size={17} color="var(--accent)" />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  2. Mô hình dịch sát nút (Live Translation)
-                </h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Dịch trực tiếp từng câu nói theo luồng Server-Sent Events
-                </span>
-              </div>
-            </div>
-
-            <a
-              href="#translation-test"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: '0.82rem',
-                color: 'var(--accent)',
-                backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-full)',
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'all 0.15s',
-              }}
-            >
-              <span>Chạy thử model dịch này</span>
-              <ExternalLink size={12} />
-            </a>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="translation-model" style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Model dịch:
-            </label>
-            <select
-              id="translation-model"
-              aria-label="Model dịch:"
-              value={settings.translationModel}
-              onChange={(e) => {
-                const nextKey = e.target.value;
-                const nextModel = translationModels.find((m) => m.key === nextKey);
-                let nextThinking = settings.translationThinkingLevel;
-                if (
-                  nextThinking !== 'auto' &&
-                  !nextModel?.thinkingLevels?.includes(
-                    nextThinking as 'minimal' | 'low' | 'medium' | 'high'
-                  )
-                ) {
-                  nextThinking = 'auto';
-                }
-                setSettings({
-                  ...settings,
-                  translationModel: nextKey,
-                  translationThinkingLevel: nextThinking,
-                });
-              }}
-              style={{
-                padding: '10px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.88rem',
-              }}
-            >
-              {translationModels.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.name} {!m.configured ? '(Server chưa cấu hình API key)' : '✓ Đã sẵn sàng'}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {thinkingLevels.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label
-                htmlFor="translation-thinking"
-                style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 600 }}
-              >
-                Mức suy luận dịch (Thinking Level):
-              </label>
-              <select
-                id="translation-thinking"
-                aria-label="Suy luận:"
-                value={settings.translationThinkingLevel}
-                onChange={(e) =>
-                  setSettings({ ...settings, translationThinkingLevel: e.target.value })
-                }
-                style={{
-                  padding: '9px 14px',
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.86rem',
-                }}
-              >
-                <option value="auto">Tự động (Theo mặc định model)</option>
-                {thinkingLevels.map((level) => (
-                  <option key={level} value={level}>
-                    {
-                      (
-                        {
-                          minimal: 'Tối thiểu (Cực nhanh, tiết kiệm nhất)',
-                          low: 'Thấp (Khuyên dùng cho dịch)',
-                          medium: 'Vừa',
-                          high: 'Cao (Lập luận sâu)',
-                        } as const
-                      )[level]
-                    }
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label
-              htmlFor="translation-history-turns"
-              style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}
-            >
-              Số câu ngữ cảnh trước đó (Translation History Turns):
-            </label>
-            <select
-              id="translation-history-turns"
-              aria-label="Số câu ngữ cảnh trước đó:"
-              value={settings.translationHistoryTurns ?? 6}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  translationHistoryTurns: Number(e.target.value),
-                })
-              }
-              style={{
-                padding: '9px 14px',
-                backgroundColor: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.86rem',
-              }}
-            >
-              <option value={0}>0 câu · Từng câu độc lập (Tiết kiệm token & chi phí nhất)</option>
-              <option value={1}>1 câu · Ngữ cảnh ngắn</option>
-              <option value={2}>2 câu · Ngữ cảnh vừa</option>
-              <option value={3}>3 câu</option>
-              <option value={4}>4 câu</option>
-              <option value={5}>5 câu</option>
-              <option value={6}>6 câu · Tối đa (Mặc định)</option>
-            </select>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Giới hạn số cặp nguồn/bản dịch trong mỗi request, kể cả vế câu dịch sớm. Ngữ cảnh hỗ trợ đại từ nhưng tăng token. Chọn 0 để không gửi lịch sử; server có thể cắt thêm khi lịch sử quá dài.
-            </span>
-          </div>
-
-          <div
-            style={{
-              padding: '12px 16px',
-              backgroundColor: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <label
-              htmlFor="early-segment-toggle"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-              }}
-            >
-              <span>Dịch sớm từng vế câu ổn định (Cost-aware Early Segments)</span>
-              <input
-                id="early-segment-toggle"
-                type="checkbox"
-                checked={settings.earlySegmentTranslation ?? false}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    earlySegmentTranslation: e.target.checked,
-                  })
-                }
-                style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }}
-              />
-            </label>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Hiện bản dịch sớm khi một vế câu đã ổn định. Có thể tăng số request, lặp prompt/ngữ cảnh và phải dịch lại khi nhận dạng sửa nội dung. Tắt để ưu tiên ít token và bản dịch ổn định.
-            </span>
-          </div>
-        </div>
-
-        {/* 3. Khoảng Nghỉ Để Chốt Câu (Pause Duration) */}
+        {/* 2. Khoảng Nghỉ Để Chốt Câu (Pause Duration) */}
         <div
           style={{
             padding: '20px 22px',
@@ -747,10 +655,10 @@ export function AiSettings() {
             </div>
             <div>
               <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                3. Khoảng nghỉ để chốt câu (Silence Boundary)
+                2. Khoảng nghỉ để chốt câu (Silence Boundary)
               </h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Thời gian im lặng cần thiết trước khi gửi câu đi dịch
+                Thời gian im lặng cần thiết trước khi chốt câu hoàn chỉnh
               </span>
             </div>
           </div>
@@ -887,7 +795,7 @@ export function AiSettings() {
             </div>
             <div>
               <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                4. Tóm tắt & Minh họa (Phần B)
+                3. Tóm tắt & Minh họa (Phần B)
               </h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 Tạo bản ghi chép tổng kết bài học và hình ảnh minh họa

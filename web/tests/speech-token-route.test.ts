@@ -55,6 +55,17 @@ describe('POST /api/speech/token', () => {
       .toEqual({ languageCodes: ['vi-VN'], mode: 'SMART' });
   });
 
+  it('constrains Live credentials to translationConfig when targetLanguageCode is provided', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ languageCode: 'ja-JP', targetLanguageCode: 'vi-VN' }),
+    }));
+    expect(response.status).toBe(200);
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config.translationConfig).toEqual({
+      targetLanguageCode: 'vi-VN',
+      echoTargetLanguage: true,
+    });
+  });
+
   it('mints Flash Live credentials for input transcription without Transcribe-only options', async () => {
     const response = await POST(new Request('http://localhost/api/speech/token', {
       method: 'POST', body: JSON.stringify({ model: 'gemini-3.1-flash-live-preview', languageCode: 'ja-JP', transcriptionMode: 'smart' }),

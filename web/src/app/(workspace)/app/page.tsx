@@ -1,133 +1,111 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useRecording } from '@/features/recording/recording-context';
-import { RecorderToolbar } from '@/features/recording/recorder-toolbar';
-import { RecordingWorkspace } from '@/features/recording/recording-workspace';
-import { TranscriptPane } from '@/features/recording/transcript-pane';
-import { FloatingRecorderPill } from '@/features/recording/floating-recorder-pill';
+import React, { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { BookOpen, ArrowRight, AudioLines, Plus } from 'lucide-react';
+import { listRecordings } from '@/storage/recordings';
+import { dataEvent } from '@/storage/cloud-sync';
 import type { RecordingItem } from '@/shared/recording';
+import styles from './home-dashboard.module.css';
 
-function formatSessionTitle(date: Date = new Date()) {
-  const d = date.getDate().toString().padStart(2, '0');
-  const m = (date.getMonth() + 1).toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `note_${d}/${m} lúc ${hours} giờ ${minutes} phút`;
+function formatDisplayDate(iso: string) {
+  try {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  } catch {
+    return iso;
+  }
 }
 
-function WorkspaceContent() {
-  const { state, controller } = useRecording();
-  const searchParams = useSearchParams();
-  const action = searchParams.get('action');
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
+export default function HomePage() {
+  const [recordings, setRecordings] = useState<RecordingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadRecent = useCallback(async () => {
+    try {
+      const items = await listRecordings(10, 0, false);
+      setRecordings(items);
+    } catch (err) {
+      console.error('Lỗi tải danh sách bản ghi:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (action === 'new') {
-      setIsCreatingNew(true);
-    }
-  }, [action]);
+    void loadRecent();
+    const reload = () => { void loadRecent(); };
+    window.addEventListener(dataEvent, reload);
+    return () => window.removeEventListener(dataEvent, reload);
+  }, [loadRecent]);
 
-  const isRecording = state.state === 'recording';
+  return (
+    <div className={styles.dashboard}>
+      {/* Top Banner Message */}
+      <div className={styles.bannerRow}>
+        <p className={styles.bannerText}>
+          Chỉ cần lưu và ghi âm. Không bỏ lỡ bất kỳ insight nào.
+        </p>
+      </div>
 
-  // When recording starts, exit creating new state
-  useEffect(() => {
-    if (isRecording) {
-      setIsCreatingNew(false);
-    }
-  }, [isRecording]);
-
-  const mockActiveRecording: RecordingItem = {
-    id: state.recordingId || 'current',
-    title: state.recordingId ? `Buổi học #${state.recordingId}` : 'Buổi học mới',
-    createdAt: new Date().toISOString(),
-    mode: state.mode,
-    sourceLanguage: state.sourceLanguage,
-    targetLanguage: state.targetLanguage,
-    state: state.state,
-    durationMs: state.durationMs,
-    audioState: 'present',
-    config: {
-      translationModelKey: state.translationModelKey,
-      transcriptionMode: state.transcriptionMode,
-      speakerCount: state.speakerCount,
-    },
-  };
-
-  // LilysAI Focus Recording Mode (Ảnh 093649.png & 093837.png)
-  if (isRecording) {
-    const title = formatSessionTitle();
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-        {/* Central Focus Area */}
-        <div
-          style={{
-            maxWidth: 780,
-            width: '100%',
-            margin: '0 auto',
-            padding: '28px 20px 96px 20px',
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            overflow: 'hidden',
-          }}
-        >
-          {/* Big Session Title */}
-          <h1
-            style={{
-              fontSize: '1.8rem',
-              fontWeight: 700,
-              textAlign: 'center',
-              marginBottom: 28,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {title}
-          </h1>
-
-          {/* Real-time Bilingual Transcript Cards */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <TranscriptPane
-              captions={state.captions}
-              speakerCount={state.speakerCount}
-              targetLanguage={state.targetLanguage}
-              onSpeakerChange={(captionId, label) => controller.setCaptionSpeaker(captionId, label)}
-            />
+      {/* Section Thư viện */}
+      <section className={styles.section} aria-label="Thư viện bản ghi">
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitleGroup}>
+            <BookOpen size={20} color="var(--accent)" />
+            <h2 className={styles.sectionTitle}>Thư viện</h2>
           </div>
+          <Link href="/collections" className={styles.viewAllLink} title="Xem toàn bộ thư viện">
+            <span>Xem tất cả</span>
+            <ArrowRight size={15} />
+          </Link>
         </div>
 
-        {/* LilysAI Floating Dock Pill at the bottom */}
-        <FloatingRecorderPill />
-      </div>
-    );
-  }
+        {/* Dynamic 4 / 5 Columns Grid */}
+        <div className={styles.libraryGrid}>
+          {recordings.slice(0, 5).map((rec) => (
+            <Link
+              key={rec.id}
+              href={`/recordings/${rec.id}`}
+              className={styles.card}
+              title={rec.title}
+            >
+              <div className={styles.cardThumbnail}>
+                <span className={styles.cardBrandLogo}>Máy Dịch</span>
+              </div>
+              <div className={styles.cardBody}>
+                <div className={styles.cardAudioMeta}>
+                  <AudioLines size={13} color="var(--accent)" />
+                  <span>Ghi âm</span>
+                </div>
+                <h3 className={styles.cardTitle}>{rec.title}</h3>
+                <span className={styles.cardDate}>{formatDisplayDate(rec.createdAt)}</span>
+              </div>
+            </Link>
+          ))}
 
-  // Show top toolbar ONLY when creating new session OR when no recordings exist yet
-  const showTopToolbar = isCreatingNew || state.captions.length === 0 || action === 'new';
+          {/* Plus / New card if fewer than 5 recordings */}
+          {recordings.length < 5 && (
+            <Link
+              href="/new/source/record"
+              className={`${styles.card} ${styles.newCard}`}
+              title="Tạo buổi ghi mới"
+            >
+              <Plus size={28} />
+              <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>Thêm mới</span>
+            </Link>
+          )}
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      {showTopToolbar && <RecorderToolbar />}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <RecordingWorkspace
-          recording={mockActiveRecording}
-          captions={state.captions}
-          onSpeakerChange={(captionId, label) => controller.setCaptionSpeaker(captionId, label)}
-          speakerAssignmentBusy={state.speakerStatus === 'working'}
-          activeSegmentIndex={state.activeSegmentIndex}
-        />
-      </div>
+          {!loading && recordings.length === 0 && (
+            <div style={{ gridColumn: '1 / -1', padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Chưa có bản ghi nào. Bấm <strong>Thêm mới</strong> để bắt đầu phiên dịch đầu tiên của bạn!
+            </div>
+          )}
+        </div>
+      </section>
     </div>
-  );
-}
-
-export default function WorkspaceHomePage() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải...</div>}>
-      <WorkspaceContent />
-    </Suspense>
   );
 }

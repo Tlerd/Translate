@@ -34,4 +34,31 @@ describe('Soniox token snapshots', () => {
     expect(snapshots[0]).toMatchObject({ text: 'đúng', isFinal: true, startMs: 300, endMs: 500 });
     expect(new SonioxTranscript('c').process({ tokens: [{ text: 'guess' }], finished: true })).toEqual([]);
   });
+
+  it('processes parallel original and translation tokens per utterance', () => {
+    const transcript = new SonioxTranscript('trans-conn');
+    const snapshot1 = transcript.process({
+      tokens: [
+        { text: 'おはよう', translation_status: 'original' },
+        { text: 'Chào buổi sáng', translation_status: 'translation' },
+      ],
+    })[0];
+    expect(snapshot1).toMatchObject({
+      text: 'おはよう',
+      translation: 'Chào buổi sáng',
+      isFinal: false,
+    });
+    const snapshot2 = transcript.process({
+      tokens: [
+        { text: 'おはようございます', is_final: true, translation_status: 'original' },
+        { text: 'Chào buổi sáng ạ', is_final: true, translation_status: 'translation' },
+        { text: '<fin>' },
+      ],
+    })[0];
+    expect(snapshot2).toMatchObject({
+      text: 'おはようございます',
+      translation: 'Chào buổi sáng ạ',
+      isFinal: true,
+    });
+  });
 });

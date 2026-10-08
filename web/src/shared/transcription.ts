@@ -20,10 +20,10 @@ export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechMode
 }
 
 export function speechProviderName(provider: SpeechProvider): string {
-  if (provider === 'soniox') return 'Soniox · stt-rt-v5';
+  if (provider === 'soniox') return 'Soniox · stt-rt-v5 (Dịch 2 chiều Nhật - Việt)';
   if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
   if (provider === 'google-flash-live') return 'Gemini 3 Flash Live';
-  return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
+  return provider === 'google' ? 'Gemini 3.5 Translate Live' : 'Gemini 3.5 Transcribe';
 }
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type SpeakerCount = typeof SPEAKER_COUNTS[number];

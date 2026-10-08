@@ -123,4 +123,43 @@ describe('Soniox WebSocket lifecycle', () => {
     expect(socket.sent.filter((frame) => frame instanceof Uint8Array).reduce((sum, frame) => sum + (frame as Uint8Array).byteLength, 0)).toBe(32000);
     socket.message({ finished: true }); await testing; expect(done).toBe(true);
   });
+  it('enables native two-way translation and passes translated text to onTranscript', async () => {
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new SonioxRecognizer(callbacks, 'ja-JP', 'lesson-trans', 'vi-VN');
+    recognizers.push(recognizer);
+    FakeSocket.last = undefined;
+    const starting = recognizer.start(8);
+    await vi.waitFor(() => expect(FakeSocket.last).toBeDefined());
+    const socket = FakeSocket.last!;
+    socket.open();
+    await starting;
+
+    const setupPayload = JSON.parse(socket.sent[0] as string);
+    expect(setupPayload).toMatchObject({
+      api_key: 'temporary',
+      model: SONIOX_MODEL,
+      language_hints: ['ja', 'vi'],
+      translation: {
+        type: 'two_way',
+        language_a: 'ja',
+        language_b: 'vi',
+      },
+    });
+
+    socket.message({
+      tokens: [
+        { text: 'こんにちは', translation_status: 'original' },
+        { text: 'Xin chào', translation_status: 'translation' },
+      ],
+    });
+    expect(callbacks.onTranscript).toHaveBeenCalledWith(
+      'こんにちは',
+      false,
+      8,
+      expect.any(String),
+      1,
+      expect.any(Object),
+      'Xin chào'
+    );
+  });
 });

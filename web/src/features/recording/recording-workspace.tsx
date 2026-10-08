@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FileText, Pencil, Sparkles, Volume2, Columns2 } from 'lucide-react';
 import { TranscriptPane } from './transcript-pane';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
@@ -32,6 +32,9 @@ export function RecordingWorkspace({
 }: RecordingWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary'>('transcript');
   const [viewMode, setViewMode] = useState<'split' | 'tabs'>('split');
+  const [splitPercent, setSplitPercent] = useState<number>(48);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
   const [workspaceCaptions, setWorkspaceCaptions] = useState(captions);
   const [highlightCaptionId, setHighlightCaptionId] = useState<number | null>(null);
@@ -40,6 +43,75 @@ export function RecordingWorkspace({
   const [currentSourceHash, setCurrentSourceHash] = useState<string | null>(null);
   const recordingInProgress = recording.state === 'recording';
   const summaryIsStale = Boolean(summary && currentSourceHash && summary.sourceHash !== currentSourceHash);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('split_view_percent');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 25 && parsed <= 75) {
+          setSplitPercent(parsed);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setViewMode('tabs');
+    }
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleTouchStart = () => {
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handlePointerMove = (clientX: number) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const rawPct = ((clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(75, Math.max(25, rawPct));
+      setSplitPercent(clamped);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handlePointerMove(e.clientX);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) {
+        handlePointerMove(e.touches[0].clientX);
+      }
+    };
+
+    const handlePointerUp = () => {
+      setIsDragging(false);
+      try {
+        localStorage.setItem('split_view_percent', String(splitPercent));
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handlePointerUp);
+    };
+  }, [isDragging, splitPercent]);
 
   useEffect(() => {
     setSummary(initialSummary);
@@ -102,7 +174,7 @@ export function RecordingWorkspace({
                 className={`${styles.tabPill} ${activeTab === 'transcript' ? styles.tabPillActive : ''}`}
               >
                 <FileText size={15} />
-                <span>Bản dịch ({workspaceCaptions.length})</span>
+                <span>Bản gốc ({workspaceCaptions.length})</span>
               </button>
 
               <button
@@ -180,10 +252,31 @@ export function RecordingWorkspace({
       {/* Main View Area */}
       <div className={styles.workspaceContent}>
         {viewMode === 'split' && !recordingInProgress ? (
-          /* LilysAI Split-View Two Columns */
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(360px, 1.2fr)', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-            {/* Left: Transcript */}
-            <div style={{ borderRight: '1px solid var(--border-color)', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          /* LilysAI Split-View Resizable Two Columns */
+          <div
+            ref={containerRef}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              height: '100%',
+              minHeight: 0,
+              width: '100%',
+              overflow: 'hidden',
+              userSelect: isDragging ? 'none' : 'auto',
+            }}
+          >
+            {/* Left: Transcript (Bản gốc) */}
+            <div
+              style={{
+                width: `${splitPercent}%`,
+                minWidth: 260,
+                height: '100%',
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
               <TranscriptPane
                 captions={workspaceCaptions}
                 highlightCaptionId={highlightCaptionId}
@@ -193,8 +286,47 @@ export function RecordingWorkspace({
               />
             </div>
 
-            {/* Right: AI Summary Workspace */}
-            <div style={{ height: '100%', minHeight: 0, overflowY: 'auto' }}>
+            {/* Resizable Divider */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
+              title="Kéo sang hai bên để điều chỉnh tỷ lệ hiển thị (25% - 75%)"
+              style={{
+                width: 8,
+                cursor: 'col-resize',
+                backgroundColor: isDragging ? 'var(--color-primary, #6366f1)' : 'var(--border-color)',
+                position: 'relative',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: isDragging ? 'none' : 'background-color 0.2s',
+                zIndex: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: 2,
+                  height: 28,
+                  borderRadius: 2,
+                  backgroundColor: isDragging ? '#ffffff' : 'var(--text-muted)',
+                  opacity: 0.8,
+                }}
+              />
+            </div>
+
+            {/* Right: AI Summary Workspace (Tóm tắt) */}
+            <div
+              style={{
+                flex: 1,
+                minWidth: 260,
+                height: '100%',
+                minHeight: 0,
+                overflowY: 'auto',
+              }}
+            >
               <SummaryPanel
                 recordingId={recording.id}
                 captions={workspaceCaptions}

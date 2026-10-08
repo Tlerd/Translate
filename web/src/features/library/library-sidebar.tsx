@@ -272,7 +272,7 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
               type="button"
               onClick={() => {
                 setIsAddMenuOpen(false);
-                router.push('/app?action=new');
+                router.push('/new/source/record');
                 onCloseMobile?.();
               }}
               style={{
@@ -476,22 +476,36 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
               borderRadius: 'var(--radius-sm)',
             }}
           >
-            {/* Click to expand/collapse Library tree */}
             <div
-              onClick={() => setIsLibraryOpen((v) => !v)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                cursor: 'pointer',
                 color: 'var(--text-primary)',
                 fontSize: '0.84rem',
                 fontWeight: 600,
                 userSelect: 'none',
               }}
             >
-              {isLibraryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <span>Thư viện</span>
+              <span
+                onClick={() => setIsLibraryOpen((v) => !v)}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title={isLibraryOpen ? 'Thu gọn cây thư mục' : 'Mở rộng cây thư mục'}
+              >
+                {isLibraryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+              <Link
+                href="/collections"
+                onClick={onCloseMobile}
+                style={{
+                  color: pathname === '/collections' ? 'var(--accent)' : 'inherit',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+                title="Mở toàn bộ Thư viện"
+              >
+                Thư viện
+              </Link>
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 400 }}>
                 ({recordings.length})
               </span>

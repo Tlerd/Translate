@@ -28,6 +28,7 @@ export interface RecordingItem {
   deletedAt?: string; // ISO string when moved to trash
   audioMimeType?: string;
   folder?: string;
+  category?: 'inbox' | 'priority' | 'archive';
   config: {
     translationModelKey: string;
     summaryModelKey?: string;
@@ -134,6 +135,8 @@ export interface AppSettings {
   readingPauseMs: number;
   translationHistoryTurns: number;
   earlySegmentTranslation: boolean;
+  recentSourceLanguages?: string[];
+  recentTargetLanguages?: string[];
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -152,6 +155,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   readingPauseMs: 900,
   translationHistoryTurns: 6,
   earlySegmentTranslation: false,
+  recentSourceLanguages: ['ja-JP', 'en-US', 'ko-KR'],
+  recentTargetLanguages: ['vi', 'en', 'zh-Hans'],
 };
 
 export interface WebExportBundle {

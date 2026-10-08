@@ -3,17 +3,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PanelLeft, Square, Settings, Radio, BarChart3, Plus } from 'lucide-react';
+import { PanelLeft, Square, Radio, Plus } from 'lucide-react';
 import styles from './app-shell.module.css';
 import { LibrarySidebar } from '@/features/library/library-sidebar';
 import { useRecording } from '@/features/recording/recording-context';
-import { ThemeToggle } from './theme-toggle';
+import { MobileBottomNav } from './mobile-nav';
 
-export function AppShell({ children, accountControls }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
+export function AppShell({ children }: { children: React.ReactNode; accountControls?: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { state: recordingState, stopRecording } = useRecording();
   const pathname = usePathname();
   const isRecording = recordingState.state === 'recording';
+  const isRecordingDetail = pathname.startsWith('/recordings/');
 
   // On initial mount on small screens, collapse sidebar
   useEffect(() => {
@@ -52,7 +53,11 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
   };
 
   return (
-    <div className={styles.shell}>
+    <div
+      className={styles.shell}
+      data-sidebar-open={sidebarOpen ? 'true' : 'false'}
+      data-recording-detail={isRecordingDetail ? 'true' : 'false'}
+    >
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -90,18 +95,18 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
                 <PanelLeft size={18} />
               </button>
             )}
-            <Link href="/app" className={styles.appTitle} title="Máy Dịch Lớp Học" aria-label="Máy Dịch Lớp Học">
+            <Link href="/app" className={styles.appTitle} title="Máy Dịch" aria-label="Máy Dịch">
               <span className={styles.appLogo}>
                 <Radio size={18} color="var(--accent)" />
               </span>
-              <span className={styles.appTitleText}>Máy Dịch Lớp Học</span>
+              <span className={styles.appTitleText}>Máy Dịch</span>
             </Link>
           </div>
 
           <div className={styles.topBarRight}>
             {/* LilysAI style + Thêm mới button on TopBar */}
             <Link
-              href="/app?action=new"
+              href="/new/source/record"
               className={styles.topBarNewBtn}
               title="Bắt đầu buổi ghi mới"
             >
@@ -124,35 +129,13 @@ export function AppShell({ children, accountControls }: { children: React.ReactN
                 </button>
               </div>
             )}
-
-            {accountControls && (
-              <div className={styles.accountWrapper}>
-                {accountControls}
-              </div>
-            )}
-
-            <ThemeToggle />
-
-            <Link
-              href="/usage"
-              className={styles.toggleButton}
-              title="Chi phí dịch"
-              aria-label="Chi phí dịch"
-            >
-              <BarChart3 size={18} />
-            </Link>
-
-            <Link
-              href="/settings"
-              className={styles.toggleButton}
-              title="Cấu hình AI"
-            >
-              <Settings size={18} />
-            </Link>
           </div>
         </header>
 
         <main className={styles.contentBody}>{children}</main>
+
+        {/* Mobile Bottom Navigation */}
+        <MobileBottomNav />
       </div>
     </div>
   );

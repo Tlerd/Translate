@@ -52,6 +52,18 @@ export async function POST(req: Request): Promise<Response> {
     return makeErrorResponse(400, 'INTERNAL_ERROR', 'Mã ngôn ngữ không hợp lệ.');
   }
 
+  const targetLanguageCode =
+    typeof body === 'object' && body !== null && 'targetLanguageCode' in body
+      ? (body as { targetLanguageCode?: unknown }).targetLanguageCode
+      : undefined;
+  if (
+    targetLanguageCode !== undefined &&
+    targetLanguageCode !== 'none' &&
+    (typeof targetLanguageCode !== 'string' || !canonicalLanguage(targetLanguageCode))
+  ) {
+    return makeErrorResponse(400, 'INTERNAL_ERROR', 'Mã ngôn ngữ đích không hợp lệ.');
+  }
+
   const transcriptionMode = typeof body === 'object' && body !== null && 'transcriptionMode' in body ? body.transcriptionMode : 'verbatim';
   if (transcriptionMode !== 'verbatim' && transcriptionMode !== 'smart') return makeErrorResponse(400, 'INTERNAL_ERROR', 'Chế độ phiên âm không hợp lệ.');
 
@@ -73,7 +85,12 @@ export async function POST(req: Request): Promise<Response> {
         expireTime: new Date(now + SESSION_LIMIT_MS).toISOString(),
         liveConnectConstraints: {
           model,
-          config: liveSpeechConfig(model, transcriptionMode, languageCode as string | undefined),
+          config: liveSpeechConfig(
+            model,
+            transcriptionMode,
+            languageCode as string | undefined,
+            targetLanguageCode as string | undefined
+          ),
         },
       },
     });

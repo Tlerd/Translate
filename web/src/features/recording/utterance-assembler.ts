@@ -7,6 +7,7 @@ export interface TranscriptSnapshot {
   captionId: number;
   revision: number;
   text: string;
+  translation?: string;
   isFinal: boolean;
   startMs: number;
   endMs: number;
@@ -17,6 +18,7 @@ export type SnapshotListener = (snapshot: TranscriptSnapshot) => void;
 interface ReadingPart {
   providerItemId: string;
   text: string;
+  translation?: string;
   revision: number;
   isFinal: boolean;
   startMs: number;
@@ -100,6 +102,7 @@ export class LiveUtteranceAssembler {
     const nextPart: ReadingPart = {
       providerItemId: snapshot.providerItemId,
       text: snapshot.text,
+      translation: snapshot.translation,
       revision: snapshot.revision,
       isFinal: snapshot.isFinal,
       startMs: snapshot.startMs,
@@ -111,6 +114,11 @@ export class LiveUtteranceAssembler {
       return next;
     }
     return [...parts, nextPart].sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+  }
+
+  private combineReadingTranslations(parts: ReadingPart[]): string | undefined {
+    const texts = parts.map((part) => part.translation).filter((t): t is string => !!t && !!t.trim());
+    return texts.length ? texts.join(' ') : undefined;
   }
 
   private rememberFinalizedReadingCaption(caption: FinalizedReadingCaption): void {
@@ -210,6 +218,7 @@ export class LiveUtteranceAssembler {
         captionId: corrected.captionId,
         revision: corrected.revision,
         text: this.combineReadingParts(corrected.parts),
+        translation: this.combineReadingTranslations(corrected.parts),
         isFinal: true,
         startMs: corrected.startMs,
         endMs: corrected.endMs,
@@ -224,6 +233,7 @@ export class LiveUtteranceAssembler {
     this.readingParts = this.upsertReadingPart(this.readingParts, snapshot);
     this.currentRevision++;
     const fullText = this.combineReadingParts(this.readingParts);
+    const fullTranslation = this.combineReadingTranslations(this.readingParts);
 
     if (!snapshot.isFinal) {
       this.emit({
@@ -233,6 +243,7 @@ export class LiveUtteranceAssembler {
         captionId: this.captionCounter,
         revision: this.currentRevision,
         text: fullText,
+        translation: fullTranslation,
         isFinal: false,
         startMs: this.activeStartMs,
         endMs: this.activeEndMs,
@@ -245,6 +256,7 @@ export class LiveUtteranceAssembler {
         captionId: this.captionCounter,
         revision: this.currentRevision,
         text: fullText,
+        translation: fullTranslation,
         // Mark as non-final in UI/scheduler so user can continue reading the sentence!
         isFinal: false,
         startMs: this.activeStartMs,
@@ -296,6 +308,7 @@ export class LiveUtteranceAssembler {
       captionId: this.captionCounter,
       revision: this.currentRevision,
       text: fullText,
+      translation: this.combineReadingTranslations(this.readingParts),
       isFinal: true,
       startMs: this.activeStartMs,
       endMs: this.activeEndMs,

@@ -45,6 +45,7 @@ export async function createRecording(params: CreateRecordingParams): Promise<Re
     state: 'recording',
     durationMs: 0,
     audioState: 'missing',
+    category: 'inbox',
     config: {
       translationModelKey: params.translationModelKey,
       summaryModelKey: params.summaryModelKey,
@@ -480,6 +481,22 @@ export async function loadSettings(): Promise<AppSettings> {
       speechProvider: normalizeSpeechProvider(map.get('speechProvider')),
       transcriptionMode: normalizeTranscriptionMode(map.get('transcriptionMode')),
       speakerCount: normalizeSpeakerCount(map.get('speakerCount')),
+      recentSourceLanguages: (() => {
+        try {
+          const raw = map.get('recentSourceLanguages');
+          return raw ? JSON.parse(raw) : DEFAULT_SETTINGS.recentSourceLanguages;
+        } catch {
+          return DEFAULT_SETTINGS.recentSourceLanguages;
+        }
+      })(),
+      recentTargetLanguages: (() => {
+        try {
+          const raw = map.get('recentTargetLanguages');
+          return raw ? JSON.parse(raw) : DEFAULT_SETTINGS.recentTargetLanguages;
+        } catch {
+          return DEFAULT_SETTINGS.recentTargetLanguages;
+        }
+      })(),
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -490,7 +507,7 @@ export const settingsUpdatedEvent = 'may-dich:settings-updated';
 
 export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
   const db = getDb();
-  const normalized: Partial<AppSettings> = { ...settings };
+  const normalized: Record<string, unknown> = { ...settings };
   if (settings.speechProvider !== undefined) normalized.speechProvider = normalizeSpeechProvider(settings.speechProvider);
   if (settings.transcriptionMode !== undefined) normalized.transcriptionMode = normalizeTranscriptionMode(settings.transcriptionMode);
   if (settings.speakerCount !== undefined) normalized.speakerCount = normalizeSpeakerCount(settings.speakerCount);
@@ -507,6 +524,12 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
       settings.earlySegmentTranslation,
       DEFAULT_SETTINGS.earlySegmentTranslation
     );
+  }
+  if (settings.recentSourceLanguages !== undefined) {
+    normalized.recentSourceLanguages = JSON.stringify(settings.recentSourceLanguages.slice(0, 3));
+  }
+  if (settings.recentTargetLanguages !== undefined) {
+    normalized.recentTargetLanguages = JSON.stringify(settings.recentTargetLanguages.slice(0, 3));
   }
   await db.transaction('rw', db.settings, async () => {
     for (const [key, value] of Object.entries(normalized)) {
@@ -590,5 +613,60 @@ export async function renameCustomFolder(oldName: string, newName: string): Prom
   for (const rec of matchingRecordings) {
     await db.recordings.update(rec.id, { folder: cleanNew });
   }
+}
+
+export async function updateRecordingCategory(
+  id: string,
+  category: 'inbox' | 'priority' | 'archive'
+): Promise<void> {
+  const db = getDb();
+  await db.recordings.update(id, { category });
+}
+
+export async function batchUpdateCategory(
+  ids: string[],
+  category: 'inbox' | 'priority' | 'archive'
+): Promise<void> {
+  const db = getDb();
+  await db.transaction('rw', db.recordings, async () => {
+    for (const id of ids) {
+      await db.recordings.update(id, { category });
+    }
+  });
+}
+
+export async function batchUpdateFolder(
+  ids: string[],
+  folder: string | null
+): Promise<void> {
+  const db = getDb();
+  const clean = folder ? folder.trim() : undefined;
+  await db.transaction('rw', db.recordings, async () => {
+    for (const id of ids) {
+      await db.recordings.update(id, { folder: clean });
+    }
+  });
+}
+
+export async function batchSoftDelete(ids: string[]): Promise<void> {
+  const db = getDb();
+  const now = new Date().toISOString();
+  await db.transaction('rw', db.recordings, async () => {
+    for (const id of ids) {
+      await db.recordings.update(id, { deletedAt: now });
+    }
+  });
+}
+
+export async function pushRecentLanguage(
+  type: 'source' | 'target',
+  langCode: string
+): Promise<void> {
+  if (!langCode || langCode === 'none') return;
+  const current = await loadSettings();
+  const key = type === 'source' ? 'recentSourceLanguages' : 'recentTargetLanguages';
+  const existing = (current[key] ?? []).filter((c) => c !== langCode);
+  const updated = [langCode, ...existing].slice(0, 3);
+  await saveSettings({ [key]: updated });
 }
 

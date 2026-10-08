@@ -27,6 +27,23 @@ export function sonioxLanguage(code: string): 'ja' | 'vi' | null {
   return null;
 }
 
+export interface SonioxTranslationConfig {
+  type: 'two_way' | 'one_way';
+  language_a: 'ja' | 'vi';
+  language_b: 'vi' | 'ja';
+}
+
+export function sonioxTranslationPair(sourceCode: string, targetCode?: string): SonioxTranslationConfig | null {
+  const src = sonioxLanguage(sourceCode);
+  const tgt = targetCode ? sonioxLanguage(targetCode) : null;
+  if (!src || !tgt || src === tgt) return null;
+  return {
+    type: 'two_way',
+    language_a: src,
+    language_b: tgt,
+  };
+}
+
 export function sonioxErrorRetryable(type: string | undefined, status: number): boolean {
   if (type === 'temp_api_key_session_expired' || type === 'max_duration_reached') return true;
   if (type && /^(unauthenticated|permission_denied|invalid_request|model_not_available|organization_balance_exhausted|organization_monthly_budget_exhausted|project_monthly_budget_exhausted)$/.test(type)) return false;

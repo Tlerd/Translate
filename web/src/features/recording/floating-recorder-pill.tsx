@@ -1,18 +1,33 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRecording } from './recording-context';
-import { OUTPUT_LANGUAGES } from '@/shared/languages';
 import styles from './floating-recorder-pill.module.css';
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, Square, ArrowLeftRight } from 'lucide-react';
 
 interface FloatingRecorderPillProps {
   onStop?: () => void;
 }
 
+function shortLangLabel(code: string): string {
+  if (!code || code === 'none') return '--';
+  if (code.startsWith('ja')) return 'JA';
+  if (code.startsWith('vi')) return 'VI';
+  if (code.startsWith('en')) return 'EN';
+  if (code.startsWith('zh')) return 'ZH';
+  if (code.startsWith('ko')) return 'KO';
+  if (code.startsWith('fr')) return 'FR';
+  if (code.startsWith('de')) return 'DE';
+  if (code.startsWith('es')) return 'ES';
+  return code.slice(0, 2).toUpperCase();
+}
+
 export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
-  const { state, stopRecording, pauseApi, resumeApi, setLanguages } = useRecording();
+  const router = useRouter();
+  const { state, stopRecording, pauseApi, resumeApi, swapLanguages } = useRecording();
   const [stopping, setStopping] = useState(false);
+  const [swapping, setSwapping] = useState(false);
 
   if (state.state !== 'recording') return null;
 
@@ -26,12 +41,30 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
   const handleStop = async () => {
     if (stopping) return;
     setStopping(true);
+    const recordingId = state.recordingId;
     try {
       await stopRecording();
       onStop?.();
+      if (recordingId) {
+        router.push(`/recordings/${recordingId}`);
+      } else {
+        router.push('/collections');
+      }
     } catch (err) {
       console.error('Lỗi dừng thu:', err);
       setStopping(false);
+    }
+  };
+
+  const handleSwap = async () => {
+    if (swapping) return;
+    setSwapping(true);
+    try {
+      await swapLanguages();
+    } catch (err) {
+      console.error('Lỗi đổi hướng ngôn ngữ:', err);
+    } finally {
+      setSwapping(false);
     }
   };
 
@@ -41,6 +74,9 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
   const h2 = Math.round(10 + vol * 14);
   const h3 = Math.round(14 + vol * 16);
   const h4 = Math.round(8 + vol * 12);
+
+  const srcLabel = shortLangLabel(state.sourceLanguage);
+  const tgtLabel = shortLangLabel(state.targetLanguage);
 
   return (
     <div className={styles.pillContainer} role="region" aria-label="Thanh điều khiển thu âm">
@@ -55,19 +91,22 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
       {/* Timer */}
       <span className={styles.timer}>{formatTimer(state.durationMs)}</span>
 
-      {/* Target Language Dropdown (including "Không dịch") */}
-      <select
-        className={styles.langSelect}
-        value={state.targetLanguage}
-        onChange={(e) => setLanguages(state.sourceLanguage, e.target.value)}
-        aria-label="Chọn ngôn ngữ đầu ra"
+      {/* Divider */}
+      <span className={styles.divider} />
+
+      {/* Nút hoán đổi ngôn ngữ */}
+      <button
+        type="button"
+        className={styles.swapBtn}
+        onClick={handleSwap}
+        disabled={swapping}
+        title="Hoán đổi ngôn ngữ đầu vào và đầu ra"
+        aria-label={`Hoán đổi ngôn ngữ ${srcLabel} và ${tgtLabel}`}
       >
-        {OUTPUT_LANGUAGES.map((lang) => (
-          <option key={lang.code} value={lang.code}>
-            {lang.name}
-          </option>
-        ))}
-      </select>
+        <span className={styles.langBadge}>{srcLabel}</span>
+        <ArrowLeftRight size={13} />
+        <span className={styles.langBadge}>{tgtLabel}</span>
+      </button>
 
       {/* Divider */}
       <span className={styles.divider} />
@@ -78,7 +117,7 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
           type="button"
           onClick={() => void resumeApi()}
           className={styles.pauseBtn}
-          title="Tiếp tục gửi API"
+          title="Tiếp tục nhận giọng và dịch"
         >
           <Play size={13} fill="#fff" />
           <span>Tiếp tục</span>
@@ -88,25 +127,26 @@ export function FloatingRecorderPill({ onStop }: FloatingRecorderPillProps) {
           type="button"
           onClick={() => void pauseApi()}
           className={styles.pauseBtn}
-          title="Tạm dừng gửi API"
+          title="Dừng gửi âm thanh tới API (vẫn tiếp tục ghi âm)"
         >
           <Pause size={13} fill="#fff" />
-          <span>Tạm dừng</span>
+          <span>Dừng API</span>
         </button>
       )}
 
       {/* Divider */}
       <span className={styles.divider} />
 
-      {/* Stop button (Red) */}
+      {/* Icon vuông đỏ dừng lại ở dưới */}
       <button
         type="button"
         onClick={handleStop}
         disabled={stopping}
-        className={styles.stopBtn}
-        title="Dừng lại và kết thúc buổi thu"
+        className={styles.stopSquareBtn}
+        title="Kết thúc buổi ghi và chốt audio"
       >
-        {stopping ? 'Đang dừng…' : 'Dừng lại'}
+        <Square size={13} fill="#ef4444" color="#ef4444" />
+        <span>{stopping ? 'Đang dừng…' : 'Dừng lại'}</span>
       </button>
     </div>
   );

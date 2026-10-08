@@ -1,0 +1,219 @@
+.container {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 32px 20px 80px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 7px 16px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.backBtn:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.pageTitle {
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.tabsContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sourceTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sourceTabActive {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
+  border-color: var(--text-primary);
+}
+
+.badgeBeta {
+  font-size: 0.68rem;
+  padding: 1px 5px;
+  background-color: rgba(234, 179, 8, 0.2);
+  color: #eab308;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.sectionBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sectionDesc {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.textareaWrapper {
+  position: relative;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px 36px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease;
+}
+
+.textareaWrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.contextInput {
+  width: 100%;
+  min-height: 140px;
+  background: none;
+  border: none;
+  outline: none;
+  resize: vertical;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.charCounter {
+  position: absolute;
+  bottom: 10px;
+  left: 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.quotaCard {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quotaHeader {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.quotaNotice {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.quotaStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.startBtnWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.startBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 48px;
+  border-radius: var(--radius-full);
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.startBtn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-2px);
+}
+
+.startBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 20px 14px 72px 14px;
+  }
+  .startBtn {
+    width: 100%;
+    padding: 14px 20px;
+  }
+}

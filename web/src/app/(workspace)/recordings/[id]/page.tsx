@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Calendar, BookOpen, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar } from 'lucide-react';
 import { getRecording, getCaptions, getSummary } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
+import { InlineAudioPlayer } from '@/features/recording/inline-audio-player';
+import { MobileRecordingDetail } from '@/features/recording/mobile-recording-detail';
 import { fetchTranslationUsage } from '@/lib/api-client';
 import { formatTokens, formatUsd, formatSaigonDate } from '@/features/usage/usage-format';
 import type { RecordingItem, CaptionItem, SummaryItem } from '@/shared/recording';
@@ -23,6 +25,16 @@ export default function RecordingDetailPage({
   const [summary, setSummary] = useState<SummaryItem | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [costText, setCostText] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -137,23 +149,36 @@ export default function RecordingDetailPage({
     }
   };
 
+  if (isMobile) {
+    return (
+      <MobileRecordingDetail
+        recording={recording}
+        captions={captions}
+        summary={summary}
+        onSummaryUpdated={setSummary}
+        costText={costText}
+      />
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Session Title Header */}
+      {/* Session Title Header with LilysAI Player */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 16px',
+          padding: '10px 16px',
           backgroundColor: 'var(--bg-secondary)',
           borderBottom: '1px solid var(--border-color)',
           gap: 12,
+          flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <Link
-            href="/app"
+            href="/collections"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -162,38 +187,36 @@ export default function RecordingDetailPage({
               height: 32,
               borderRadius: 'var(--radius-sm)',
               backgroundColor: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
               color: 'var(--text-secondary)',
             }}
-            title="Quay lại"
+            title="Quay lại Thư viện"
           >
             <ArrowLeft size={16} />
           </Link>
 
-          <div>
-            <h2 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{recording.title}</h2>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {recording.title}
+            </h2>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
-                fontSize: '0.78rem',
+                gap: 8,
+                fontSize: '0.74rem',
                 color: 'var(--text-muted)',
                 marginTop: 2,
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Calendar size={12} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Calendar size={11} />
                 {formatDate(recording.createdAt)}
               </span>
               <span>•</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Clock size={12} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Clock size={11} />
                 {formatDuration(recording.durationMs)}
-              </span>
-              <span>•</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {recording.mode === 'lecture' ? <BookOpen size={12} /> : <MessageSquare size={12} />}
-                {recording.mode === 'lecture' ? 'Giảng bài' : 'Hội thoại'}
               </span>
               {costText && (
                 <>
@@ -204,6 +227,9 @@ export default function RecordingDetailPage({
             </div>
           </div>
         </div>
+
+        {/* LilysAI Integrated Audio Player in Header */}
+        <InlineAudioPlayer recordingId={recording.id} durationMs={recording.durationMs} />
       </div>
 
       {/* Main Workspace Body */}

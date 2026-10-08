@@ -43,6 +43,8 @@ export class GeminiLiveRecognizer {
   private inputText = '';
   private locallyClosedFlashInput = false;
   private heardSpeech = false;
+  private currentTranslation: string | undefined = undefined;
+  private lastSourceText = '';
   private stopPromise: Promise<void> | null = null;
   private drainResolver: (() => void) | null = null;
   private sessionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,7 +53,13 @@ export class GeminiLiveRecognizer {
     transcriptEvents: 0, maxBufferedBytes: 0, lastError: null,
   };
 
-  constructor(callbacks: SpeechRecognitionCallbacks, languageCode = 'ja-JP', private transcriptionMode: TranscriptionMode = 'verbatim', private model: LiveSpeechModel = LIVE_TRANSCRIPTION_MODEL) {
+  constructor(
+    callbacks: SpeechRecognitionCallbacks,
+    languageCode = 'ja-JP',
+    private transcriptionMode: TranscriptionMode = 'verbatim',
+    private model: LiveSpeechModel = LIVE_TRANSCRIPTION_MODEL,
+    private targetLanguageCode?: string
+  ) {
     this.callbacks = callbacks;
     this.languageCode = languageCode;
   }
@@ -61,7 +69,7 @@ export class GeminiLiveRecognizer {
   }
 
   /** Resolves only after Gemini acknowledges the constrained session setup. */
-  public async start(epoch: number, languageCode = this.languageCode): Promise<void> {
+  public async start(epoch: number, languageCode = this.languageCode, targetLanguageCode = this.targetLanguageCode): Promise<void> {
     if (this.socket || this.diagnosticsValue.status === 'connecting' || this.diagnosticsValue.status === 'listening' || this.diagnosticsValue.status === 'draining') {
       throw new Error('Gemini recognizer is already active.');
     }
@@ -70,10 +78,13 @@ export class GeminiLiveRecognizer {
     this.connectionId = `${Date.now().toString(36)}-${(++connectionSequence).toString(36)}`;
     this.epoch = epoch;
     this.languageCode = languageCode;
+    this.targetLanguageCode = targetLanguageCode;
     this.utteranceCounter = 0;
     this.activeUtteranceId = null;
     this.revision = 0;
     this.inputText = '';
+    this.currentTranslation = undefined;
+    this.lastSourceText = '';
     this.locallyClosedFlashInput = false;
     this.heardSpeech = false;
     this.resampler = null;
@@ -86,7 +97,12 @@ export class GeminiLiveRecognizer {
     const response = await fetch('/api/speech/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ languageCode, transcriptionMode: this.transcriptionMode, model: this.model }),
+      body: JSON.stringify({
+        languageCode,
+        transcriptionMode: this.transcriptionMode,
+        model: this.model,
+        ...(this.targetLanguageCode ? { targetLanguageCode: this.targetLanguageCode } : {}),
+      }),
       cache: 'no-store',
       signal: AbortSignal.timeout(12_000),
     });
@@ -118,7 +134,12 @@ export class GeminiLiveRecognizer {
       };
       socket.onopen = () => {
         if (generation !== this.connectionGeneration) return finish(new Error('Gemini session was superseded.'));
-        const { responseModalities, ...config } = liveSpeechConfig(this.model, this.transcriptionMode, languageCode);
+        const { responseModalities, ...config } = liveSpeechConfig(
+          this.model,
+          this.transcriptionMode,
+          languageCode,
+          this.targetLanguageCode
+        );
         socket.send(JSON.stringify({
           setup: {
             model: `models/${this.model}`,
@@ -250,6 +271,19 @@ export class GeminiLiveRecognizer {
     const final = content?.inputTranscription;
     const interimText = interim && typeof interim === 'object' && 'text' in interim ? interim.text : undefined;
     const finalText = final && typeof final === 'object' && 'text' in final ? final.text : undefined;
+
+    const outputInterim = content?.interimOutputTranscription;
+    const outputFinal = content?.outputTranscription;
+    const modelParts = content?.modelTurn && typeof content.modelTurn === 'object' && 'parts' in content.modelTurn && Array.isArray((content.modelTurn as { parts?: unknown }).parts)
+      ? (content.modelTurn as { parts: Array<{ text?: string }> }).parts
+      : undefined;
+    const modelText = modelParts ? modelParts.map((p) => p.text || '').join('').trim() : undefined;
+    const interimTrans = (outputInterim && typeof outputInterim === 'object' && 'text' in outputInterim && typeof outputInterim.text === 'string' ? outputInterim.text : undefined) || undefined;
+    const finalTrans = (outputFinal && typeof outputFinal === 'object' && 'text' in outputFinal && typeof outputFinal.text === 'string' ? outputFinal.text : undefined) || (modelText && modelText.length ? modelText : undefined);
+
+    if (interimTrans) this.currentTranslation = interimTrans;
+    if (finalTrans) this.currentTranslation = finalTrans;
+
     // Flash Live streams input transcription deltas. Generated model turns and
     // outputTranscription are never classroom speech, even during Stop.
     if (this.model === FLASH_LIVE_MODEL) {
@@ -267,13 +301,20 @@ export class GeminiLiveRecognizer {
       return;
     }
     if (typeof interimText === 'string' && interimText.length) {
-      this.emitTranscript(interimText, false);
+      this.lastSourceText = interimText;
+      this.emitTranscript(interimText, false, this.currentTranslation);
     }
     if (typeof finalText === 'string' && finalText.length) {
-      this.emitTranscript(finalText, true);
+      this.lastSourceText = finalText;
+      this.emitTranscript(finalText, true, this.currentTranslation);
       this.activeUtteranceId = null;
       this.revision = 0;
+      this.currentTranslation = undefined;
+      this.lastSourceText = '';
       if (this.diagnosticsValue.status === 'draining') this.finishDrain();
+    }
+    if (!finalText && !interimText && (finalTrans || interimTrans) && this.lastSourceText) {
+      this.emitTranscript(this.lastSourceText, false, this.currentTranslation);
     }
     if (content && 'turnComplete' in content && content.turnComplete && this.diagnosticsValue.status === 'draining') {
       this.finishDrain();
@@ -296,14 +337,14 @@ export class GeminiLiveRecognizer {
     this.revision = 0;
   }
 
-  private emitTranscript(text: string, isFinal: boolean): void {
+  private emitTranscript(text: string, isFinal: boolean, translation?: string): void {
     if (!this.activeUtteranceId) {
       this.activeUtteranceId = `gemini-${this.epoch}-${this.connectionId}-${++this.utteranceCounter}`;
       this.revision = 0;
     }
     this.revision++;
     this.diagnosticsValue.transcriptEvents++;
-    this.callbacks.onTranscript(text, isFinal, this.epoch, this.activeUtteranceId, this.revision);
+    this.callbacks.onTranscript(text, isFinal, this.epoch, this.activeUtteranceId, this.revision, undefined, translation);
   }
 
   /** Stop microphone input first, flush PCM, signal end-of-audio, and drain finals. */

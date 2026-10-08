@@ -218,6 +218,14 @@
     flex: 0 0 50px;
   }
 
+  .topBarNewBtn {
+    display: none !important;
+  }
+
+  .contentBody {
+    padding-bottom: 60px;
+  }
+
   .sidebarWrapper {
     position: fixed;
     top: 0;
@@ -314,3 +322,10 @@
 .menuButton {
   display: flex;
 }
+
+@media (max-width: 768px) {
+  .shell[data-recording-detail="true"] .topBar {
+    display: none !important;
+  }
+}
+

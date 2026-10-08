@@ -300,6 +300,48 @@ describe('Gemini live recognizer', () => {
     expect(onTranscript.mock.calls[1][3]).toBe(onTranscript.mock.calls[0][3]);
     expect(onTranscript.mock.calls[1][0]).toBe('finalizing words, complete.');
   });
+
+  it('passes translation text from outputTranscription to onTranscript', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onTranscript = vi.fn();
+    const recognizer = new GeminiLiveRecognizer(
+      { onTranscript, onError: vi.fn(), onStateChange: vi.fn() },
+      'ja-JP',
+      'verbatim',
+      undefined,
+      'vi-VN'
+    );
+    FakeWebSocket.last = undefined;
+    const starting = recognizer.start(25);
+    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
+    const socket = FakeWebSocket.last!;
+    socket.open();
+    socket.message({ setupComplete: {} });
+    await starting;
+
+    expect(JSON.parse(socket.sent[0]).setup.translationConfig).toMatchObject({
+      targetLanguageCode: 'vi-VN',
+      echoTargetLanguage: true,
+    });
+
+    socket.message({
+      serverContent: {
+        inputTranscription: { text: 'こんにちは' },
+        outputTranscription: { text: 'Xin chào' },
+      },
+    });
+    expect(onTranscript).toHaveBeenCalledWith(
+      'こんにちは',
+      true,
+      25,
+      expect.any(String),
+      1,
+      undefined,
+      'Xin chào'
+    );
+  });
 });
 
 describe('Pcm16kResampler', () => {

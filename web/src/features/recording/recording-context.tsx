@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { ClassroomController, type ControllerState, type StartOptions } from './controller';
 import type { ClassroomMode } from '@/shared/recording';
-import { loadSettings, saveSettings, settingsUpdatedEvent } from '@/storage/recordings';
+import { loadSettings, saveSettings, settingsUpdatedEvent, pushRecentLanguage } from '@/storage/recordings';
 import type { AppSettings } from '@/shared/recording';
 import { inputLanguage } from '@/shared/languages';
 
@@ -125,12 +125,16 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       controllerRef.current!.setLanguages(source, target);
       const next = controllerRef.current!.snapshot();
       void saveSettings({ sourceLanguage: next.sourceLanguage, targetLanguage: next.targetLanguage }).catch(error => console.warn('Không thể lưu ngôn ngữ:', error));
+      void pushRecentLanguage('source', next.sourceLanguage);
+      void pushRecentLanguage('target', next.targetLanguage);
     },
     swapLanguages: async () => {
       settingsChangedByUserRef.current = true;
       await controllerRef.current!.swapLanguages();
       const next = controllerRef.current!.snapshot();
       void saveSettings({ sourceLanguage: next.sourceLanguage, targetLanguage: next.targetLanguage }).catch(error => console.warn('Không thể lưu ngôn ngữ:', error));
+      void pushRecentLanguage('source', next.sourceLanguage);
+      void pushRecentLanguage('target', next.targetLanguage);
     },
   };
 

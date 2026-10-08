@@ -380,6 +380,10 @@ export class ClassroomController {
         const oldestCaptionId = this.captionRevisions.keys().next().value;
         if (oldestCaptionId !== undefined) this.captionRevisions.delete(oldestCaptionId);
       }
+      if (snapshot.translation !== undefined && snapshot.translation !== null) {
+        void this.handleDirectTranslationSnapshot(recordingId, { ...snapshot, revision });
+        return;
+      }
       this.scheduler?.onSnapshot({ ...snapshot, revision });
     });
 
@@ -459,7 +463,7 @@ export class ClassroomController {
 
     // Speech Recognizer
     const callbacks: SpeechRecognitionCallbacks = {
-        onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing) => {
+        onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing, translation) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
           this.state.lastTranscriptAt = Date.now();
           this.state.transcriptCount++;
@@ -515,6 +519,7 @@ export class ClassroomController {
             captionId,
             revision: providerRevision,
             text,
+            translation,
             isFinal,
             startMs,
             endMs: currentMs,
@@ -690,13 +695,14 @@ export class ClassroomController {
     // eslint-disable-next-line prefer-const
     let recognizer!: GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer;
     const callbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
+    const targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
     recognizer = this.state.speechProvider === 'soniox'
-      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined)
+      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage)
       : this.state.speechProvider === 'nemotron'
       ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
-      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider));
+      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider), targetLanguage);
     this.speechRecognizer = recognizer;
-    await recognizer.start(epoch, language);
+    await recognizer.start(epoch, language, targetLanguage);
     if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
     this.pcmReady = true;
     for (const item of this.pcmQueue) this.pushRecognitionAudio(item);
@@ -808,6 +814,55 @@ export class ClassroomController {
       this.hasPendingTranscript = false;
       this.activeBlockId = closedBlock + 1;
     }, delay);
+  }
+
+  private async handleDirectTranslationSnapshot(
+    recordingId: string,
+    snapshot: TranscriptSnapshot
+  ): Promise<void> {
+    const existingIndex = this.state.captions.findIndex((c) => c.id === snapshot.captionId);
+    const previous = existingIndex >= 0 ? this.state.captions[existingIndex] : undefined;
+    let sourceHistory = previous?.sourceHistory;
+    if (previous?.isFinal && previous.source !== snapshot.text) {
+      const history = [...(sourceHistory ?? []), { text: previous.source, revision: previous.revision }];
+      sourceHistory = history.length > 20 ? [history[0], ...history.slice(-19)] : history;
+    }
+
+    const captionItem: CaptionItem = {
+      id: snapshot.captionId,
+      recordingId,
+      blockId: snapshot.blockId,
+      startMs: snapshot.startMs,
+      endMs: snapshot.endMs,
+      source: snapshot.text,
+      revision: snapshot.revision,
+      isFinal: existingIndex >= 0
+        ? this.state.captions[existingIndex].isFinal || snapshot.isFinal
+        : snapshot.isFinal,
+      translation: snapshot.translation ?? (existingIndex >= 0 ? this.state.captions[existingIndex].translation : ''),
+      targetSourceRevision: snapshot.revision,
+      translationModelKey: this.state.speechProvider,
+      state: snapshot.isFinal ? 'done' : 'streaming',
+      speakerLabel: previous?.speakerLabel ?? this.captionSpeakers.get(snapshot.captionId),
+      sourceHistory,
+    };
+
+    if (existingIndex >= 0) {
+      const nextCaptions = [...this.state.captions];
+      nextCaptions[existingIndex] = captionItem;
+      this.state.captions = nextCaptions;
+    } else {
+      this.state.captions = [...this.state.captions, captionItem];
+    }
+
+    this.notify();
+    const write = this.captionWriteChain.then(() => saveCaption(captionItem)).catch((err) => {
+      this.state.error = `Không lưu được phụ đề: ${err instanceof Error ? err.message : String(err)}`;
+      this.notify();
+    });
+    this.captionWriteChain = write;
+    this.pendingCaptionWrites.add(write);
+    void write.finally(() => this.pendingCaptionWrites.delete(write));
   }
 
   private async handleTranslationEvent(

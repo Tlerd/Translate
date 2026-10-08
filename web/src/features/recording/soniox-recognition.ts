@@ -1,5 +1,5 @@
 import { signalWithTimeout } from '@/shared/abort-signal';
-import { SONIOX_MODEL, SONIOX_WEBSOCKET_URL, SonioxSpeechError, sonioxErrorRetryable, sonioxLanguage } from '@/shared/soniox';
+import { SONIOX_MODEL, SONIOX_WEBSOCKET_URL, SonioxSpeechError, sonioxErrorRetryable, sonioxLanguage, sonioxTranslationPair } from '@/shared/soniox';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
 import { SonioxTranscript, type SonioxToken } from './soniox-transcript';
@@ -25,14 +25,19 @@ export class SonioxRecognizer {
   private finished = false;
   private failure: SonioxSpeechError | null = null;
 
-  constructor(private callbacks: SpeechRecognitionCallbacks, private languageCode = 'ja-JP', private recordingId?: string) {}
+  constructor(
+    private callbacks: SpeechRecognitionCallbacks,
+    private languageCode = 'ja-JP',
+    private recordingId?: string,
+    private targetLanguageCode?: string
+  ) {}
 
-  async start(epoch: number, languageCode = this.languageCode): Promise<void> {
+  async start(epoch: number, languageCode = this.languageCode, targetLanguageCode = this.targetLanguageCode): Promise<void> {
     if (this.socket || this.status === 'connecting') throw new SonioxSpeechError('Soniox đang kết nối.', false);
     const language = sonioxLanguage(languageCode);
     if (!language) throw new SonioxSpeechError('Soniox hỗ trợ đầu vào Nhật và Việt trong bản này.', false);
     const generation = ++this.generation;
-    this.epoch = epoch; this.languageCode = languageCode;
+    this.epoch = epoch; this.languageCode = languageCode; this.targetLanguageCode = targetLanguageCode;
     this.transcript = new SonioxTranscript(`soniox-${Date.now().toString(36)}-${++connectionSequence}`);
     this.stopPromise = null; this.failure = null; this.finished = false;
     this.offset = null; this.sentMs = 0; this.pendingFinalize = false; this.audioSinceFinalize = false;
@@ -64,9 +69,26 @@ export class SonioxRecognizer {
         socket.onopen = () => {
           if (generation !== this.generation) return;
           try {
-            socket.send(JSON.stringify({ api_key: session.token, model: SONIOX_MODEL, audio_format: 'pcm_s16le',
-              sample_rate: 16_000, num_channels: 1, language_hints: [language],
-              enable_endpoint_detection: false, enable_speaker_diarization: false, enable_language_identification: true }));
+            const translationPair = sonioxTranslationPair(languageCode, targetLanguageCode);
+            const configPayload: Record<string, unknown> = {
+              api_key: session.token,
+              model: SONIOX_MODEL,
+              audio_format: 'pcm_s16le',
+              sample_rate: 16_000,
+              num_channels: 1,
+              language_hints: translationPair ? ['ja', 'vi'] : [language],
+              enable_endpoint_detection: false,
+              enable_speaker_diarization: false,
+              enable_language_identification: true,
+            };
+            if (translationPair) {
+              configPayload.translation = {
+                type: translationPair.type,
+                language_a: translationPair.language_a,
+                language_b: translationPair.language_b,
+              };
+            }
+            socket.send(JSON.stringify(configPayload));
             this.status = 'listening'; this.callbacks.onStateChange('listening'); finish();
           } catch { finish(new SonioxSpeechError('Không gửi được cấu hình Soniox.', true)); }
         };
@@ -85,8 +107,15 @@ export class SonioxRecognizer {
           if (message.tokens?.some((token) => token.text === '<fin>' || token.text === '<end>')) this.pendingFinalize = false;
           for (const snapshot of this.transcript.process(message)) {
             const offset = this.offset ?? 0;
-            this.callbacks.onTranscript(snapshot.text, snapshot.isFinal, this.epoch, snapshot.providerItemId, snapshot.revision,
-              { startMs: offset + (snapshot.startMs ?? this.sentMs), endMs: offset + (snapshot.endMs ?? this.sentMs) });
+            this.callbacks.onTranscript(
+              snapshot.text,
+              snapshot.isFinal,
+              this.epoch,
+              snapshot.providerItemId,
+              snapshot.revision,
+              { startMs: offset + (snapshot.startMs ?? this.sentMs), endMs: offset + (snapshot.endMs ?? this.sentMs) },
+              snapshot.translation
+            );
           }
           if (message.finished) {
             this.finished = true;
