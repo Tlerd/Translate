@@ -19,8 +19,11 @@ import {
   Pencil,
   Loader2,
   Share2,
+  Maximize2,
 } from 'lucide-react';
 import { TranscriptPane } from './transcript-pane';
+import { ReadingMode } from './reading-mode';
+import { useReadingPrefs } from './use-reading-prefs';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
 import { playableAudio } from '@/storage/audio-sync';
 import { computeCaptionSourceHash, saveSummary, updateCaptionSources, getExtensionFromMimeType } from '@/storage/recordings';
@@ -60,6 +63,7 @@ export function MobileRecordingDetail({
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary' | 'audio'>('transcript');
   const [headerVisible, setHeaderVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const reading = useReadingPrefs();
   const [editorOpen, setEditorOpen] = useState(false);
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
   const [summaryPreset, setSummaryPreset] = useState<'short' | 'default' | 'long' | 'easy'>('default');
@@ -293,6 +297,19 @@ export function MobileRecordingDetail({
               <Pencil size={15} />
               <span>Sửa kịch bản</span>
             </button>
+            {captions.length > 0 && (
+              <button
+                type="button"
+                className={styles.menuItem}
+                onClick={() => {
+                  setMenuOpen(false);
+                  reading.enter();
+                }}
+              >
+                <Maximize2 size={15} />
+                <span>Đọc toàn màn hình</span>
+              </button>
+            )}
             <button
               type="button"
               className={styles.menuItem}
@@ -691,6 +708,24 @@ export function MobileRecordingDetail({
           <span>Âm thanh</span>
         </button>
       </nav>
+
+      {reading.open && (
+        <ReadingMode
+          title={recording.title}
+          scale={reading.scale}
+          display={reading.display}
+          hasTranslation={recording.targetLanguage !== 'none' && captions.some((caption) => caption.translation)}
+          onScale={reading.changeScale}
+          onDisplay={reading.changeDisplay}
+          onExit={reading.exit}
+        >
+          <TranscriptPane
+            captions={captions}
+            targetLanguage={recording.targetLanguage}
+            reading={{ scale: reading.scale, display: reading.display }}
+          />
+        </ReadingMode>
+      )}
 
       {/* Transcript Editor Dialog */}
       {editorOpen && (

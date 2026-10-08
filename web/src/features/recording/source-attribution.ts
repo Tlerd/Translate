@@ -65,3 +65,56 @@ export function chooseSpeakerLabel(providerLabel: string | undefined, source: So
   if (providerLabel && !isSourceSpeakerLabel(providerLabel)) return providerLabel;
   return source ?? providerLabel;
 }
+
+export type ActiveSource = 'mic' | 'display';
+
+/** Which source a level sample belongs to. With headphones the microphone only hears the user. */
+export function sourceOfTick(mic: number, display: number): ActiveSource | null {
+  const micActive = mic >= SOURCE_ACTIVE_LEVEL;
+  const displayActive = display >= SOURCE_ACTIVE_LEVEL;
+  if (micActive && displayActive) return mic >= display * MIC_OVERLAP_RATIO ? 'mic' : 'display';
+  if (micActive) return 'mic';
+  if (displayActive) return 'display';
+  return null;
+}
+
+/** When both are active, the microphone wins unless the shared audio is far louder (speaker echo). */
+export const MIC_OVERLAP_RATIO = 0.6;
+/** Consecutive 100 ms samples a new source must hold before a caption is cut. */
+export const CUT_CONFIRM_TICKS = 3;
+/** Minimum samples between two cuts so a noisy overlap cannot shred captions. */
+export const CUT_MIN_GAP_TICKS = 15;
+
+/**
+ * Decides when the speaker changes between the user (microphone) and the meeting (shared
+ * audio) so the current caption can be closed and the next voice starts its own box.
+ */
+export class SourceCutDetector {
+  private confirmed: ActiveSource | null = null;
+  private candidate: ActiveSource | null = null;
+  private streak = 0;
+  private sinceCut = CUT_MIN_GAP_TICKS;
+
+  /** Feed one level sample; returns true when the current caption should be closed now. */
+  observe(mic: number, display: number): boolean {
+    this.sinceCut++;
+    const source = sourceOfTick(mic, display);
+    // Silence keeps the last confirmed source so a pause does not look like a change.
+    if (source === null) {
+      this.candidate = null;
+      this.streak = 0;
+      return false;
+    }
+    if (source === this.candidate) this.streak++;
+    else {
+      this.candidate = source;
+      this.streak = 1;
+    }
+    if (this.streak < CUT_CONFIRM_TICKS || source === this.confirmed) return false;
+    const previous = this.confirmed;
+    this.confirmed = source;
+    if (previous === null || this.sinceCut < CUT_MIN_GAP_TICKS) return false;
+    this.sinceCut = 0;
+    return true;
+  }
+}

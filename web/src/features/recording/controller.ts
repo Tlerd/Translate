@@ -3,7 +3,7 @@ import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/lan
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { AdaptiveVoiceDetector } from './voice-activity';
-import { chooseSpeakerLabel, SourceActivityTracker } from './source-attribution';
+import { chooseSpeakerLabel, SourceActivityTracker, SourceCutDetector } from './source-attribution';
 import { NemotronRecognizer } from './nemotron-recognition';
 import { SonioxRecognizer } from './soniox-recognition';
 import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
@@ -35,6 +35,8 @@ import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLi
 
 /** Silence sent to Gemini after speech stops before the utterance is closed (Live API guide: at least 500 ms). */
 const GEMINI_SILENCE_TAIL_MS = 600;
+/** Longest a caption stays open while speech never pauses (Soniox). */
+const MAX_OPEN_UTTERANCE_MS = 15_000;
 
 export interface ControllerState {
   recordingId: string | null;
@@ -165,6 +167,8 @@ export class ClassroomController {
   private activeBlockId = 1;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private finalizeRequestedAt: number | null = null;
+  /** When the open utterance last started, for capping how long continuous speech stays in one caption. */
+  private lastUtteranceCloseAt = 0;
   private pcmVoiceActive = false;
   private voiceDetector = new AdaptiveVoiceDetector();
   private pcmLastVoiceTime = 0;
@@ -425,7 +429,7 @@ export class ClassroomController {
       },
       sourceLanguage,
       targetLanguage,
-      minIntervalMs: 700,
+      minIntervalMs: 300,
       historyTurns: translationHistoryTurns,
       earlySegments: earlySegmentTranslation,
       pauseMs,
@@ -510,6 +514,7 @@ export class ClassroomController {
       // timeline. Use the recorder's actual start for captions and lesson time.
       this.startTime = this.audioRecorder.startedAt || Date.now();
       this.state.durationMs = 0;
+      this.lastUtteranceCloseAt = Date.now();
       this.startSourceTracking(audioSource, currentEpoch);
       this.durationIntervalId = setInterval(() => {
         if (this.state.state !== 'recording' || this.sessionEpoch !== currentEpoch) return;
@@ -534,6 +539,7 @@ export class ClassroomController {
         onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing, translation) => {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
           this.state.lastTranscriptAt = Date.now();
+          if (isFinal) this.lastUtteranceCloseAt = this.state.lastTranscriptAt;
           if (isFinal && this.finalizeRequestedAt !== null) {
             this.state.finalizeLatencyMs = this.state.lastTranscriptAt - this.finalizeRequestedAt;
             this.finalizeRequestedAt = null;
@@ -654,6 +660,8 @@ export class ClassroomController {
         if (this.state.speechProvider === 'soniox') {
           forwardPcm({ samples, rate, startMs });
           if (isVoice) { this.pcmLastVoiceTime = now; this.pcmVoiceActive = true; }
+          // Continuous speech never goes silent, so close the caption now and then to keep it short.
+          if (this.pcmVoiceActive && now - this.lastUtteranceCloseAt > MAX_OPEN_UTTERANCE_MS) this.requestUtteranceClose();
           else if (this.pcmVoiceActive && now - this.pcmLastVoiceTime > (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)) {
             this.pcmVoiceActive = false;
             this.finalizeRequestedAt = now;
@@ -773,7 +781,7 @@ export class ClassroomController {
     const callbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
     const targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
     recognizer = this.state.speechProvider === 'soniox'
-      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount)
+      ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
       : this.state.speechProvider === 'nemotron'
       ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
       : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider), targetLanguage);
@@ -876,12 +884,25 @@ export class ClassroomController {
     this.stopSourceTracking();
     if (audioSource !== 'mixed') return;
     const tracker = new SourceActivityTracker();
+    const cuts = new SourceCutDetector();
     this.sourceTracker = tracker;
     this.sourceLevelTimer = setInterval(() => {
       if (this.sessionEpoch !== epoch || this.state.state !== 'recording') return;
       const levels = this.audioRecorder?.audioInput?.levels();
-      if (levels) tracker.record(Date.now() - this.startTime, levels.mic, levels.display);
+      if (!levels) return;
+      tracker.record(Date.now() - this.startTime, levels.mic, levels.display);
+      // The user cutting in on the meeting (or the reverse) closes the caption so each voice gets its own box.
+      if (cuts.observe(levels.mic, levels.display)) this.requestUtteranceClose();
     }, 100);
+  }
+
+  /** Ask the recognizer to close the utterance that is open right now. */
+  private requestUtteranceClose(): void {
+    const recognizer = this.speechRecognizer;
+    if (!this.pcmReady || !recognizer) return;
+    this.finalizeRequestedAt = Date.now();
+    this.lastUtteranceCloseAt = this.finalizeRequestedAt;
+    recognizer.finalizeUtterance();
   }
 
   private stopSourceTracking(): void {

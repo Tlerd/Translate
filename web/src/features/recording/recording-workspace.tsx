@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Pencil, Sparkles, Volume2, Columns2 } from 'lucide-react';
+import { FileText, Maximize2, Pencil, Sparkles, Volume2, Columns2 } from 'lucide-react';
 import { TranscriptPane } from './transcript-pane';
+import { ReadingMode } from './reading-mode';
+import { useReadingPrefs } from './use-reading-prefs';
 import { TranscriptEditorDialog } from './transcript-editor-dialog';
 import { AudioSegmentsDialog } from './audio-segments-dialog';
 import { SummaryPanel } from '@/features/summary/summary-panel';
@@ -38,6 +40,7 @@ export function RecordingWorkspace({
   const [summary, setSummary] = useState<SummaryItem | undefined>(initialSummary);
   const [workspaceCaptions, setWorkspaceCaptions] = useState(captions);
   const [highlightCaptionId, setHighlightCaptionId] = useState<number | null>(null);
+  const reading = useReadingPrefs();
   const [editorOpen, setEditorOpen] = useState(false);
   const [segmentsDialogOpen, setSegmentsDialogOpen] = useState(false);
   const [currentSourceHash, setCurrentSourceHash] = useState<string | null>(null);
@@ -221,6 +224,19 @@ export function RecordingWorkspace({
             </button>
           )}
 
+          {!recordingInProgress && workspaceCaptions.length > 0 && (
+            <button
+              type="button"
+              onClick={reading.enter}
+              className={styles.tabPill}
+              title="Đọc toàn màn hình, ẩn mọi thanh công cụ"
+              style={{ fontSize: '0.8rem' }}
+            >
+              <Maximize2 size={14} />
+              <span>Đọc toàn màn hình</span>
+            </button>
+          )}
+
           {((viewMode === 'tabs' && activeTab === 'transcript') || viewMode === 'split') && workspaceCaptions.length > 0 && (
             <div className={recordingInProgress ? styles.recordingTools : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
@@ -364,6 +380,25 @@ export function RecordingWorkspace({
           </div>
         )}
       </div>
+      {reading.open && (
+        <ReadingMode
+          title={recording.title}
+          scale={reading.scale}
+          display={reading.display}
+          hasTranslation={recording.targetLanguage !== 'none' && workspaceCaptions.some((caption) => caption.translation)}
+          onScale={reading.changeScale}
+          onDisplay={reading.changeDisplay}
+          onExit={reading.exit}
+        >
+          <TranscriptPane
+            captions={workspaceCaptions}
+            highlightCaptionId={highlightCaptionId}
+            speakerCount={speakerCount}
+            targetLanguage={recording.targetLanguage}
+            reading={{ scale: reading.scale, display: reading.display }}
+          />
+        </ReadingMode>
+      )}
       {editorOpen && (
         <TranscriptEditorDialog
           captions={workspaceCaptions}
