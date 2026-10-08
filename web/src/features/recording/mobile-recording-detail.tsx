@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -40,6 +40,8 @@ interface MobileRecordingDetailProps {
   costText?: string | null;
 }
 
+type DetailTab = 'transcript' | 'summary' | 'audio';
+
 const WAVEFORM_HEIGHTS = [
   30, 45, 60, 25, 70, 85, 40, 65, 35, 90,
   55, 75, 40, 80, 60, 30, 50, 95, 70, 45,
@@ -60,7 +62,8 @@ export function MobileRecordingDetail({
   summary: initialSummary,
   onSummaryUpdated,
 }: MobileRecordingDetailProps) {
-  const [activeTab, setActiveTab] = useState<'transcript' | 'summary' | 'audio'>('transcript');
+  const [activeTab, setActiveTab] = useState<DetailTab>('transcript');
+  // Header, bottom nav and summary toolbar share this flag: hidden while reading down.
   const [headerVisible, setHeaderVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const reading = useReadingPrefs();
@@ -83,20 +86,26 @@ export function MobileRecordingDetail({
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
 
-  // Focus effect: scroll to hide top header & bottom navigation
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const currentScrollY = e.currentTarget.scrollTop;
-    const delta = currentScrollY - lastScrollY.current;
+  // Focus mode: scrolling down hides the bars, scrolling up or reaching the top shows them.
+  // Fed by main's onScroll (summary/audio) and by TranscriptPane's onScrollTop (transcript,
+  // which scrolls inside its own container).
+  const updateBarsForScroll = useCallback((scrollTop: number) => {
+    const delta = scrollTop - lastScrollY.current;
+    lastScrollY.current = scrollTop;
 
-    if (currentScrollY <= 20) {
+    if (scrollTop <= 20 || delta < -6) {
       setHeaderVisible(true);
-    } else if (delta > 10) {
+    } else if (delta > 8) {
       setHeaderVisible(false);
       setMenuOpen(false);
-    } else if (delta < -10) {
-      setHeaderVisible(true);
     }
-    lastScrollY.current = currentScrollY;
+  }, []);
+
+  // Every tab switch goes through here so the bars are shown and the direction tracking restarts.
+  const selectTab = (tab: DetailTab) => {
+    lastScrollY.current = 0;
+    setHeaderVisible(true);
+    setActiveTab(tab);
   };
 
   // Fetch audio asset for Tab 3
@@ -315,7 +324,7 @@ export function MobileRecordingDetail({
               className={styles.menuItem}
               onClick={() => {
                 setMenuOpen(false);
-                setActiveTab('audio');
+                selectTab('audio');
               }}
             >
               <Headphones size={15} />
@@ -342,13 +351,24 @@ export function MobileRecordingDetail({
       {/* =========================================================
           Main Scrollable Content Area (Triggers Focus Mode)
           ========================================================= */}
-      <main ref={scrollRef} className={styles.scrollContent} onScroll={handleScroll}>
+      <main
+        ref={scrollRef}
+        className={[
+          styles.scrollContent,
+          activeTab === 'transcript' ? styles.scrollContentFixed : '',
+          headerVisible ? '' : styles.scrollContentFocus,
+        ].join(' ')}
+        onScroll={(e) => updateBarsForScroll(e.currentTarget.scrollTop)}
+      >
         {/* Tab 1: [Bản gốc] (Clean Transcript, No Audio Player) */}
+        {/* The pane scrolls itself, so main stays fixed and the pane fills it. */}
         {activeTab === 'transcript' && (
-          <div style={{ height: '100%' }}>
+          <div className={styles.transcriptFill}>
             <TranscriptPane
               captions={captions}
               targetLanguage={recording.targetLanguage}
+              onScrollTop={updateBarsForScroll}
+              startAtTop
             />
           </div>
         )}
@@ -683,7 +703,7 @@ export function MobileRecordingDetail({
       <nav className={`${styles.bottomNav} ${!headerVisible ? styles.bottomNavHidden : ''}`}>
         <button
           type="button"
-          onClick={() => setActiveTab('transcript')}
+          onClick={() => selectTab('transcript')}
           className={`${styles.tabBtn} ${activeTab === 'transcript' ? styles.tabBtnActive : ''}`}
         >
           <FileText size={19} />
@@ -692,7 +712,7 @@ export function MobileRecordingDetail({
 
         <button
           type="button"
-          onClick={() => setActiveTab('summary')}
+          onClick={() => selectTab('summary')}
           className={`${styles.tabBtn} ${activeTab === 'summary' ? styles.tabBtnActive : ''}`}
         >
           <Sparkles size={19} />
@@ -701,7 +721,7 @@ export function MobileRecordingDetail({
 
         <button
           type="button"
-          onClick={() => setActiveTab('audio')}
+          onClick={() => selectTab('audio')}
           className={`${styles.tabBtn} ${activeTab === 'audio' ? styles.tabBtnActive : ''}`}
         >
           <Headphones size={19} />

@@ -2,15 +2,17 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Calendar } from 'lucide-react';
+import { ArrowLeft, PanelLeft } from 'lucide-react';
 import { getRecording, getCaptions, getSummary } from '@/storage/recordings';
 import { dataEvent } from '@/storage/cloud-sync';
 import { RecordingWorkspace } from '@/features/recording/recording-workspace';
 import { InlineAudioPlayer } from '@/features/recording/inline-audio-player';
 import { MobileRecordingDetail } from '@/features/recording/mobile-recording-detail';
+import { useSidebarToggle } from '@/components/sidebar-context';
 import { fetchTranslationUsage } from '@/lib/api-client';
 import { formatTokens, formatUsd, formatSaigonDate } from '@/features/usage/usage-format';
 import type { RecordingItem, CaptionItem, SummaryItem } from '@/shared/recording';
+import styles from './detail-header.module.css';
 
 export default function RecordingDetailPage({
   params,
@@ -19,6 +21,7 @@ export default function RecordingDetailPage({
 }) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
+  const { sidebarOpen, toggleSidebar } = useSidebarToggle();
 
   const [recording, setRecording] = useState<RecordingItem | null>(null);
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
@@ -161,86 +164,52 @@ export default function RecordingDetailPage({
     );
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Session Title Header with LilysAI Player */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 16px',
-          backgroundColor: 'var(--bg-secondary)',
-          borderBottom: '1px solid var(--border-color)',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
+  // Left part of RecordingWorkspace's single top row: sidebar toggle, back, title, meta, audio player.
+  const header = (
+    <div className={styles.header}>
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className={styles.iconButton}
+        title={sidebarOpen ? 'Đóng thanh bên' : 'Mở thanh bên'}
+        aria-label={sidebarOpen ? 'Đóng thanh bên' : 'Mở thanh bên'}
+        aria-expanded={sidebarOpen}
+        aria-controls="recording-library"
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-          <Link
-            href="/library"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-secondary)',
-            }}
-            title="Quay lại Thư viện"
-          >
-            <ArrowLeft size={16} />
-          </Link>
+        <PanelLeft size={16} />
+      </button>
 
-          <div style={{ minWidth: 0 }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {recording.title}
-            </h2>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: '0.74rem',
-                color: 'var(--text-muted)',
-                marginTop: 2,
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Calendar size={11} />
-                {formatDate(recording.createdAt)}
-              </span>
-              <span>•</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Clock size={11} />
-                {formatDuration(recording.durationMs)}
-              </span>
-              {costText && (
-                <>
-                  <span>•</span>
-                  <span>{costText}</span>
-                </>
-              )}
-            </div>
-          </div>
+      <Link
+        href="/library"
+        className={styles.iconButton}
+        title="Quay lại Thư viện"
+        aria-label="Quay lại Thư viện"
+      >
+        <ArrowLeft size={16} />
+      </Link>
+
+      <div className={styles.titleBlock}>
+        <h2 className={styles.title}>{recording.title}</h2>
+        <div className={styles.meta} title={costText ?? undefined}>
+          {formatDate(recording.createdAt)} • {formatDuration(recording.durationMs)}
         </div>
+      </div>
 
-        {/* LilysAI Integrated Audio Player in Header */}
+      <div className={styles.player}>
         <InlineAudioPlayer recordingId={recording.id} durationMs={recording.durationMs} />
       </div>
+    </div>
+  );
 
-      {/* Main Workspace Body */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <RecordingWorkspace
-          recording={recording}
-          captions={captions}
-          summary={summary}
-          onSummaryUpdated={setSummary}
-        />
-      </div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      <RecordingWorkspace
+        recording={recording}
+        captions={captions}
+        summary={summary}
+        onSummaryUpdated={setSummary}
+        header={header}
+      />
     </div>
   );
 }

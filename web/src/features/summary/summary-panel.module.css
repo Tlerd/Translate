@@ -372,3 +372,17 @@
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
+/* Desktop: the content sits in a calm column (max 760px) matching the transcript pane */
+@media (min-width: 769px) {
+  .panel {
+    padding: 28px 32px 80px;
+  }
+
+  .panel > * {
+    width: 100%;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+

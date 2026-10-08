@@ -247,6 +247,11 @@
     padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* No bottom nav, no reserved strip under the content. */
+  .shell[data-bottom-nav='hidden'] .contentBody {
+    padding-bottom: 0;
+  }
+
   /* Pages that hide the bottom nav (recording detail, live recording) need no reserved space. */
   .shell[data-bottom-nav='hidden'] .sidebarWrapper {
     padding-bottom: 0;
@@ -344,9 +349,9 @@
   display: flex;
 }
 
-@media (max-width: 768px) {
-  .shell[data-recording-detail="true"] .topBar {
-    display: none !important;
-  }
+/* Recording detail is a focused reading view: the global bar is hidden at every width.
+   Its sidebar toggle lives in the detail header instead (see sidebar-context.tsx). */
+.shell[data-recording-detail="true"] .topBar {
+  display: none !important;
 }
 
