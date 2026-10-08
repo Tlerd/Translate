@@ -201,7 +201,7 @@ export default function RecordSourcePage() {
     <div className={styles.page}>
       <div className={styles.container}>
         <div className={styles.topRow}>
-          <Link href="/collections" className={styles.backBtn} title="Quay lại Thư viện">
+          <Link href="/library" className={styles.backBtn} title="Quay lại Thư viện">
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </Link>

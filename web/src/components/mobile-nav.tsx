@@ -20,7 +20,7 @@ export function MobileBottomNav() {
   return (
     <nav className={styles.bottomNav} aria-label="Điều hướng di động">
       <Link
-        href="/collections"
+        href="/library"
         className={`${styles.navItem} ${isCollections ? styles.active : ''}`}
         title="Thư viện"
       >

@@ -261,7 +261,7 @@ export function MobileRecordingDetail({
           Top Header (Scroll to Hide)
           ========================================================= */}
       <header className={`${styles.topHeader} ${!headerVisible ? styles.topHeaderHidden : ''}`}>
-        <Link href="/collections" className={styles.headerIconBtn} title="Quay lại Thư viện">
+        <Link href="/library" className={styles.headerIconBtn} title="Quay lại Thư viện">
           <ArrowLeft size={18} />
         </Link>
 

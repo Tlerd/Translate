@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode; accountContr
                 <PanelLeft size={18} />
               </button>
             )}
-            <Link href="/app" className={styles.appTitle} title="Máy Dịch" aria-label="Máy Dịch">
+            <Link href="/library" className={styles.appTitle} title="Máy Dịch" aria-label="Máy Dịch">
               <span className={styles.appLogo}>
                 <Radio size={18} color="var(--accent)" />
               </span>

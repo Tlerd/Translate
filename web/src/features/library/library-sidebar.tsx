@@ -157,7 +157,7 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
         }}
       >
         <Link
-          href="/app"
+          href="/library"
           onClick={onCloseMobile}
           style={{
             display: 'flex',
@@ -344,7 +344,7 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '4px 8px' }}>
         {/* Navigation Link: Trang chủ */}
         <Link
-          href="/app"
+          href="/library"
           onClick={onCloseMobile}
           style={{
             display: 'flex',
@@ -394,7 +394,7 @@ export function LibrarySidebar({ onCloseMobile, onToggleSidebar }: LibrarySideba
                 {isLibraryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </span>
               <Link
-                href="/collections"
+                href="/library"
                 onClick={onCloseMobile}
                 style={{
                   color: pathname === '/collections' ? 'var(--accent)' : 'inherit',

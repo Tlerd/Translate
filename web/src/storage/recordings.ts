@@ -708,6 +708,30 @@ export async function batchSoftDelete(ids: string[]): Promise<void> {
   });
 }
 
+export interface RecordingFieldSnapshot {
+  id: string;
+  folder?: string;
+  category?: 'inbox' | 'priority' | 'archive';
+  deletedAt?: string;
+}
+
+/**
+ * Restores folder, category and deletedAt exactly as captured before a bulk action.
+ * An undefined value clears the field, which matches a recording that never had it.
+ */
+export async function restoreRecordingFields(snapshots: RecordingFieldSnapshot[]): Promise<void> {
+  const db = getDb();
+  await db.transaction('rw', db.recordings, async () => {
+    for (const snapshot of snapshots) {
+      await db.recordings.update(snapshot.id, {
+        folder: snapshot.folder,
+        category: snapshot.category,
+        deletedAt: snapshot.deletedAt,
+      });
+    }
+  });
+}
+
 export async function pushRecentLanguage(
   type: 'source' | 'target',
   langCode: string

@@ -155,7 +155,7 @@ export function AiSettings() {
         </div>
 
         <Link
-          href="/app"
+          href="/library"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -897,7 +897,7 @@ export function AiSettings() {
           </button>
 
           <Link
-            href="/app"
+            href="/library"
             style={{
               padding: '12px 22px',
               backgroundColor: 'var(--bg-secondary)',
