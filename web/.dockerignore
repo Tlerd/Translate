@@ -1,0 +1,35 @@
+# Dependencies and build output (installed/built inside the image)
+node_modules
+.next
+out
+build
+dist
+*.tsbuildinfo
+
+# Secrets and local env: inject at runtime (Cloud Run env vars / Secret Manager)
+.env
+.env.*
+!.env.example
+
+# Not needed to build or run
+.git
+.gitignore
+.dockerignore
+Dockerfile
+tests
+test-results
+coverage
+# scripts/lib is imported by src/app/api/speech/nemotron/session/route.ts at build time
+scripts/*
+!scripts/lib
+!scripts/lib/**
+docs
+.cache
+.vscode
+.idea
+*.md
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

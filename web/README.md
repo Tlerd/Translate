@@ -179,6 +179,8 @@ Các adapter không tự tạo kết quả giả khi thiếu API key. Test offli
 - **Vercel Production URL:** [translate-ruby-phi.vercel.app/app](https://translate-ruby-phi.vercel.app/app)
 - **Quy trình:**
   Mọi commit đẩy lên nhánh `main` của repository GitHub sẽ tự động kích hoạt tiến trình build và deploy trên Vercel theo thiết lập Git integration.
+- **Google Cloud Run (tùy chọn):** build từ `web/Dockerfile` (Next.js `output: 'standalone'`), dùng chung Neon, Vercel Blob và Upstash. Xem [hướng dẫn deploy Google Cloud](docs/DEPLOY-GOOGLE-CLOUD.md).
+
 # Soniox STT trực tiếp
 
 Ô nhận giọng có **Soniox · stt-rt-v5** cho Nhật/Việt. Key `SONIOX_API_KEY` chỉ đặt phía server; dùng `node scripts/soniox-key-setup.cjs` để mở form localhost và lưu vào `.env.local`, rồi khởi động lại server. Chọn Soniox và Lưu trước khi kiểm tra. Test kết nối gửi 1 giây audio im lặng, có thể tính phí và không bật mic.
