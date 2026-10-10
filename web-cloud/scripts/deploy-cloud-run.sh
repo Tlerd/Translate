@@ -126,6 +126,9 @@ rm -f "$ENV_FILE"
 say "6/6 Kiểm tra"
 code="$(curl -s -o /dev/null -w '%{http_code}' "$URL/login" || true)"
 echo "GET $URL/login → $code"
+for name in SONIOX_API_KEY OPENAI_API_KEY; do
+  case " ${SECRETS[*]} " in *" $name "*) ;; *) echo "! Chưa có $name: tính năng dùng key này sẽ báo lỗi. Thêm bằng: RESET=$name bash web-cloud/scripts/deploy-cloud-run.sh";; esac
+done
 cat <<EOF
 
 Xong. Còn 1 việc cần bạn tự làm (đăng nhập Google Cloud Console):
