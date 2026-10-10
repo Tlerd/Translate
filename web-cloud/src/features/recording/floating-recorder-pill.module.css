@@ -1,0 +1,161 @@
+.pillContainer {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #0b1120;
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 20px rgba(56, 189, 248, 0.15);
+  backdrop-filter: blur(12px);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.waveIndicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.waveBar {
+  width: 3px;
+  background-color: #84cc16;
+  border-radius: 9999px;
+  transition: height 0.1s ease;
+}
+
+.timer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.swapBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.swapBtn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+}
+
+.langBadge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sourceIcon {
+  display: inline-flex;
+  align-items: center;
+  color: #7dd3fc;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.pauseBtn {
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  font-size: 0.84rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pauseBtn:hover {
+  color: #38bdf8;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.stopSquareBtn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.stopSquareBtn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  transform: translateY(-1px);
+}
+
+.stopSquareBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .pillContainer {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 16px);
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  .pauseBtn {
+    padding: 4px 6px;
+    font-size: 0.78rem;
+  }
+  .timer {
+    font-size: 0.86rem;
+  }
+  .swapBtn {
+    font-size: 0.76rem;
+    padding: 3px 6px;
+  }
+  .stopSquareBtn {
+    padding: 4px 8px;
+    font-size: 0.78rem;
+  }
+}

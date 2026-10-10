@@ -1,0 +1,533 @@
+/* Building blocks shared by the settings page and its feature panels (AI models, connection tests).
+   Colors come from the theme tokens in globals.css, so light and dark themes both work.
+   Touch targets are 44px on phones and 40px on laptops. Form controls use 16px text on phones so
+   iOS does not zoom the page when a field is focused. */
+
+/* ---------- Cards ---------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+}
+
+@media (min-width: 720px) {
+  .card {
+    padding: 22px 24px;
+  }
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 12px;
+  min-width: 0;
+}
+
+.cardHeadMain {
+  display: flex;
+  flex: 1 1 240px;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cardHeadAside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cardIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: rgba(56, 189, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cardDescription {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.divider {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ---------- Fields ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fieldText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Short controls sit beside their label on laptops. Phones keep the label above the control. */
+@media (min-width: 720px) {
+  .fieldInline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+    align-items: center;
+    gap: 6px 20px;
+  }
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+@media (min-width: 720px) {
+  .control {
+    min-height: 40px;
+    font-size: 0.9375rem;
+  }
+}
+
+.control:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.range {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.range:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.valuePill {
+  flex: 0 0 auto;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(56, 189, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Buttons and chips ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+@media (min-width: 720px) {
+  .btn {
+    min-height: 40px;
+    font-size: 0.875rem;
+  }
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background: var(--bg-active);
+  color: #fff;
+}
+
+.btnSecondary {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btnDanger {
+  background: var(--danger-hover);
+  color: #fff;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .actionRow > .btn {
+    flex: 1 1 140px;
+  }
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chipRowLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+@media (max-width: 719px), (pointer: coarse) {
+  .chip {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 0.875rem;
+  }
+}
+
+.chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chipActive {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+@media (hover: hover) {
+  .btnPrimary:hover:not(:disabled),
+  .btnDanger:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .btnSecondary:hover:not(:disabled) {
+    background: var(--bg-card-hover);
+  }
+
+  .chip:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+}
+
+.btn:focus-visible,
+.chip:focus-visible,
+.control:focus-visible,
+.range:focus-visible,
+.disclosureSummary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Badges and notices (text + icon, never colour alone) ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.badge svg {
+  flex: 0 0 auto;
+}
+
+.badgeInfo {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.badgeInfo svg {
+  color: var(--accent);
+}
+
+.badgeSuccess {
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.badgeSuccess svg {
+  color: var(--success);
+}
+
+.badgeWarn {
+  border-color: color-mix(in srgb, var(--warning) 50%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.badgeWarn svg {
+  color: var(--warning);
+}
+
+.badgeError {
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.badgeError svg {
+  color: var(--danger);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.notice > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.noticeInfo {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
+}
+
+.noticeInfo > svg {
+  color: var(--accent);
+}
+
+.noticeSuccess {
+  border-color: color-mix(in srgb, var(--success) 50%, transparent);
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-primary));
+}
+
+.noticeSuccess > svg {
+  color: var(--success);
+}
+
+.noticeError {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg-primary));
+}
+
+.noticeError > svg {
+  color: var(--danger);
+}
+
+/* ---------- Disclosure (collapsible) ---------- */
+
+.disclosure {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.disclosureSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.disclosureSummary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosureSummary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.disclosure[open] > .disclosureSummary::before {
+  transform: rotate(90deg);
+}
+
+.disclosureBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 14px 14px;
+  min-width: 0;
+}
+
+/* ---------- Misc ---------- */
+
+.code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+
+  .btn,
+  .chip,
+  .disclosureSummary::before {
+    transition: none;
+  }
+}

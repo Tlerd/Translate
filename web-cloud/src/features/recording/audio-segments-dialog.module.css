@@ -1,0 +1,14 @@
+.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog { width: min(760px, 100%); max-height: 90dvh; overflow: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: 0 16px 60px rgba(0,0,0,.2); }
+.header, .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; }
+.header { border-bottom: 1px solid var(--border-color); }
+.header h2 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; margin: 0; }
+.header h2 svg { color: var(--accent); }
+.content { padding: 24px; display: grid; gap: 16px; }
+.content p { margin: 0; }
+.player { width: 100%; }
+.dialog button, .download { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); }
+.download { justify-self: start; color: var(--accent); }
+.note, .footer span { color: var(--text-muted); font-size: .85rem; }
+.footer { border-top: 1px solid var(--border-color); }
+@media (max-width: 600px) { .overlay { padding: 8px; } .header, .footer, .content { padding: 16px; } .footer { flex-wrap: wrap; } }

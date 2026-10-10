@@ -1,0 +1,533 @@
+/* Workspace & Layout Containers */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+/* Single slim top row: page header on the left, view tools on the right */
+.workspaceTabs {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 14px 0 12px;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  gap: 10px;
+  transition: border-color 0.25s ease;
+}
+
+.workspaceActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+/* Text labels of the view tools drop out on narrower laptop widths; the buttons keep their aria-label. */
+@media (max-width: 1200px) {
+  .actionLabel {
+    display: none;
+  }
+}
+
+.tabPillContainer {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 4px;
+}
+
+.tabPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: calc(var(--radius-md) - 3px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.tabPill:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.tabPillActive {
+  background-color: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.workspaceContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Split view: two panels, each with a thin header bar, a 1px divider and a collapsed rail */
+.splitContainer {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.splitPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panelBar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.panelBarEnd {
+  justify-content: flex-end;
+}
+
+.panelBarLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.panelCollapseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.panelCollapseBtn:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.panelCollapseBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.panelBody {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panelScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.paneFull {
+  min-width: 0;
+}
+
+.collapsedRail {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 100%;
+  padding-top: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border: none;
+  background-color: var(--bg-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.collapsedRail:hover {
+  color: var(--accent);
+  background-color: var(--bg-hover);
+}
+
+.collapsedRailLeft {
+  border-right: 1px solid var(--border-color);
+}
+
+.collapsedRailRight {
+  border-left: 1px solid var(--border-color);
+}
+
+.splitDivider {
+  position: relative;
+  flex: 0 0 8px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.splitDivider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.splitDivider:hover::before,
+.splitDivider[data-dragging='true']::before {
+  background-color: var(--accent);
+}
+
+/* Summary panel and image panel share one calm, centred reading column on desktop */
+.calmArea {
+  min-width: 0;
+}
+
+/* Transcript Pane */
+.transcriptPane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Captions sit in one column; desktop caps its width (see .transcriptFlat below) */
+.transcriptColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.emptyTranscript {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+  gap: 12px;
+}
+
+/* Transcript Caption Card (Uiverse style; desktop flattens it in .transcriptFlat) */
+.captionCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 10px;
+  overflow-wrap: anywhere;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.captionCard:hover {
+  border-color: var(--accent-glow);
+  box-shadow: var(--shadow-md);
+}
+
+.captionCardHighlighted {
+  background-color: rgba(56, 189, 248, 0.08) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 16px var(--accent-glow) !important;
+}
+
+.captionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.captionTime {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.captionMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 8px;
+}
+
+.speakerLabel {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  background-color: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.streamingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.streamingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulse 1.2s infinite;
+}
+
+.captionText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  font-size: 0.96rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.captionTranslation {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+  padding: 2px 0 2px 12px;
+  line-height: 1.55;
+  font-size: 1.04rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  border-top: 1px dashed var(--border-color);
+  border-left: 3px solid var(--accent);
+}
+
+.sourceHistory {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.sourceHistory summary {
+  width: fit-content;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.sourceHistory ol {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.sourceHistory li {
+  padding-left: 2px;
+  overflow-wrap: anywhere;
+}
+
+.historyRevision {
+  margin-left: 6px;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/* =========================================
+   RESPONSIVE DESIGN (Fixes Mobile Frozen Top)
+   ========================================= */
+
+@media (max-width: 768px) {
+  .workspaceTabs {
+    padding: 6px 10px;
+  }
+
+  .transcriptPane {
+    padding: 10px 10px;
+    gap: 10px;
+  }
+
+  .transcriptColumn {
+    gap: 10px;
+  }
+}
+
+.speakerSelect {
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.scrollToBottomBtn {
+  position: sticky;
+  bottom: 12px;
+  align-self: center;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s;
+}
+
+.scrollToBottomBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   DESKTOP (>768px): focused reading layout
+   Mobile keeps the card look above; these rules only apply on wider screens.
+   ========================================= */
+/* Non-reading transcript: flat captions in one centred column */
+.transcriptFlat {
+  padding: 16px 16px 72px;
+  gap: 0;
+}
+
+@media (min-width: 769px) {
+  .transcriptFlat {
+    padding: 24px 32px 80px;
+  }
+}
+
+.transcriptFlat .transcriptColumn {
+  gap: 2px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* Transcript alone (summary collapsed) gets a slightly wider column */
+.paneFull .transcriptFlat .transcriptColumn {
+  max-width: 820px;
+}
+
+.transcriptFlat .captionCard,
+.transcriptFlat .captionCard:hover {
+  gap: 0;
+  padding: 10px 14px;
+  background-color: transparent;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.transcriptFlat .captionHeader {
+  margin-bottom: 6px;
+}
+
+.transcriptFlat .captionText {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.transcriptFlat .captionTranslation {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.transcriptFlat .captionCardHighlighted,
+.transcriptFlat .captionCardHighlighted:hover {
+  background-color: rgba(56, 189, 248, 0.08) !important;
+  background-color: color-mix(in srgb, var(--accent) 9%, transparent) !important;
+  border: 0 !important;
+  border-radius: 10px;
+  box-shadow: none !important;
+}
+
+@media (min-width: 769px) {
+  /* Summary panel and image panel: the same centred column */
+  .calmArea {
+    padding: 0 32px 80px;
+  }
+
+  .calmArea > * {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

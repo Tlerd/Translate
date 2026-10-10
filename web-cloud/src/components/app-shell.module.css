@@ -1,0 +1,357 @@
+.shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sidebarWrapper {
+  width: 290px;
+  min-width: 290px;
+  max-width: 290px;
+  height: 100%;
+  border-right: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, box-shadow 0.25s ease;
+  z-index: 50;
+  overflow: hidden;
+}
+
+@media (min-width: 769px) {
+  .sidebarClosed {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    border-right: none !important;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.topBar {
+  flex: 0 0 54px;
+  height: 54px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 10px;
+  z-index: 30;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.toggleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggleButton:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.toggleButton:active {
+  transform: scale(0.95);
+}
+
+.topBarNewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.topBarNewBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.appTitle {
+  font-size: 0.98rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.appLogo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.accountWrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.activeSessionBanner {
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.recordingDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  animation: pulse 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.stopButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background-color: var(--danger);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.stopButton:hover {
+  background-color: var(--danger-hover);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+.contentBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile responsive drawer */
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .topBar {
+    padding: 0 10px;
+    height: 50px;
+    flex: 0 0 50px;
+  }
+
+  .topBarNewBtn {
+    display: none !important;
+  }
+
+  .contentBody {
+    padding-bottom: 60px;
+  }
+
+  .sidebarWrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  /* The bottom nav (60px, fixed, above the drawer) would cover the drawer footer: sync status,
+     Cấu hình AI and Chi phí. Reserving the nav's height at the bottom keeps the footer above it.
+     The nav stays visible and tappable under the backdrop. The drawer's content box shrinks,
+     so its full-height child (LibraryNav) shrinks with it. */
+  .sidebarWrapper {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* No bottom nav, no reserved strip under the content. */
+  .shell[data-bottom-nav='hidden'] .contentBody {
+    padding-bottom: 0;
+  }
+
+  /* Pages that hide the bottom nav (recording detail, live recording) need no reserved space. */
+  .shell[data-bottom-nav='hidden'] .sidebarWrapper {
+    padding-bottom: 0;
+  }
+
+  /* A closed drawer must not leak its shadow onto the left edge of the page. */
+  .sidebarClosed {
+    box-shadow: none;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, visibility 0s linear 0.25s;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    z-index: 40;
+  }
+}
+
+@media (max-width: 640px) {
+  .topBar {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .topBarLeft {
+    gap: 6px;
+  }
+
+  .topBarRight {
+    gap: 6px;
+  }
+
+  .appTitleText {
+    display: none;
+  }
+
+  .appTitle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    padding: 0;
+    gap: 0;
+    transition: all 0.15s ease;
+  }
+
+  .appTitle:hover {
+    background-color: var(--bg-hover);
+    transform: translateY(-1px);
+  }
+
+  .accountWrapper {
+    gap: 6px;
+  }
+
+  .activeSessionBanner {
+    padding: 3px 6px;
+    font-size: 0.72rem;
+  }
+
+  .stopButton span {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .recordingText {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .topBar {
+    gap: 4px;
+    padding: 0 4px;
+  }
+
+  .topBarLeft,
+  .topBarRight {
+    gap: 4px;
+  }
+}
+
+
+.menuButton {
+  display: flex;
+}
+
+/* Recording detail is a focused reading view: the global bar is hidden at every width.
+   Its sidebar toggle lives in the detail header instead (see sidebar-context.tsx). */
+.shell[data-recording-detail="true"] .topBar {
+  display: none !important;
+}
+

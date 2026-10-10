@@ -1,0 +1,92 @@
+.playerContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 4px 14px;
+  height: 38px;
+  min-width: 260px;
+}
+
+.playBtn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+
+.playBtn:hover:not(:disabled) {
+  transform: scale(1.1);
+  color: var(--accent);
+}
+
+.playBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.timeText {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.progressTrack {
+  flex: 1;
+  min-width: 60px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.progressTrack::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.progressTrack::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+
+.volumeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.volumeBtn:hover {
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .playerContainer {
+    min-width: 180px;
+    padding: 3px 10px;
+    gap: 8px;
+  }
+}
