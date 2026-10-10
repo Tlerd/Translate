@@ -56,7 +56,7 @@ Vercel chạy phần web và route cấp ticket. Tiến trình C++ cùng gateway
 
 ## Phạm vi và kiểm tra
 
-Danh mục chọn đầu vào có 32 locale dùng ngay theo model card, gồm `vi-VN` và `ja-JP`. Các ngôn ngữ chỉ dành cho adaptation như tiếng Thái không xuất hiện trong danh mục. Phiên hiện dùng `verbatim`, dấu câu tự động; không tải model phân biệt người nói nên gán Speaker thủ công. Không có phí API STT theo phút; vẫn có chi phí phần cứng/hosting và chi phí model dịch, tóm tắt hoặc ảnh nếu sử dụng.
+Danh mục chọn đầu vào có 31 locale dùng ngay theo model card (bỏ `hi-IN`), gồm `vi-VN` và `ja-JP`. Các ngôn ngữ chỉ dành cho adaptation như tiếng Thái không xuất hiện trong danh mục. Phiên hiện dùng `verbatim`, dấu câu tự động; không tải model phân biệt người nói nên gán Speaker thủ công. Không có phí API STT theo phút; vẫn có chi phí phần cứng/hosting và chi phí model dịch, tóm tắt hoặc ảnh nếu sử dụng.
 
 Kiểm tra tự động:
 

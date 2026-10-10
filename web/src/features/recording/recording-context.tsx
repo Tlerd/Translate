@@ -6,6 +6,7 @@ import type { ClassroomMode } from '@/shared/recording';
 import { loadSettings, saveSettings, settingsUpdatedEvent, pushRecentLanguage } from '@/storage/recordings';
 import type { AppSettings } from '@/shared/recording';
 import { inputLanguage } from '@/shared/languages';
+import { recoverInterruptedRecordings } from './recover-recordings';
 
 interface RecordingContextValue {
   controller: ClassroomController;
@@ -43,6 +44,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return () => {
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    recoverInterruptedRecordings(() => controllerRef.current?.activeRecordingId() ?? null)
+      .catch((error) => console.warn('Không khôi phục được buổi thu bị gián đoạn:', error));
   }, []);
 
   useEffect(() => {

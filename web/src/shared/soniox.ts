@@ -3,7 +3,7 @@ export const SONIOX_WEBSOCKET_URL = 'wss://stt-rt.soniox.com/transcribe-websocke
 // Soniox transcribes and translates between any pair of its 60+ languages. Codes are
 // its bare ISO codes; ja-JP and vi-VN keep their region so saved settings still match.
 export const SONIOX_LOCALES = [
-  'ja-JP', 'vi-VN', ...`af sq ar az eu be bn bs bg ca zh hr cs da nl en et fi fr gl de el gu he hi hu id it kn kk ko lv lt mk ms ml mr no fa pl pt pa ro ru sr sk sl es sw sv tl ta te th tr uk ur cy`.split(' '),
+  'ja-JP', 'vi-VN', ...`af sq ar az eu be bn bs bg ca zh hr cs da nl en et fi fr gl de el he hu id it kk ko lv lt mk ms no fa pl pt ro ru sr sk sl es sw sv tl th tr uk ur cy`.split(' '),
 ];
 const SONIOX_BASE_CODES = new Set(SONIOX_LOCALES.map((code) => code.split('-')[0]));
 // Google catalogue codes whose Soniox spelling differs.

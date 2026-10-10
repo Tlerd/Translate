@@ -1,5 +1,5 @@
 import { getDb } from './db';
-import { notifyAudio } from './audio-assets';
+import { notifyAudio, queueAudio } from './audio-assets';
 import { compareAudioChunkOrder } from '@/shared/audio';
 import type {
   RecordingItem,
@@ -102,6 +102,66 @@ export async function softDeleteRecording(id: string): Promise<void> {
     throw new Error('Buổi đang thu không thể xóa.');
   }
   await db.recordings.update(id, { deletedAt: new Date().toISOString() });
+}
+
+export async function listStuckRecordingIds(): Promise<string[]> {
+  const rows = await getDb().recordings.filter((recording) => recording.state === 'recording').toArray();
+  return rows.map((recording) => recording.id);
+}
+
+/**
+ * Marks recordings still in the 'recording' state as interrupted once no tab owns them, so a
+ * closed or crashed tab does not leave rows that cannot be deleted or synced.
+ */
+export async function recoverStaleRecordings(options: {
+  isLive: (id: string) => boolean;
+  now?: number;
+  minAgeMs?: number;
+}): Promise<number> {
+  const db = getDb();
+  const now = options.now ?? Date.now();
+  const cutoff = now - (options.minAgeMs ?? 0);
+  let recovered = 0;
+  const withAudio: string[] = [];
+
+  for (const id of await listStuckRecordingIds()) {
+    if (options.isLive(id)) continue;
+    const result = await db.transaction('rw', [db.recordings, db.audioChunks, db.audioSegments, db.captions], async () => {
+      const recording = await db.recordings.get(id);
+      if (!recording || recording.state !== 'recording') return null;
+      const createdMs = Date.parse(recording.createdAt);
+      if (createdMs > cutoff) return null;
+
+      let durationMs = recording.durationMs;
+      let hasChunks = false;
+      await db.audioChunks.where('recordingId').equals(id).each((chunk) => {
+        hasChunks = true;
+        durationMs = Math.max(durationMs, chunk.timestamp);
+      });
+      await db.captions.where('recordingId').equals(id).each((caption) => {
+        durationMs = Math.max(durationMs, caption.endMs);
+      });
+
+      const endedAt = Number.isNaN(createdMs) ? new Date(now) : new Date(createdMs + durationMs);
+      await db.recordings.update(id, { state: 'interrupted', durationMs, endedAt: endedAt.toISOString() });
+
+      const segments = await db.audioSegments.where('recordingId').equals(id).toArray();
+      for (const segment of segments) {
+        if (segment.status !== 'recording' || segment.id === undefined) continue;
+        await db.audioSegments.update(segment.id, hasChunks
+          ? { status: 'completed', endMs: durationMs, durationMs: Math.max(0, durationMs - (segment.startMs ?? 0)) }
+          : { status: 'failed' });
+      }
+      return { hasChunks };
+    });
+    if (!result) continue;
+    recovered += 1;
+    if (result.hasChunks) withAudio.push(id);
+  }
+
+  // Interrupted recordings with audio are queued for upload like a normal stop.
+  await Promise.all(withAudio.map((id) => queueAudio(id).catch((error) => console.warn('Audio đang chờ đồng bộ:', error))));
+  return recovered;
 }
 
 export async function restoreRecording(id: string): Promise<void> {
