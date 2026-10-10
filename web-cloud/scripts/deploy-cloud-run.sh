@@ -103,15 +103,25 @@ npm install --prefix "$R2_TMP" --silent --no-audit --no-fund @aws-sdk/client-s3@
 rm -rf "$R2_TMP"
 
 say "5/6 Build và deploy lên Cloud Run (lần đầu mất ~5–10 phút)"
-ENV_VARS="NODE_ENV=production@TRANSLATION_USAGE_STORE=on@AUTH_URL=$URL@OWNER_EMAIL=$OWNER_EMAIL"
-ENV_VARS+="@AUTH_GOOGLE_ID=$AUTH_GOOGLE_ID@AI_IMAGE_ENABLED=$AI_IMAGE_ENABLED"
-ENV_VARS+="@S3_ENDPOINT=$S3_ENDPOINT@S3_REGION=auto@S3_BUCKET=$S3_BUCKET"
+# A YAML file avoids gcloud's delimiter parsing (emails contain "@", URLs contain ":" and "/").
+ENV_FILE="$(mktemp)"
+yaml() { local v=${2//\\/\\\\}; v=${v//\"/\\\"}; printf '%s: "%s"\n' "$1" "$v" >> "$ENV_FILE"; }
+yaml NODE_ENV production
+yaml TRANSLATION_USAGE_STORE "on"
+yaml AUTH_URL "$URL"
+yaml OWNER_EMAIL "$OWNER_EMAIL"
+yaml AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
+yaml AI_IMAGE_ENABLED "$AI_IMAGE_ENABLED"
+yaml S3_ENDPOINT "$S3_ENDPOINT"
+yaml S3_REGION auto
+yaml S3_BUCKET "$S3_BUCKET"
 SECRET_FLAGS=""
 for name in "${SECRETS[@]}"; do SECRET_FLAGS+="${SECRET_FLAGS:+,}$name=$name:latest"; done
 gcloud run deploy "$SERVICE" --source "$APP_DIR" --project "$PROJECT" --region "$REGION" \
   --allow-unauthenticated --memory 1Gi --cpu 1 --timeout 300 \
   --min-instances 0 --max-instances 2 --no-cpu-throttling \
-  --set-env-vars "^@^$ENV_VARS" --set-secrets "$SECRET_FLAGS" --quiet
+  --env-vars-file "$ENV_FILE" --set-secrets "$SECRET_FLAGS" --quiet
+rm -f "$ENV_FILE"
 
 say "6/6 Kiểm tra"
 code="$(curl -s -o /dev/null -w '%{http_code}' "$URL/login" || true)"
