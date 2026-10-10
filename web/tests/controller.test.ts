@@ -140,6 +140,34 @@ describe('ClassroomController stop boundary', () => {
     expect(track.stop).toHaveBeenCalledOnce();
   });
 
+  it('holds a recording lock from start until stop', async () => {
+    const track = { stop: vi.fn() };
+    const lockRequests: Array<{ name: string; settled: boolean }> = [];
+    const locks = {
+      request: vi.fn((name: string, callback: () => Promise<void>) => {
+        const entry = { name, settled: false };
+        lockRequests.push(entry);
+        return callback().then(() => { entry.settled = true; });
+      }),
+    };
+    vi.stubGlobal('navigator', { locks, mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
+    vi.stubGlobal('window', { SpeechRecognition: FakeSpeechRecognition });
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    vi.stubGlobal('fetch', vi.fn(async () => completedResponse('x')));
+
+    const controller = new ClassroomController();
+    const recordingId = await controller.start({ pauseMs: 10_000 });
+    expect(lockRequests).toHaveLength(1);
+    expect(lockRequests[0].name).toBe(`may-dich-recording:${recordingId}`);
+    expect(controller.activeRecordingId()).toBe(recordingId);
+    await Promise.resolve();
+    expect(lockRequests[0].settled).toBe(false);
+
+    await controller.stop();
+    await vi.waitFor(() => expect(lockRequests[0].settled).toBe(true));
+    expect(controller.activeRecordingId()).toBeNull();
+  });
+
   it('keeps a finalized source and partial target while marking a failed request', async () => {
     const track = { stop: vi.fn() };
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });

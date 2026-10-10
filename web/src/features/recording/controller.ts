@@ -1,4 +1,5 @@
 import { queueAudio } from '@/storage/audio-assets';
+import { holdRecordingLock } from './recording-lock';
 import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/languages';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
@@ -138,6 +139,7 @@ export class ClassroomController {
 
   private speechRecognizer: GeminiTranscribeRecognizer | GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer | null = null;
   private pcmCapture: GeminiPcmCapture | null = null;
+  private releaseRecordingLock: (() => void) | null = null;
   private pcmPreparation: Promise<void> | null = null;
   private pcmAttached = false;
   private pcmInputCallback: ((samples: Float32Array, rate: number) => void) | null = null;
@@ -313,15 +315,25 @@ export class ClassroomController {
     const displayStream = displayRequest ? await displayRequest : undefined;
     this.undeliveredDisplayStream = displayStream ?? null;
 
-    const recording = await createRecording({
-      mode,
-      sourceLanguage,
-      targetLanguage,
-      translationModelKey,
-      transcriptionMode,
-      speakerCount,
-      audioSource,
-    });
+    // Held before the row exists so no other tab can see a 'recording' row without its lock.
+    const newRecordingId = crypto.randomUUID();
+    this.releaseRecordingLock = holdRecordingLock(newRecordingId);
+    let recording: Awaited<ReturnType<typeof createRecording>>;
+    try {
+      recording = await createRecording({
+        id: newRecordingId,
+        mode,
+        sourceLanguage,
+        targetLanguage,
+        translationModelKey,
+        transcriptionMode,
+        speakerCount,
+        audioSource,
+      });
+    } catch (error) {
+      this.dropRecordingLock();
+      throw error;
+    }
 
     const recordingId = recording.id;
     this.recordingConfig = { ...recording.config, transcriptionMode, speakerCount };
@@ -338,15 +350,21 @@ export class ClassroomController {
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
 
-    await createAudioSegment({
-      recordingId,
-      segmentIndex: 1,
-      kind: 'translating',
-      label: 'Toàn buổi',
-      startMs: 0,
-      status: 'recording',
-      mimeType: WebAudioRecorder.getBestSupportedMimeType() || 'audio/webm',
-    });
+    try {
+      await createAudioSegment({
+        recordingId,
+        segmentIndex: 1,
+        kind: 'translating',
+        label: 'Toàn buổi',
+        startMs: 0,
+        status: 'recording',
+        mimeType: WebAudioRecorder.getBestSupportedMimeType() || 'audio/webm',
+      });
+    } catch (error) {
+      try { await updateRecording(recordingId, { state: 'interrupted', audioState: 'missing' }); }
+      finally { this.dropRecordingLock(); }
+      throw error;
+    }
 
     this.state = {
       recordingId,
@@ -533,7 +551,8 @@ export class ClassroomController {
       this.durationIntervalId = null;
       this.assembler?.close(); this.assembler = null;
       this.scheduler?.close(); this.scheduler = null;
-      await updateRecording(recordingId, { state: 'interrupted', audioState: 'missing' });
+      try { await updateRecording(recordingId, { state: 'interrupted', audioState: 'missing' }); }
+      finally { this.dropRecordingLock(); }
       this.notify();
       throw err;
     }
@@ -1134,6 +1153,16 @@ export class ClassroomController {
     return this.audioRecorder?.audioInput?.levels() ?? null;
   }
 
+  private dropRecordingLock(): void {
+    const release = this.releaseRecordingLock;
+    this.releaseRecordingLock = null;
+    release?.();
+  }
+
+  public activeRecordingId(): string | null {
+    return this.state.state === 'recording' ? this.state.recordingId ?? null : null;
+  }
+
   private releaseUndeliveredDisplay(): void {
     const stream = this.undeliveredDisplayStream;
     this.undeliveredDisplayStream = null;
@@ -1307,6 +1336,8 @@ export class ClassroomController {
       }
       try { await updateRecording(recordingId, { state: 'stopped', endedAt: new Date(captureEndedAt).toISOString(), durationMs }); }
       catch (error) { stopErrors.push(`Lưu thời điểm dừng: ${String(error)}`); }
+      // The row is no longer 'recording', so other tabs have no reason to treat it as live.
+      this.dropRecordingLock();
     }
     await this.recognizerChange;
     this.clearSpeechTimers();

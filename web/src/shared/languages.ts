@@ -5,8 +5,9 @@ import { SONIOX_LOCALES } from './soniox';
 // Snapshot of Google's model-specific tables, checked 2026-10-03.
 // https://ai.google.dev/gemini-api/docs/transcribe#supported-languages
 // https://ai.google.dev/gemini-api/docs/live-api/capabilities#supported-languages
-const transcribeCodes = `af-ZA am-ET ar-EG hy-AM as-IN az-AZ be-BY bn-BD bn-IN bs-BA bg-BG rup-BG my-MM yue-Hant-HK ca-ES ceb km-KH hr-HR cs-CZ da-DK nl-NL en-GB en-IN en-US et-EE fa-IR fil-PH fi-FI fr-FR gl-ES ka-GE de-DE el-GR gu-IN ha-NG he-IL hi-IN hu-HU is-IS id-ID it-IT ja-JP jv-ID kea-CV kn-IN kk-KZ ko-KR ky-KG lv-LV ln-CD lt-LT mk-MK ms-MY ml-IN mt-MT cmn-Hans-CN mr-IN mn-MN ne-NP nb-NO or-IN pl-PL pt-BR pt-PT pa-IN pa-Guru-IN ro-RO ru-RU sr-RS sd-Arab-IN sk-SK sl-SI es-419 es-US sw-KE sv-SE tg-TJ te-IN th-TH tr-TR uk-UA uz-UZ vi-VN`.split(' ');
-const liveCodes = `af ak sq am ar hy as az eu be bn bs bg my ca ceb zh-Hans zh-Hant hr cs da nl en et fo fil fi fr gl ka de el gu ha he hi hu is id ga it ja kn kk km rw ko ku ky lo lv lt mk ms ml mt mi mr mn ne no nb or om ps fa pl pt-BR pt-PT pa qu ro rm ru sr sd si sk sl so st es sw sv tg ta te th tn tr tk uk ur uz vi cy fy wo yo zu`.split(' ');
+// Indian languages and India-region variants are left out on purpose.
+const transcribeCodes = `af-ZA am-ET ar-EG hy-AM az-AZ be-BY bn-BD bs-BA bg-BG rup-BG my-MM yue-Hant-HK ca-ES ceb km-KH hr-HR cs-CZ da-DK nl-NL en-GB en-US et-EE fa-IR fil-PH fi-FI fr-FR gl-ES ka-GE de-DE el-GR ha-NG he-IL hu-HU is-IS id-ID it-IT ja-JP jv-ID kea-CV kk-KZ ko-KR ky-KG lv-LV ln-CD lt-LT mk-MK ms-MY mt-MT cmn-Hans-CN mn-MN ne-NP nb-NO pl-PL pt-BR pt-PT ro-RO ru-RU sr-RS sk-SK sl-SI es-419 es-US sw-KE sv-SE tg-TJ th-TH tr-TR uk-UA uz-UZ vi-VN`.split(' ');
+const liveCodes = `af ak sq am ar hy az eu be bn bs bg my ca ceb zh-Hans zh-Hant hr cs da nl en et fo fil fi fr gl ka de el ha he hu is id ga it ja kk km rw ko ku ky lo lv lt mk ms mt mi mn ne no nb om ps fa pl pt-BR pt-PT qu ro rm ru sr sd si sk sl so st es sw sv tg th tn tr tk uk ur uz vi cy fy wo yo zu`.split(' ');
 
 export interface LanguageOption { code: string; name: string }
 const names = new Intl.DisplayNames(['vi'], { type: 'language' });

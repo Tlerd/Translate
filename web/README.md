@@ -24,7 +24,7 @@
 
 ### Nhận giọng và người nói
 
-**Nemotron 3.5 ASR + NeMo-Speech.cpp** đã có trong ô chọn **Nhận giọng**, dùng WebSocket với máy chủ riêng. Hỗ trợ 32 locale dùng ngay, gồm Việt và Nhật, không cần huấn luyện lại; phần dịch chữ vẫn dùng model dịch đã chọn. Xem [hướng dẫn cài, chạy GPU/CPU và kết nối web đã deploy](docs/NEMOTRON-STT.md).
+**Nemotron 3.5 ASR + NeMo-Speech.cpp** đã có trong ô chọn **Nhận giọng**, dùng WebSocket với máy chủ riêng. Hỗ trợ 31 locale dùng ngay (đã bỏ tiếng Ấn Độ), gồm Việt và Nhật, không cần huấn luyện lại; phần dịch chữ vẫn dùng model dịch đã chọn. Xem [hướng dẫn cài, chạy GPU/CPU và kết nối web đã deploy](docs/NEMOTRON-STT.md).
 
 Web hỗ trợ `gemini-3.5-transcribe-live` qua Live API WebSocket và `gemini-3.5-transcribe` qua Interactions API theo đoạn. Gemini chỉ dùng thế hệ 3.5: Gemini 3 Flash Live (`gemini-3.1-flash-live-preview`) đã bỏ, cấu hình cũ `google-flash`/`google-flash-live` tự chuyển sang Gemini 3.5 Transcribe. Dừng ngắt thu PCM ngay; Live chờ kết quả cuối tối đa 5 giây, Transcribe theo đoạn tối đa 20 giây rồi hủy phần nhận giọng còn chờ (audio vẫn lưu). Đoạn im lặng không được gửi đi phiên âm.
 
@@ -43,7 +43,7 @@ Tham khảo [hướng dẫn phiên âm Google](https://ai.google.dev/gemini-api/
 
 ### Ngôn ngữ
 
-Hai ô **Ngôn ngữ đầu vào / Ngôn ngữ đầu ra** có tìm theo tên tiếng Việt hoặc mã, nút đổi chiều và số lựa chọn thực tế. Mặc định Nhật (`ja-JP`) → Việt (`vi`); lưu lựa chọn qua tải lại và vào từng buổi, khóa khi thu. Màn hình điện thoại nhỏ hiện chiều dịch gọn trong lúc ghi âm. Danh mục trong `src/shared/languages.ts` lấy theo bảng Google: Transcribe có 83 mã không trùng; đầu ra có 180 mã. Đây là số lựa chọn gồm vùng/script, không phải 180 ngôn ngữ riêng biệt. Mã `es-419`, `yue-Hant-HK`, `cmn-Hans-CN` được giữ đầy đủ khi gửi API.
+Hai ô **Ngôn ngữ đầu vào / Ngôn ngữ đầu ra** có tìm theo tên tiếng Việt hoặc mã, nút đổi chiều và số lựa chọn thực tế. Mặc định Nhật (`ja-JP`) → Việt (`vi`); lưu lựa chọn qua tải lại và vào từng buổi, khóa khi thu. Màn hình điện thoại nhỏ hiện chiều dịch gọn trong lúc ghi âm. Danh mục trong `src/shared/languages.ts` lấy theo bảng Google: Transcribe có 70 mã không trùng; đầu ra có 157 mã. Ngôn ngữ Ấn Độ và biến thể vùng Ấn Độ (`-IN`) được bỏ có chủ đích. Đây là số lựa chọn gồm vùng/script, không phải 157 ngôn ngữ riêng biệt. Mã `es-419`, `yue-Hant-HK`, `cmn-Hans-CN` được giữ đầy đủ khi gửi API.
 
 Hội thoại hai chiều hiện ở giai đoạn [nghiên cứu phương án A/B](docs/BIDIRECTIONAL-CONVERSATION.md).
 
