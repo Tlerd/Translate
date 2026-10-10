@@ -1,0 +1,157 @@
+.shell {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.exit,
+.iconButton,
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.exit {
+  padding: 0 12px;
+}
+
+.iconButton {
+  width: 36px;
+  padding: 0;
+}
+
+.iconButton:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.exit:hover,
+.iconButton:not(:disabled):hover,
+.segment:hover {
+  background: var(--bg-hover);
+}
+
+.exit:focus-visible,
+.iconButton:focus-visible,
+.segment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.segment {
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.segmentActive {
+  border-color: var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sizer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scale {
+  min-width: 44px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .title {
+    order: 1;
+    flex-basis: calc(100% - 110px);
+  }
+
+  .exit {
+    order: 0;
+  }
+
+  .controls {
+    order: 2;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 8px;
+  }
+
+  .segment {
+    padding: 0 8px;
+    font-size: 0.8rem;
+  }
+}

@@ -3,6 +3,7 @@
 ## Project Structure & Module Organization
 
 - `web/`: Next.js App Router application. Routes and API handlers live in `src/app/`; feature controllers and UI in `src/features/`; shared components in `src/components/`; provider integrations in `src/server/`; IndexedDB persistence in `src/storage/`. Static assets are in `public/`, tests in `tests/`, and smoke scripts in `scripts/`.
+- `web-cloud/`: container build of the web app for Google Cloud Run / AWS. Same layout as `web/`, but uses only standard services: Postgres via `pg` (`DATABASE_URL`), Redis protocol (`REDIS_URL`) and S3-compatible storage (`S3_*`). Keep `web/` (Vercel) unchanged when working here. Deploy guide: `web-cloud/docs/DEPLOY-GOOGLE-CLOUD.md`.
 - `app/`: Flutter Android application. Dart modules live in `lib/`, tests in `test/`, native Kotlin integrations in `android/`, and build/benchmark scripts in `tool/`. Release artifacts and checksums belong in `releases/`.
 - Root Markdown files contain Vietnamese setup guides, product plans, and acceptance notes.
 

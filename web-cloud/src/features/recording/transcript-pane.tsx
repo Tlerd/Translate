@@ -1,0 +1,281 @@
+'use client';
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { ArrowDown } from 'lucide-react';
+import type { CaptionItem } from '@/shared/recording';
+import { displaySpeakerLabel, isSourceSpeakerLabel, SOURCE_SPEAKER_LABELS, SPEAKER_COUNTS, type SpeakerCount } from '@/shared/transcription';
+import type { ReadingDisplay } from './reading-prefs';
+import styles from './recording-ui.module.css';
+
+interface TranscriptPaneProps {
+  captions: CaptionItem[];
+  highlightCaptionId?: number | null;
+  speakerCount?: SpeakerCount;
+  targetLanguage?: string;
+  onSpeakerChange?: (captionId: number, speakerLabel: string | undefined) => Promise<void>;
+  /** Full-screen reading: a centred column with scalable text. */
+  reading?: { scale: number; display: ReadingDisplay };
+  /** Reports the pane's own scroll position, so a parent can hide its bars while reading. */
+  onScrollTop?: (scrollTop: number) => void;
+  /** Saved recordings open at the first line; live captions follow the newest line. */
+  startAtTop?: boolean;
+}
+
+export function TranscriptPane({ captions, highlightCaptionId, speakerCount = 8, targetLanguage, onSpeakerChange, reading, onScrollTop, startAtTop = false }: TranscriptPaneProps) {
+  const scale = reading?.scale ?? 1;
+  const display = reading?.display ?? 'both';
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(!reading && !startAtTop);
+  const [pendingSpeakerId, setPendingSpeakerId] = useState<number | null>(null);
+  const [speakerError, setSpeakerError] = useState<string | null>(null);
+
+  const changeSpeaker = async (captionId: number, label: string) => {
+    if (!onSpeakerChange || pendingSpeakerId !== null) return;
+    setPendingSpeakerId(captionId);
+    setSpeakerError(null);
+    try { await onSpeakerChange(captionId, label || undefined); }
+    catch (error) { setSpeakerError(error instanceof Error ? error.message : String(error)); }
+    finally { setPendingSpeakerId(null); }
+  };
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // User is considered at the bottom if within 48px
+    const isNearBottom = distanceToBottom <= 48;
+    setAutoScroll(isNearBottom);
+    onScrollTop?.(el.scrollTop);
+  }, [onScrollTop]);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    setAutoScroll(true);
+    const el = containerRef.current;
+    if (el) {
+      if (smooth) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (autoScroll && containerRef.current) {
+      const el = containerRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [captions, autoScroll]);
+
+  // Source labels ("Tôi", "Cuộc họp") only appear for mixed microphone + screen recordings.
+  const hasSourceLabels = captions.some((cap) => isSourceSpeakerLabel(cap.speakerLabel));
+
+  const getSpeakerColor = (label?: string) => {
+    if (!label) return '#6366f1';
+    const colors = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6', '#14b8a6'];
+    let hash = 0;
+    for (let i = 0; i < label.length; i++) hash += label.charCodeAt(i);
+    return colors[hash % colors.length];
+  };
+
+  const formatTimestamp = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  if (captions.length === 0) {
+    return (
+      <div data-testid="transcript-empty-state" className={styles.emptyTranscript} style={{ color: 'var(--text-muted)' }}>
+        <p style={{ fontSize: '1rem', fontWeight: 600 }}>Chưa có nội dung nói</p>
+        <p style={{ fontSize: '0.85rem' }}>
+          Bấm <strong>Bắt đầu thu</strong> và nói vào micro để nhận diện giọng nói và dịch thời gian thực.
+        </p>
+      </div>
+    );
+  }
+
+  // Reading mode keeps its scalable inline type; otherwise the CSS classes decide (desktop flattens them).
+  const sourceStyle: React.CSSProperties | undefined = reading
+    ? { fontWeight: 500, fontSize: `${0.96 * scale}rem`, lineHeight: 1.5, color: 'var(--text-primary)' }
+    : undefined;
+  const translationStyle: React.CSSProperties | undefined = reading
+    ? {
+        marginTop: 8,
+        padding: '2px 0 2px 12px',
+        fontSize: `${1.04 * scale}rem`,
+        lineHeight: 1.55,
+        fontWeight: 500,
+        color: 'var(--text-primary)',
+        borderLeft: '3px solid var(--accent)',
+      }
+    : undefined;
+
+  return (
+    <div
+      ref={containerRef}
+      data-testid="transcript-pane"
+      className={reading ? styles.transcriptPane : `${styles.transcriptPane} ${styles.transcriptFlat}`}
+      onScroll={handleScroll}
+      onTouchMove={handleScroll}
+      style={reading ? { padding: '24px max(16px, calc((100% - 880px) / 2)) 48px' } : undefined}
+    >
+      <div className={styles.transcriptColumn}>
+        {speakerError && <div role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem' }}>{speakerError}</div>}
+        {captions.map((cap) => {
+          const isHighlighted = highlightCaptionId === cap.id;
+          const isStreaming = cap.state === 'streaming';
+          const speakerNumber = cap.speakerLabel ? cap.speakerLabel.replace('spk_', '') : '1';
+          const isSource = isSourceSpeakerLabel(cap.speakerLabel);
+          // Avatar shows the number for Speaker N, or the initial for a source label.
+          const avatarText = isSource ? (cap.speakerLabel === SOURCE_SPEAKER_LABELS.mic ? 'T' : 'CH') : speakerNumber;
+          const speakerName = cap.speakerLabel ? displaySpeakerLabel(cap.speakerLabel) : `Speaker ${speakerNumber}`;
+
+          return (
+            <div
+              key={cap.id}
+              id={`caption-${cap.id}`}
+              data-testid="caption-card"
+              className={`${styles.captionCard} ${isHighlighted ? styles.captionCardHighlighted : ''}`}
+            >
+              {/* Header: Speaker Avatar, Name, and Timestamp */}
+              <div className={styles.captionHeader}>
+                <div className={styles.captionMeta} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      backgroundColor: getSpeakerColor(cap.speakerLabel),
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                    title={isSource ? speakerName : `Người nói ${speakerNumber}`}
+                  >
+                    {avatarText}
+                  </div>
+
+                  {onSpeakerChange ? (
+                    <select
+                      aria-label={`Người nói cho câu ${cap.id}`}
+                      className={styles.speakerSelect}
+                      value={cap.speakerLabel ?? ''}
+                      disabled={pendingSpeakerId !== null}
+                      aria-busy={pendingSpeakerId === cap.id}
+                      onChange={(event) => void changeSpeaker(cap.id, event.target.value)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      <option value="">{isSource ? 'Chưa gán' : `Speaker ${speakerNumber}`}</option>
+                      {(hasSourceLabels || isSource) && (
+                        <>
+                          <option value={SOURCE_SPEAKER_LABELS.mic}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.mic)}</option>
+                          <option value={SOURCE_SPEAKER_LABELS.display}>{displaySpeakerLabel(SOURCE_SPEAKER_LABELS.display)}</option>
+                        </>
+                      )}
+                      {cap.speakerLabel && !isSource && !SPEAKER_COUNTS.slice(0, speakerCount).some(count => cap.speakerLabel === `spk_${count}`) && (
+                        <option value={cap.speakerLabel} disabled>{displaySpeakerLabel(cap.speakerLabel)} (nhãn cũ)</option>
+                      )}
+                      {SPEAKER_COUNTS.slice(0, speakerCount).map(count => <option key={count} value={`spk_${count}`}>Speaker {count}</option>)}
+                    </select>
+                  ) : (
+                    <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                      {speakerName}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isStreaming && (
+                    <span className={styles.streamingBadge}>
+                      <span className={styles.streamingDot} />
+                      {cap.isFinal && targetLanguage !== 'none' ? 'Đang dịch...' : 'Đang nghe...'}
+                    </span>
+                  )}
+                  <span className={styles.captionTime}>
+                    {formatTimestamp(cap.startMs)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Original source (the translation stands alone when only it is wanted and exists) */}
+              {(display !== 'translation' || !cap.translation) && (
+                <div
+                  data-testid="caption-source"
+                  className={styles.captionText}
+                  style={sourceStyle}
+                >
+                  {cap.source}
+                </div>
+              )}
+
+              {cap.sourceHistory?.length ? (
+                <details className={styles.sourceHistory} style={{ marginTop: 4 }}>
+                  <summary>Lời nhận dạng trước đó ({cap.sourceHistory.length})</summary>
+                  <ol>
+                    {cap.sourceHistory.map((item) => (
+                      <li key={`${item.revision}-${item.text}`}>
+                        <span>{item.text}</span>
+                        <span className={styles.historyRevision}>Bản {item.revision}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
+
+              {/* Translation */}
+              {targetLanguage !== 'none' && display !== 'source' && (cap.translation || isStreaming) && (
+                <div
+                  className={styles.captionTranslation}
+                  data-testid="caption-translation"
+                  style={translationStyle}
+                >
+                  {cap.translation || (isStreaming ? '...' : '')}
+                  {cap.translation && cap.targetSourceRevision !== cap.revision && (
+                    <span style={{ display: 'block', marginTop: 4, color: 'var(--warning)', fontSize: '0.76rem' }}>
+                      Bản dịch cũ — lời gốc đã được chỉnh sửa
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {cap.error && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>
+                  Lỗi dịch: {cap.error}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div ref={bottomRef} />
+      {!autoScroll && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom(true)}
+          className={styles.scrollToBottomBtn}
+          title="Cuộn xuống bản dịch mới nhất"
+          aria-label="Cuộn xuống bản dịch mới nhất"
+        >
+          <ArrowDown size={14} />
+          <span>Cuộn xuống cuối</span>
+        </button>
+      )}
+    </div>
+  );
+}

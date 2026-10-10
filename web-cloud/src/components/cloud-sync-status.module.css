@@ -1,0 +1,116 @@
+.syncButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.syncButton:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  transform: translateY(-1px);
+}
+
+.syncButton:active {
+  transform: scale(0.96);
+}
+
+.iconWrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotDone {
+  background-color: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.dotSyncing {
+  background-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulseDot 1.2s infinite;
+}
+
+.dotError {
+  background-color: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+.errorIcon {
+  color: var(--warning);
+}
+
+.syncText {
+  display: inline;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+/* Mobile responsive: compact icon button */
+@media (max-width: 640px) {
+  .syncButton {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .syncText {
+    display: none;
+  }
+
+  .statusDot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border: 1.5px solid var(--bg-card);
+  }
+}
