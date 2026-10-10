@@ -45,6 +45,14 @@ describe('Soniox temporary session route', () => {
     expect((await POST(request(undefined, { Origin: 'https://other.example' }))).status).toBe(403);
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('accepts the public Origin behind Cloud Run where req.url is the internal address', async () => {
+    const host = 'translate-web-1.asia-southeast1.run.app';
+    const cloudRun = (origin: string) => new Request('http://0.0.0.0:8080/api/speech/soniox/session', { method: 'POST', body: JSON.stringify({ languageCode: 'ja-JP' }), headers: { Host: host, 'X-Forwarded-Proto': 'https', Origin: origin } });
+    const response = await POST(cloudRun(`https://${host}`));
+    expect(response.status).not.toBe(403);
+    expect(response.status).toBe(200);
+    expect((await POST(cloudRun('https://evil.example'))).status).toBe(403);
+  });
   it('does not call upstream when the key is absent or the application rate limit is reached', async () => {
     vi.stubEnv('SONIOX_API_KEY', '');
     expect(await (await POST(request())).json()).toMatchObject({ error: { code: 'MISSING_CONFIG', retryable: false } });

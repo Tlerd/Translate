@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { getServerEnv } from '@/config/env.server';
 import { verifyAuthGuard } from '@/server/http/guard';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
+import { isAllowedOrigin } from '@/server/http/public-origin';
 import { checkRateLimit } from '@/server/http/rate-limit';
 import { createSonioxSession, SonioxProviderError, sonioxErrorResponse } from '@/server/speech/soniox';
 import { inputLanguage } from '@/shared/languages';
@@ -15,7 +16,7 @@ export async function POST(req: Request): Promise<Response> {
   const guard = await verifyAuthGuard(req);
   if (guard) { guard.headers.set('Cache-Control', 'no-store'); return guard; }
   const origin = req.headers.get('origin');
-  if (origin && origin !== new URL(req.url).origin) return sonioxErrorResponse(403, 'UNAUTHORIZED', 'Nguồn yêu cầu cấp phiên không hợp lệ.');
+  if (origin && !isAllowedOrigin(req, origin)) return sonioxErrorResponse(403, 'UNAUTHORIZED', 'Nguồn yêu cầu cấp phiên không hợp lệ.');
   let parsed: z.infer<typeof schema>;
   try {
     const result = schema.safeParse(await boundedJson(req, 2048));

@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/config/env.server';
 import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
+import { publicOrigin } from '@/server/http/public-origin';
 import { inputLanguage } from '@/shared/languages';
 import { NEMOTRON_MODEL } from '@/shared/nemotron';
 import { createNemotronTicket } from '../../../../../../scripts/lib/nemotron-ticket.mjs';
@@ -33,7 +34,7 @@ export async function POST(req: Request): Promise<Response> {
     base = new URL(env.NEMOTRON_BASE_URL); socket = new URL(env.NEMOTRON_WEBSOCKET_URL);
     if (!['http:', 'https:'].includes(base.protocol) || !['ws:', 'wss:'].includes(socket.protocol) ||
         base.username || base.password || base.search || base.hash || socket.username || socket.password || socket.search || socket.hash) throw new Error('Invalid URLs');
-    if (new URL(req.url).protocol === 'https:' && socket.protocol !== 'wss:') throw new Error('WSS is required');
+    if (new URL(publicOrigin(req)).protocol === 'https:' && socket.protocol !== 'wss:') throw new Error('WSS is required');
   } catch { return makeErrorResponse(503, 'MISSING_CONFIG', 'Địa chỉ máy chủ Nemotron chưa hợp lệ hoặc chưa hỗ trợ kết nối bảo mật.'); }
   try {
     const ready = await fetch(new URL('/ready', base), {
@@ -44,7 +45,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!ready.ok || status.ready !== true || !status.capabilities?.includes('asr')) throw new Error('ASR not ready');
   } catch { return makeErrorResponse(503, 'INTERNAL_ERROR', 'Máy chủ Nemotron chưa sẵn sàng. Kiểm tra tiến trình nhận giọng rồi thử lại.'); }
   const ticket = createNemotronTicket(env.NEMOTRON_GATEWAY_SECRET, {
-    origin: new URL(req.url).origin, language, endpointingMs: pauseMs,
+    origin: publicOrigin(req), language, endpointingMs: pauseMs,
   });
   return Response.json({ ...ticket, model: NEMOTRON_MODEL, websocketUrl: socket.toString(), sessionLimitMs: 600_000 }, { headers: { 'Cache-Control': 'no-store' } });
 }
