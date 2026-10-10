@@ -9,11 +9,13 @@ import {
   BarChart3,
   Cloud,
   Cpu,
+  HardDrive,
   SunMoon,
   type LucideIcon,
 } from 'lucide-react';
 import { AiSettings } from '@/features/settings/ai-settings';
 import { TranslationConnectionTest } from '@/features/settings/translation-connection-test';
+import { CloudAudioStorage } from '@/features/settings/cloud-audio-storage';
 import { SpeechConnectionTest } from '@/features/settings/speech-connection-test';
 import { useSettingsSections } from '@/features/settings/use-settings-sections';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -32,6 +34,7 @@ const GROUPS: readonly SettingsGroupLink[] = [
   { id: 'ai-config', label: 'Mô hình AI', icon: Cpu },
   { id: 'connection-tests', label: 'Kiểm tra kết nối', icon: Activity },
   { id: 'usage-cost', label: 'Chi phí', icon: BarChart3 },
+  { id: 'cloud-audio', label: 'Lưu trữ audio trên cloud', icon: HardDrive },
 ];
 
 const GROUP_IDS = GROUPS.map((group) => group.id);
@@ -186,6 +189,16 @@ export default function SettingsPage() {
                   <ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </section>
+            </div>
+          </section>
+
+          <section id="cloud-audio" className={styles.group} aria-labelledby="settings-group-cloud-audio">
+            <div className={styles.groupHeader}>
+              <h2 id="settings-group-cloud-audio" className={styles.groupTitle}>Lưu trữ audio trên cloud</h2>
+              <p className={styles.groupDescription}>Kiểm tra dung lượng kho Blob và dọn audio không còn thuộc buổi ghi nào.</p>
+            </div>
+            <div className={styles.groupBody}>
+              <CloudAudioStorage />
             </div>
           </section>
         </div>

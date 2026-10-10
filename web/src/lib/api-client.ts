@@ -12,6 +12,7 @@ import type {
   ApiErrorResponse,
 } from '@/shared/ai-contracts';
 import type { SpeechUsageSummary, TranslationMetrics, UsageSummary } from '@/shared/usage';
+import type { AudioCleanupResult, AudioStorageReport } from '@/shared/audio-storage';
 
 export async function fetchModels(): Promise<ModelsResponse> {
   const res = await fetch('/api/models', {
@@ -220,4 +221,26 @@ export async function fetchSpeechUsage(query: {
   }
 
   return res.json();
+}
+
+async function audioStorageRequest<T>(method: 'GET' | 'POST', fallback: string, body?: unknown): Promise<T> {
+  const res = await fetch('/api/recordings/audio/storage', {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof errorBody.error === 'string' && errorBody.error ? errorBody.error : `${fallback}: HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export function fetchAudioStorageReport(): Promise<AudioStorageReport> {
+  return audioStorageRequest('GET', 'Lỗi tải dung lượng audio trên cloud');
+}
+
+export function cleanupOrphanAudio(): Promise<AudioCleanupResult> {
+  return audioStorageRequest('POST', 'Lỗi dọn audio mồ côi', { confirm: true });
 }
