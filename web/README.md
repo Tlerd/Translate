@@ -7,7 +7,7 @@
 ### Hai phần sản phẩm độc lập
 1. **Phần A: Dịch sát nút (Live Translation):**
    - Ưu tiên model chi phí thấp, phản hồi nhanh theo từng cụm câu nói.
-   - Nhận giọng bằng Gemini 3.5 Transcribe, Gemini 3.5 Translate Live hoặc Soniox; dịch theo luồng SSE.
+   - Nhận giọng bằng Gemini 3.5 Transcribe, Gemini 3.5 Transcribe Live (có dịch) hoặc Soniox; dịch theo luồng SSE.
    - Một **MediaRecorder** chạy liên tục từ đầu đến cuối buổi, lưu chunk vào IndexedDB (Dexie). **Dừng API** chỉ ngừng gửi audio mới; micro vẫn ghi, các câu đã nhận tiếp tục dịch.
    - Kết thúc buổi: worker Mediabunny chuẩn hóa metadata, timestamp và chỉ mục tua, kiểm chứng file rồi tự đưa vào hàng đợi upload private Blob. Một trình phát và nút **Tải toàn buổi** dùng thời lượng file thực; thời gian buổi học được hiển thị riêng nếu khác. Bản gốc trên máy được giữ.
    - Chữ gốc hiện ngay; các delta SSE cập nhật bản dịch khi request còn chạy. Scheduler giữ tối đa 1 request dịch đang chạy, gộp các bản chữ tạm và giữ hàng đợi câu đã chốt. Chỉ chữ tạm bị thay thế/quá hạn; các câu đã chốt được xử lý đầy đủ theo thứ tự.

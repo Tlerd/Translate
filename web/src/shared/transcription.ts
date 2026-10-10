@@ -16,7 +16,7 @@ export function isLiveSpeechProvider(provider: SpeechProvider): boolean {
 export function speechProviderName(provider: SpeechProvider): string {
   if (provider === 'soniox') return 'Soniox · stt-rt-v5 (dịch trực tiếp, 60+ ngôn ngữ)';
   if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
-  return provider === 'google' ? 'Gemini 3.5 Translate Live' : 'Gemini 3.5 Transcribe';
+  return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
 }
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type SpeakerCount = typeof SPEAKER_COUNTS[number];

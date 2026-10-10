@@ -65,7 +65,8 @@ export async function normalizeAudio(parts: AudioPart[]): Promise<NormalizedAudi
     if (needsDecode || (codec !== 'opus' && codec !== 'aac')) {
       // Separate AAC/Opus streams can have independent decoder priming. Decode
       // each stream separately so its delay/padding isn't replayed at joins.
-      const source = new AudioSampleSource({ codec: codec === 'opus' ? 'opus' : 'aac', bitrate: 128_000 });
+      // Re-encoding keeps the speech bitrate the recorder uses; AAC needs more bits than Opus for the same clarity.
+      const source = new AudioSampleSource({ codec: codec === 'opus' ? 'opus' : 'aac', bitrate: codec === 'opus' ? 32_000 : 64_000 });
       output.addAudioTrack(source); await output.start();
       for (const track of tracks) {
         for await (const sample of new AudioSampleSink(track).samples()) {

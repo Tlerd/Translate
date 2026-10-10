@@ -146,7 +146,7 @@ export function AiSettings() {
           <strong className={styles.introTitle}>Kiến trúc trực tiếp từ giọng nói (Direct Speech Translation)</strong>
           <ul className={styles.introList}>
             <li>
-              <strong>Phần A (Nhận diện &amp; Dịch trực tiếp):</strong> Dùng Gemini 3.5 Translate Live hoặc Soniox stt-rt-v5 dịch trực tiếp từ sóng âm micro ra ngôn ngữ đích đã chọn, không cần mô hình dịch chữ trung gian.
+              <strong>Phần A (Nhận diện &amp; Dịch trực tiếp):</strong> Dùng Gemini 3.5 Transcribe Live hoặc Soniox stt-rt-v5 dịch trực tiếp từ sóng âm micro ra ngôn ngữ đích đã chọn, không cần mô hình dịch chữ trung gian.
             </li>
             <li>
               <strong>Phần B (Tóm tắt &amp; Mindmap):</strong> Dùng Gemini phân tích sâu và trích xuất điểm chính sau khi kết thúc buổi ghi.
@@ -279,7 +279,7 @@ export function AiSettings() {
                   })
                 }
               >
-                <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
+                <option value="google">Gemini 3.5 Transcribe Live · trực tiếp, có dịch</option>
                 <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (dịch 60+ ngôn ngữ, tách người nói)</option>
                 <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
                 <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
@@ -293,7 +293,7 @@ export function AiSettings() {
                 </div>
                 {settings.speechProvider === 'google' && (
                   <p className={styles.providerText}>
-                    Gemini 3.5 Translate Live nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Tự động gia hạn phiên kết nối cho các buổi học dài.
+                    Model <code className={shared.code}>gemini-3.5-transcribe-live</code> (bật dịch) nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Trên Google AI Studio, phí nằm ở mục Gemini 3.5 Transcribe Live. Tự động gia hạn phiên kết nối cho các buổi học dài.
                   </p>
                 )}
                 {settings.speechProvider === 'soniox' && (

@@ -13,7 +13,7 @@ import type { AudioSource } from '@/shared/recording';
 import styles from './record-source.module.css';
 
 const ENGINES: Array<{ id: SpeechProvider; name: string; hint: string }> = [
-  { id: 'google', name: 'Gemini 3.5 Translate Live', hint: 'Nhận giọng và dịch trực tiếp trong một luồng.' },
+  { id: 'google', name: 'Gemini 3.5 Transcribe Live', hint: 'Nhận giọng và dịch trực tiếp trong một luồng.' },
   { id: 'google-transcribe', name: 'Gemini 3.5 Transcribe', hint: 'Phiên âm theo đoạn sau mỗi lần ngắt câu, ổn định nhất.' },
   { id: 'soniox', name: 'Soniox', hint: 'Dịch trực tiếp 60+ ngôn ngữ, tự tách người nói.' },
 ];
