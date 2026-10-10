@@ -19,6 +19,12 @@ export interface AudioRecorderCallbacks {
   onSegmentComplete?: (segmentIndex: number, endMs?: number) => Promise<void> | void;
 }
 
+/**
+ * Speech needs far less than the browser default (~128 kbps): 32 kbps Opus stays clear for voice and
+ * keeps an hour of audio near 14 MB instead of ~58 MB in cloud storage.
+ */
+export const RECORDING_AUDIO_BITS_PER_SECOND = 32_000;
+
 export class WebAudioRecorder {
   private mediaStream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
@@ -156,7 +162,7 @@ export class WebAudioRecorder {
       this.isRecording = true;
       this.isStopping = false;
 
-      const recorder = new MediaRecorder(stream, { mimeType: this.mimeType });
+      const recorder = new MediaRecorder(stream, { mimeType: this.mimeType, audioBitsPerSecond: RECORDING_AUDIO_BITS_PER_SECOND });
       this.setupRecorderListeners(recorder, this.currentSegmentIndex);
       this.mediaRecorder = recorder;
       recorder.start(timesliceMs);

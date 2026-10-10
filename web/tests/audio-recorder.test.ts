@@ -48,8 +48,9 @@ describe('WebAudioRecorder', () => {
 
   it('keeps a single recorder and monotonically ordered chunks until the final stop', async () => {
     const instances: FakeMediaRecorder[] = [];
+    const options: Array<MediaRecorderOptions | undefined> = [];
     class ContinuousRecorder extends FakeMediaRecorder {
-      constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); instances.push(this); }
+      constructor(stream: MediaStream, recorderOptions?: MediaRecorderOptions) { super(stream, recorderOptions); instances.push(this); options.push(recorderOptions); }
     }
     const track = { stop: vi.fn() };
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) } });
@@ -67,6 +68,8 @@ describe('WebAudioRecorder', () => {
     expect(track.stop).not.toHaveBeenCalled(); expect(completed).toEqual([]);
     await recorder.stop();
     expect(instances).toHaveLength(1);
+    // Speech bitrate, not the browser's ~128 kbps default, keeps cloud audio small.
+    expect(options[0]?.audioBitsPerSecond).toBe(32_000);
     expect(chunks.map(chunk => chunk.sequence)).toEqual([0, 1, 2, 3]);
     expect(chunks.map(chunk => chunk.text)).toEqual(['before API pause', 'while API paused', 'after API resume', 'last chunk']);
     expect(chunks.every(chunk => chunk.segmentIndex === 1)).toBe(true);
