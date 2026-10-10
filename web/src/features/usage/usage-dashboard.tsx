@@ -3,13 +3,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Database, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchTranslationUsage } from '@/lib/api-client';
-import type { UsageSummary } from '@/shared/usage';
+import { fetchSpeechUsage, fetchTranslationUsage } from '@/lib/api-client';
+import { SPEECH_PRICING_AS_OF } from '@/shared/speech-pricing';
+import { speechProviderName } from '@/shared/transcription';
+import type { SpeechUsageSummary, UsageSummary } from '@/shared/usage';
 import {
   type UsagePreset,
   rangePreset,
   formatTokens,
   formatUsd,
+  formatClock,
+  formatDurationVi,
+  formatUsdPerMinute,
+  combineEstimatedUsd,
 } from './usage-format';
 import styles from './usage-dashboard.module.css';
 
@@ -19,17 +25,31 @@ export function UsageDashboard() {
   const [preset, setPreset] = useState<UsagePreset | 'custom'>('7days');
   const [dateRange, setDateRange] = useState(() => rangePreset('7days'));
   const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [speech, setSpeech] = useState<SpeechUsageSummary | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; is503: boolean } | null>(null);
   const [pageByDay, setPageByDay] = useState(1);
   const [pageByRecording, setPageByRecording] = useState(1);
+  const [pageSpeechDay, setPageSpeechDay] = useState(1);
 
   const loadUsage = useCallback(async (from: string, to: string) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchTranslationUsage({ from, to });
-      setSummary(data);
+      const [translation, speechResult] = await Promise.allSettled([
+        fetchTranslationUsage({ from, to }),
+        fetchSpeechUsage({ from, to }),
+      ]);
+      if (translation.status === 'rejected') throw translation.reason;
+      setSummary(translation.value);
+      // Speech usage is additive: its failure must not hide translation usage.
+      setSpeech(speechResult.status === 'fulfilled' ? speechResult.value : null);
+      setSpeechError(
+        speechResult.status === 'fulfilled'
+          ? null
+          : (speechResult.reason as Error)?.message || 'Không thể tải thống kê nhận giọng nói.'
+      );
     } catch (err: unknown) {
       const errObj = err as Error & { status?: number; code?: string };
       const is503 = errObj.status === 503 || errObj.code === 'MISSING_CONFIG';
@@ -38,6 +58,7 @@ export function UsageDashboard() {
         is503,
       });
       setSummary(null);
+      setSpeech(null);
     } finally {
       setLoading(false);
     }
@@ -51,6 +72,7 @@ export function UsageDashboard() {
     setPreset(newPreset);
     setPageByDay(1);
     setPageByRecording(1);
+    setPageSpeechDay(1);
     const range = rangePreset(newPreset);
     setDateRange(range);
   };
@@ -59,6 +81,7 @@ export function UsageDashboard() {
     setPreset('custom');
     setPageByDay(1);
     setPageByRecording(1);
+    setPageSpeechDay(1);
     setDateRange({ from, to });
   };
 
@@ -72,6 +95,12 @@ export function UsageDashboard() {
 
   const totalRecordingPages = Math.max(1, Math.ceil((summary?.byRecording.length ?? 0) / PAGE_SIZE));
   const pagedByRecording = summary?.byRecording.slice((pageByRecording - 1) * PAGE_SIZE, pageByRecording * PAGE_SIZE) ?? [];
+
+  const speechDays = speech?.byDay ?? [];
+  const maxSpeechDayMs = speechDays.reduce((max, d) => Math.max(max, d.audioMs), 0) || 1;
+  const totalSpeechDayPages = Math.max(1, Math.ceil(speechDays.length / PAGE_SIZE));
+  const pagedSpeechDays = speechDays.slice((pageSpeechDay - 1) * PAGE_SIZE, pageSpeechDay * PAGE_SIZE);
+  const combined = summary ? combineEstimatedUsd(summary.totals.estimatedUsd, speech?.totals.estimatedUsd ?? 0) : null;
 
   return (
     <div className={styles.pageWrapper}>
@@ -198,6 +227,20 @@ export function UsageDashboard() {
               </span>
               <span className={styles.statSub}>Theo token đã báo cáo, đã tách giá cache</span>
             </div>
+
+            <div className={styles.statCard} style={{ borderColor: 'var(--accent)' }}>
+              <span className={styles.statLabel} style={{ color: 'var(--accent)' }}>Tổng ước tính (dịch + nhận giọng)</span>
+              <span className={styles.statValue} style={{ color: 'var(--accent)' }}>
+                {combined ? formatUsd(combined.usd) : formatUsd(null)}
+              </span>
+              <span className={styles.statSub}>
+                {combined?.partial
+                  ? 'Chưa gồm chi phí dịch chưa rõ'
+                  : speech
+                  ? 'Dịch bằng token + nhận giọng theo thời gian'
+                  : 'Chưa có dữ liệu nhận giọng'}
+              </span>
+            </div>
           </div>
 
           <p className={styles.subtitle}>
@@ -206,6 +249,138 @@ export function UsageDashboard() {
             {' '}Đây là ước tính dịch, không phải tổng hóa đơn. Dữ liệu lưu thất bại có thể thiếu khỏi báo cáo.
             {' '}Đơn giá kiểm tra ngày 05/10/2026; chưa gồm thuế, lưu trữ cache và dịch vụ audio.
           </p>
+
+          {/* Speech recognition (live) */}
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Nhận giọng nói (Live)</h2>
+              <span className={styles.sectionDesc}>Thời gian nhận giọng và chi phí ước tính</span>
+            </div>
+
+            {speechError ? (
+              <div className={styles.empty}>Không tải được thống kê nhận giọng nói: {speechError}</div>
+            ) : speech ? (
+              <>
+                <div className={styles.statsGrid}>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Tổng thời gian nhận giọng</span>
+                    <span className={styles.statValue}>{formatDurationVi(speech.totals.audioMs)}</span>
+                    <span className={styles.statSub}>
+                      {formatClock(speech.totals.audioMs, true)} · {formatTokens(speech.totals.sessions)} phiên
+                    </span>
+                  </div>
+                  <div className={styles.statCard} style={{ borderColor: 'var(--accent)' }}>
+                    <span className={styles.statLabel} style={{ color: 'var(--accent)' }}>Ước tính chi phí nhận giọng</span>
+                    <span className={styles.statValue} style={{ color: 'var(--accent)' }}>
+                      {formatUsd(speech.totals.estimatedUsd)}
+                    </span>
+                    <span className={styles.statSub}>Theo thời gian × đơn giá/phút</span>
+                  </div>
+                </div>
+
+                {speech.byProvider.length === 0 ? (
+                  <div className={styles.empty}>Chưa có phiên nhận giọng nào trong khoảng thời gian này.</div>
+                ) : (
+                  <>
+                    <div className={styles.tableWrapper}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>Tên model</th>
+                            <th className={styles.thRight}>Số phiên</th>
+                            <th className={styles.thRight}>Thời gian</th>
+                            <th className={styles.thRight}>Đơn giá/phút</th>
+                            <th className={styles.thRight}>Ước tính USD</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {speech.byProvider.map((p) => (
+                            <tr key={`${p.provider}|${p.model}|${p.translated}`}>
+                              <td className={styles.td} style={{ fontWeight: 500 }}>
+                                <div>{p.model}</div>
+                                <div className={styles.sectionDesc}>
+                                  {speechProviderName(p.provider)}{p.provider === 'soniox' && p.translated ? ' · có dịch' : ''}
+                                </div>
+                              </td>
+                              <td className={styles.tdRight}>{formatTokens(p.sessions)}</td>
+                              <td className={styles.tdRight}>{formatClock(p.audioMs, true)}</td>
+                              <td className={styles.tdRight}>{formatUsdPerMinute(p.usdPerMinute)}</td>
+                              <td className={styles.tdRight}>{formatUsd(p.estimatedUsd)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className={styles.sectionHeader}>
+                      <h3 className={styles.sectionTitle}>Nhận giọng theo ngày</h3>
+                      <span className={styles.sectionDesc}>Tính theo ngày bắt đầu phiên</span>
+                    </div>
+                    <div className={styles.tableWrapper}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>Ngày</th>
+                            <th className={styles.thRight}>Thời gian</th>
+                            <th className={styles.thRight}>Ước tính USD</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedSpeechDays.map((d) => {
+                            const percent = Math.min(100, Math.round((d.audioMs / maxSpeechDayMs) * 100));
+                            return (
+                              <tr key={d.date}>
+                                <td className={styles.td}>
+                                  <div>{d.date}</div>
+                                  <div className={styles.barTrack}>
+                                    <div className={styles.barFill} style={{ width: `${percent}%` }} />
+                                  </div>
+                                </td>
+                                <td className={styles.tdRight}>{formatClock(d.audioMs, true)}</td>
+                                <td className={styles.tdRight}>{formatUsd(d.estimatedUsd)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {totalSpeechDayPages > 1 && (
+                      <div className={styles.pagination}>
+                        <span className={styles.pageInfo}>
+                          Trang {pageSpeechDay} / {totalSpeechDayPages} ({speechDays.length} ngày)
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.pageBtn}
+                          onClick={() => setPageSpeechDay((p) => Math.max(1, p - 1))}
+                          disabled={pageSpeechDay <= 1}
+                          aria-label="Trang trước"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.pageBtn}
+                          onClick={() => setPageSpeechDay((p) => Math.min(totalSpeechDayPages, p + 1))}
+                          disabled={pageSpeechDay >= totalSpeechDayPages}
+                          aria-label="Trang sau"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <p className={styles.subtitle}>
+                  Giá chỉ là ước tính tại ngày {SPEECH_PRICING_AS_OF}, không phải hóa đơn. Soniox tính theo thời gian
+                  mở stream; Gemini tính theo audio token (quy đổi theo phút audio). Nemotron tự host nên chỉ theo dõi
+                  thời gian ($0).
+                </p>
+              </>
+            ) : null}
+          </section>
 
           {/* Table by Day */}
           <section className={styles.section}>

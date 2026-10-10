@@ -42,6 +42,23 @@ describe('unary Gemini transcription', () => {
     expect(callbacks.onTranscript).not.toHaveBeenCalled();
     expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
   });
+  it('reports billed audio only for segments actually posted, not skipped silence', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ text: 'words' })));
+    const billed = vi.fn();
+    const callbacks = { onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() };
+    const recognizer = new GeminiTranscribeRecognizer(callbacks, 'ja-JP', 900, 'verbatim', 1, 0, billed);
+    recognizer.start(7);
+    for (let second = 0; second < 5; second++) recognizer.pushPcm(new Float32Array(16000), 16000);
+    recognizer.finalizeUtterance();
+    recognizer.pushPcm(new Float32Array(8000).fill(0.2), 16000);
+    recognizer.finalizeUtterance();
+    recognizer.pushPcm(new Float32Array(16000).fill(0.2), 16000);
+    await recognizer.stop();
+    const sent = billed.mock.calls.map(([ms]) => ms as number);
+    expect(sent).toHaveLength(2); // the 5 s of silence was never posted
+    expect(sent[0]).toBe(500);
+    expect(sent[1]).toBeGreaterThanOrEqual(1000); expect(sent[1]).toBeLessThan(1010);
+  });
   it('preserves recording timestamps when silent segments are skipped', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ text: 'speech after silence' }));
     vi.stubGlobal('fetch', fetcher);

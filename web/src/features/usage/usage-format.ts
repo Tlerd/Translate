@@ -1,3 +1,5 @@
+import type { SpeechUsageSummary, UsageSummary } from '@/shared/usage';
+
 export type UsagePreset = 'today' | '7days' | '30days';
 
 export function getSaigonDateParts(d: Date): { year: number; month: number; day: number } {
@@ -49,4 +51,55 @@ export function formatUsd(val: number | null | undefined): string {
     return `$${val.toFixed(4)}`;
   }
   return `$${val.toFixed(2)}`;
+}
+
+/** m:ss, or h:mm:ss from one hour (or always, with `forceHours`). */
+export function formatClock(ms: number | null | undefined, forceHours = false): string {
+  const totalSeconds = Math.max(0, Math.round((ms ?? 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const ss = String(seconds).padStart(2, '0');
+  if (hours > 0 || forceHours) return `${hours}:${String(minutes).padStart(2, '0')}:${ss}`;
+  return `${minutes}:${ss}`;
+}
+
+/** "12 phút 30 giây", "1 giờ 5 phút 3 giây", "45 giây". */
+export function formatDurationVi(ms: number | null | undefined): string {
+  const totalSeconds = Math.max(0, Math.round((ms ?? 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours} giờ ${minutes} phút ${seconds} giây`;
+  if (minutes > 0) return `${minutes} phút ${seconds} giây`;
+  return `${seconds} giây`;
+}
+
+export function formatUsdPerMinute(val: number): string {
+  return val === 0 ? '$0.00' : `$${val.toFixed(4)}`;
+}
+
+/** Translation cost can be unknown (null); the combined total then only covers speech. */
+export function combineEstimatedUsd(
+  translationUsd: number | null | undefined,
+  speechUsd: number | null | undefined
+): { usd: number; partial: boolean } {
+  const partial = translationUsd == null;
+  return { usd: Math.round(((translationUsd ?? 0) + (speechUsd ?? 0)) * 1e6) / 1e6, partial };
+}
+
+/** One line for the recording detail header, e.g. "Nhận giọng 12:34 · ~$0.11 · Dịch 40 request · ~$0.02". */
+export function recordingCostText(
+  translation: Pick<UsageSummary, 'totals'> | null | undefined,
+  speech: Pick<SpeechUsageSummary, 'totals'> | null | undefined
+): string | null {
+  const parts: string[] = [];
+  if (speech && speech.totals.sessions > 0) {
+    parts.push(`Nhận giọng ${formatClock(speech.totals.audioMs)} · ~${formatUsd(speech.totals.estimatedUsd)}`);
+  }
+  if (translation && translation.totals.requests > 0) {
+    const usd = translation.totals.estimatedUsd != null ? `~${formatUsd(translation.totals.estimatedUsd)}` : 'Chưa rõ';
+    parts.push(`Dịch ${translation.totals.requests} request · ${usd}`);
+  }
+  return parts.length ? parts.join(' · ') : null;
 }

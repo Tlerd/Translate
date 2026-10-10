@@ -1,3 +1,5 @@
+import type { SpeechProvider } from './transcription';
+
 export interface UsageBucket {
   requests: number;
   unavailable: number;
@@ -28,4 +30,21 @@ export interface UsageSummary {
   byDay: Array<UsageBucket & { day: string }>;
   byRecording: Array<UsageBucket & { recordingId: string }>;
   avgInputTokensPerRequest: number | null;
+}
+
+export interface SpeechUsageProviderRow {
+  provider: SpeechProvider;
+  model: string;
+  translated: boolean;
+  sessions: number;
+  audioMs: number;
+  usdPerMinute: number;
+  estimatedUsd: number;
+}
+
+export interface SpeechUsageSummary {
+  range: { from: string; to: string };
+  totals: { sessions: number; audioMs: number; estimatedUsd: number };
+  byProvider: SpeechUsageProviderRow[];
+  byDay: Array<{ date: string; audioMs: number; estimatedUsd: number }>;
 }

@@ -11,7 +11,7 @@ import type {
   GenerateImageRequest,
   ApiErrorResponse,
 } from '@/shared/ai-contracts';
-import type { TranslationMetrics, UsageSummary } from '@/shared/usage';
+import type { SpeechUsageSummary, TranslationMetrics, UsageSummary } from '@/shared/usage';
 
 export async function fetchModels(): Promise<ModelsResponse> {
   const res = await fetch('/api/models', {
@@ -190,6 +190,30 @@ export async function fetchTranslationUsage(query: {
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => ({}))) as ApiErrorResponse;
     const error = new Error(errorBody.error?.message || `Lỗi tải thống kê usage: HTTP ${res.status}`);
+    (error as Error & { status?: number; code?: string }).status = res.status;
+    (error as Error & { status?: number; code?: string }).code = errorBody.error?.code;
+    throw error;
+  }
+
+  return res.json();
+}
+
+export async function fetchSpeechUsage(query: {
+  from: string;
+  to: string;
+  recordingId?: string;
+}): Promise<SpeechUsageSummary> {
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  if (query.recordingId) params.set('recordingId', query.recordingId);
+  const res = await fetch(`/api/usage/speech?${params.toString()}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => ({}))) as ApiErrorResponse;
+    const error = new Error(errorBody.error?.message || `Lỗi tải thống kê nhận giọng: HTTP ${res.status}`);
     (error as Error & { status?: number; code?: string }).status = res.status;
     (error as Error & { status?: number; code?: string }).code = errorBody.error?.code;
     throw error;
