@@ -19,6 +19,7 @@ interface GoogleRecognizerFixture {
   stopImpl: () => Promise<void>;
   finalOnStop: (() => void) | null;
   updateSettings: (settings: unknown) => void;
+  finalizeUtterance: () => void;
   emit: (text: string, isFinal: boolean, itemId?: string, revision?: number) => void;
 }
 interface RecorderFixture {
@@ -527,5 +528,88 @@ describe('ClassroomController Google speech integration', () => {
       expect.objectContaining({ source: 'first speaker', speakerLabel: 'spk_1' }),
       expect.objectContaining({ source: 'second speaker', speakerLabel: 'spk_2' }),
     ]);
+  });
+  describe('Gemini Live long utterances and finalize latency', () => {
+    const loud = () => new Float32Array(1600).fill(0.2);
+    async function startLive() {
+      let now = 1700000000000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const controller = new ClassroomController();
+      await controller.start({ speechProvider: 'google' });
+      const live = shared.liveRecognizers[0];
+      const finalize = vi.spyOn(live, 'finalizeUtterance');
+      return { controller, live, finalize, advance: (ms: number) => { now += ms; return now; } };
+    }
+
+    it('closes continuous loud audio on a cadence of at most 10 s and keeps forwarding audio', async () => {
+      const { controller, live, finalize, advance } = await startLive();
+      const callTimes: number[] = [];
+      finalize.mockImplementation(() => { callTimes.push(Date.now()); });
+      const begin = Date.now();
+      for (let i = 0; i < 400; i++) { advance(100); shared.captures[0].emit(loud(), 16000); }
+      expect(finalize.mock.calls.length).toBeGreaterThanOrEqual(3);
+      expect(callTimes[0] - begin).toBeLessThanOrEqual(10_100);
+      expect(callTimes[0] - begin).toBeGreaterThanOrEqual(6000);
+      for (let i = 1; i < callTimes.length; i++) expect(callTimes[i] - callTimes[i - 1]).toBeLessThanOrEqual(10_100);
+      expect(live.pushes).toHaveLength(400);
+      await controller.stop();
+    });
+
+    it('closes early at a dip once past the soft maximum', async () => {
+      const { controller, finalize, advance } = await startLive();
+      for (let i = 0; i < 70; i++) { advance(100); shared.captures[0].emit(loud(), 16000); }
+      expect(finalize).not.toHaveBeenCalled();
+      advance(100); shared.captures[0].emit(new Float32Array(1600).fill(0.02), 16000);
+      expect(finalize).toHaveBeenCalledTimes(1);
+      await controller.stop();
+    });
+
+    it('does not force a close for a short utterance or right after a long silence', async () => {
+      const { controller, finalize, advance } = await startLive();
+      for (let i = 0; i < 20; i++) { advance(100); shared.captures[0].emit(loud(), 16000); }
+      for (let i = 0; i < 20; i++) { advance(100); shared.captures[0].emit(new Float32Array(1600), 16000); }
+      const afterSilenceClose = finalize.mock.calls.length;
+      advance(120_000); shared.captures[0].emit(loud(), 16000);
+      advance(100); shared.captures[0].emit(new Float32Array(1600).fill(0.02), 16000);
+      expect(finalize).toHaveBeenCalledTimes(afterSilenceClose);
+      await controller.stop();
+    });
+
+    it('does not force closes for other providers', async () => {
+      let now = 1700000000000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const controller = new ClassroomController();
+      await controller.start({ speechProvider: 'google-transcribe' });
+      const finalize = vi.spyOn(shared.recognizers[0], 'finalizeUtterance');
+      for (let i = 0; i < 200; i++) { now += 100; shared.captures[0].emit(loud(), 16000); }
+      expect(finalize).not.toHaveBeenCalled();
+      await controller.stop();
+    });
+
+    it('measures finalize latency only for a request with pending text', async () => {
+      const { controller, live, advance } = await startLive();
+      live.emit('first', false, 'item-1', 1);
+      live.emit('first sentence', true, 'item-1', 2); // Gemini closed it on its own
+      advance(100); shared.captures[0].emit(loud(), 16000);
+      for (let i = 0; i < 8; i++) { advance(100); shared.captures[0].emit(new Float32Array(1600), 16000); }
+      expect(live.pushes.length).toBeGreaterThan(0);
+      advance(60_000);
+      live.emit('second', false, 'item-2', 1);
+      live.emit('second sentence', true, 'item-2', 2);
+      expect(controller.snapshot().finalizeLatencyMs).toBeNull();
+      await controller.stop();
+    });
+
+    it('reports latency for a close that had pending text', async () => {
+      const { controller, live, advance } = await startLive();
+      advance(100); shared.captures[0].emit(loud(), 16000);
+      live.emit('speaking', false, 'item-1', 1);
+      for (let i = 0; i < 8; i++) { advance(100); shared.captures[0].emit(new Float32Array(1600), 16000); }
+      advance(400);
+      live.emit('speaking now', true, 'item-1', 2);
+      expect(controller.snapshot().finalizeLatencyMs).toBeGreaterThan(0);
+      expect(controller.snapshot().finalizeLatencyMs).toBeLessThan(1500);
+      await controller.stop();
+    });
   });
 });

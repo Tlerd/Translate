@@ -4,6 +4,7 @@ import { canonicalLanguage, inputLanguage, OUTPUT_LANGUAGES } from '@/shared/lan
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { GeminiLiveRecognizer } from './gemini-live-recognition';
 import { AdaptiveVoiceDetector } from './voice-activity';
+import { FinalizeLatencyTracker, UtteranceCutter } from './utterance-cutter';
 import { chooseSpeakerLabel, SourceActivityTracker, SourceCutDetector } from './source-attribution';
 import { NemotronRecognizer } from './nemotron-recognition';
 import { SonioxRecognizer } from './soniox-recognition';
@@ -172,7 +173,8 @@ export class ClassroomController {
   private configRevision = 1;
   private activeBlockId = 1;
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
-  private finalizeRequestedAt: number | null = null;
+  private finalizeLatency = new FinalizeLatencyTracker();
+  private utteranceCutter = new UtteranceCutter();
   /** When the open utterance last started, for capping how long continuous speech stays in one caption. */
   private lastUtteranceCloseAt = 0;
   private pcmVoiceActive = false;
@@ -345,6 +347,8 @@ export class ClassroomController {
     this.segmentStartTimes.clear();
     this.segmentStartTimes.set(1, 0);
     this.pcmVoiceActive = false;
+    this.utteranceCutter.reset();
+    this.finalizeLatency.reset();
     this.voiceDetector.reset();
     this.pcmLastVoiceTime = 0;
     this.pcmPreRollBuffer = [];
@@ -568,9 +572,12 @@ export class ClassroomController {
           if (epoch !== this.sessionEpoch || this.sessionEpoch !== currentEpoch) return;
           this.state.lastTranscriptAt = Date.now();
           if (isFinal) this.lastUtteranceCloseAt = this.state.lastTranscriptAt;
-          if (isFinal && this.finalizeRequestedAt !== null) {
-            this.state.finalizeLatencyMs = this.state.lastTranscriptAt - this.finalizeRequestedAt;
-            this.finalizeRequestedAt = null;
+          this.finalizeLatency.noteTranscript(text, isFinal);
+          if (isFinal) {
+            // The provider closed the utterance itself; a continuous source starts a fresh one on the next chunk.
+            this.utteranceCutter.reset();
+            const latencyMs = this.finalizeLatency.complete(this.state.lastTranscriptAt);
+            if (latencyMs !== null) this.state.finalizeLatencyMs = latencyMs;
           }
           this.state.transcriptCount++;
           this.speechRetries = 0;
@@ -656,6 +663,7 @@ export class ClassroomController {
         if (this.sessionEpoch !== currentEpoch || this.state.state !== 'recording' || this.stopping) return;
         if (this.apiState === 'paused' || this.apiState === 'pausing') {
           this.pcmVoiceActive = false;
+          this.utteranceCutter.reset();
           this.pcmPreRollBuffer = [];
           this.pcmPreRollMs = 0;
           return;
@@ -692,12 +700,15 @@ export class ClassroomController {
           if (this.pcmVoiceActive && now - this.lastUtteranceCloseAt > MAX_OPEN_UTTERANCE_MS) this.requestUtteranceClose();
           else if (this.pcmVoiceActive && now - this.pcmLastVoiceTime > (this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)) {
             this.pcmVoiceActive = false;
-            this.finalizeRequestedAt = now;
+            this.finalizeLatency.request(now);
             this.speechRecognizer?.finalizeUtterance();
           }
           return;
         }
 
+        // Gemini Live closes only on its own VAD, which never fires for continuous sound; cap how long one caption stays open.
+        const cutsLongUtterances = this.state.speechProvider === 'google';
+        let closeLongUtterance = false;
         if (isVoice) {
           this.pcmLastVoiceTime = now;
           if (!this.pcmVoiceActive) {
@@ -709,6 +720,7 @@ export class ClassroomController {
             this.pcmPreRollMs = 0;
           }
           forwardPcm({ samples, rate, startMs });
+          if (cutsLongUtterances && this.utteranceCutter.observe(now, rms, chunkMs, true)) closeLongUtterance = true;
         } else {
           // Below threshold
           if (this.pcmVoiceActive) {
@@ -718,10 +730,12 @@ export class ClassroomController {
               : GEMINI_SILENCE_TAIL_MS;
             if (now - this.pcmLastVoiceTime <= silenceMs) {
               forwardPcm({ samples, rate, startMs });
+              if (cutsLongUtterances && this.utteranceCutter.observe(now, rms, chunkMs, false)) closeLongUtterance = true;
             } else {
               this.pcmVoiceActive = false;
+              this.utteranceCutter.reset();
               if (this.pcmReady && this.speechRecognizer) {
-                this.finalizeRequestedAt = now;
+                this.finalizeLatency.request(now);
                 this.speechRecognizer.finalizeUtterance();
               }
             }
@@ -735,6 +749,8 @@ export class ClassroomController {
             this.pcmPreRollMs -= (removed.samples.length / removed.rate) * 1000;
           }
         }
+        // pcmVoiceActive stays true: audio keeps flowing and Gemini resumes on the next chunk after audioStreamEnd.
+        if (closeLongUtterance) this.requestUtteranceClose();
       };
       try {
         await this.pcmPreparation;
@@ -962,8 +978,9 @@ export class ClassroomController {
   private requestUtteranceClose(): void {
     const recognizer = this.speechRecognizer;
     if (!this.pcmReady || !recognizer) return;
-    this.finalizeRequestedAt = Date.now();
-    this.lastUtteranceCloseAt = this.finalizeRequestedAt;
+    this.lastUtteranceCloseAt = Date.now();
+    this.finalizeLatency.request(this.lastUtteranceCloseAt);
+    this.utteranceCutter.reset();
     recognizer.finalizeUtterance();
   }
 
@@ -1188,6 +1205,8 @@ export class ClassroomController {
     this.pcmQueue = [];
     this.pcmQueueMs = 0;
     this.pcmVoiceActive = false;
+    this.utteranceCutter.reset();
+    this.finalizeLatency.reset();
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
     this.clearSilenceTimer();
@@ -1243,6 +1262,8 @@ export class ClassroomController {
     this.pcmQueue = [];
     this.pcmQueueMs = 0;
     this.pcmVoiceActive = false;
+    this.utteranceCutter.reset();
+    this.finalizeLatency.reset();
     this.pcmLastVoiceTime = 0;
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
@@ -1303,6 +1324,8 @@ export class ClassroomController {
     }
     this.pcmQueue = []; this.pcmQueueMs = 0;
     this.pcmVoiceActive = false;
+    this.utteranceCutter.reset();
+    this.finalizeLatency.reset();
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
 
