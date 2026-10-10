@@ -31,7 +31,8 @@ import type {
   RecordingItem,
   AudioSegmentKind,
 } from '@/shared/recording';
-import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, liveTranscriptionModel, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
+import { canonicalModelKey } from '@/shared/ai-model-keys';
+import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
 
 /** Silence sent to Gemini after speech stops before the utterance is closed (Live API guide: at least 500 ms). */
 const GEMINI_SILENCE_TAIL_MS = 600;
@@ -112,7 +113,7 @@ export class ClassroomController {
     mode: 'lecture',
     sourceLanguage: 'ja-JP',
     targetLanguage: 'vi',
-    translationModelKey: 'google:gemini-3.1-flash-lite',
+    translationModelKey: 'google:gemini-3.5-flash-lite',
     translationThinkingLevel: 'auto',
     durationMs: 0,
     audioVolume: 0,
@@ -296,7 +297,7 @@ export class ClassroomController {
       discardDisplayRequest(displayRequest);
       throw new Error('Chọn ngôn ngữ hợp lệ cho bộ nhận giọng trước khi thu.');
     }
-    const translationModelKey = options.translationModelKey || this.state.translationModelKey;
+    const translationModelKey = canonicalModelKey(options.translationModelKey || this.state.translationModelKey);
     const pauseMs = ClassroomController.clampPause(options.pauseMs ?? this.state.pauseMs);
     const readingPauseMs = ClassroomController.clampPause(options.readingPauseMs ?? this.state.readingPauseMs);
     const translationHistoryTurns = options.translationHistoryTurns !== undefined
@@ -784,7 +785,7 @@ export class ClassroomController {
       ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
       : this.state.speechProvider === 'nemotron'
       ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
-      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, liveTranscriptionModel(this.state.speechProvider), targetLanguage);
+      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, targetLanguage);
     this.speechRecognizer = recognizer;
     await recognizer.start(epoch, language, targetLanguage);
     if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
@@ -1475,7 +1476,8 @@ export class ClassroomController {
     }
   }
 
-  public setTranslationModel(modelKey: string): void {
+  public setTranslationModel(rawModelKey: string): void {
+    const modelKey = canonicalModelKey(rawModelKey);
     if (this.state.translationModelKey === modelKey) return;
     this.configRevision++;
     this.state.translationModelKey = modelKey;

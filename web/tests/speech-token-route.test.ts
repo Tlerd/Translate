@@ -66,16 +66,24 @@ describe('POST /api/speech/token', () => {
     });
   });
 
-  it('mints Flash Live credentials for input transcription without Transcribe-only options', async () => {
+  it('mints Transcribe Live credentials by default with text output only', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ languageCode: 'ja-JP', transcriptionMode: 'smart' }),
+    }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).model).toBe('gemini-3.5-transcribe-live');
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints).toMatchObject({
+      model: 'gemini-3.5-transcribe-live', config: { responseModalities: ['TEXT'] },
+    });
+  });
+
+  it('rejects the retired Flash Live model from a stale client with a clear 400 before minting credentials', async () => {
     const response = await POST(new Request('http://localhost/api/speech/token', {
       method: 'POST', body: JSON.stringify({ model: 'gemini-3.1-flash-live-preview', languageCode: 'ja-JP', transcriptionMode: 'smart' }),
     }));
-    expect(response.status).toBe(200);
-    expect((await response.json()).model).toBe('gemini-3.1-flash-live-preview');
-    expect(createToken.mock.calls[0][0].config.liveConnectConstraints).toMatchObject({
-      model: 'gemini-3.1-flash-live-preview', config: { responseModalities: ['AUDIO'], inputAudioTranscription: {} },
-    });
-    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config.inputAudioTranscription).not.toHaveProperty('mode');
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('UNSUPPORTED_MODEL');
+    expect(createToken).not.toHaveBeenCalled();
   });
 
   it.each(['gemini-3-flash-preview', 'arbitrary-model'])('rejects non-Live model %s before minting credentials', async (model) => {

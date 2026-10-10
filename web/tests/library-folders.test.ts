@@ -49,7 +49,7 @@ describe('getLibraryFolders', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecordingFolder('rec_synced_folder', 'Lớp từ máy khác');
 
@@ -58,7 +58,7 @@ describe('getLibraryFolders', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecordingFolder('rec_trashed_folder', 'Thư mục đã xóa');
     await batchSoftDelete(['rec_trashed_folder']);
@@ -75,7 +75,7 @@ describe('getLibraryFolders', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecordingFolder('rec_only_used', 'Chỉ có trong buổi ghi');
 

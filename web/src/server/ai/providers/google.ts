@@ -131,7 +131,7 @@ function readableGoogleError(error: unknown, modelId: string): unknown {
     modelId === 'gemini-2.5-flash-lite' &&
     /(no longer available to new users|limit.*access.*to the 2\.5 models|actively used.*in the past|not found|does not exist|permission denied|unsupported)/i.test(message)
   ) {
-    return new Error('Google không mở Gemini 2.5 Flash-Lite cho key/tài khoản này do giới hạn tài khoản cũ. Hãy chọn Gemini 3.1 Flash-Lite; model 2.5 chỉ dùng được với tài khoản còn được Google hỗ trợ.');
+    return new Error('Google không mở Gemini 2.5 Flash-Lite cho key/tài khoản này do giới hạn tài khoản cũ. Hãy chọn Gemini 3.5 Flash-Lite; model 2.5 chỉ dùng được với tài khoản còn được Google hỗ trợ.');
   }
   return error;
 }

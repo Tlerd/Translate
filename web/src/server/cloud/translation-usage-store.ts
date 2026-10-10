@@ -1,6 +1,6 @@
 import 'server-only';
 import { database } from './recording-store';
-import { getModelConfig } from '@/config/ai-models';
+import { getModelPricing } from '@/config/ai-models';
 import type { UsageBucket, UsageSummary } from '@/shared/usage';
 
 export interface TranslationUsageRecord {
@@ -144,7 +144,7 @@ function calculateBucketFromAggregatedRows(rows: AggregatedUsageRow[]): {
 
   let estimatedUsd: number | null = requests > 0 && reported === 0 ? null : 0;
   for (const [modelKey, mt] of modelTokens.entries()) {
-    const config = getModelConfig(modelKey);
+    const config = getModelPricing(modelKey);
     if (!config || config.inputUsdPerM == null || config.outputUsdPerM == null ||
         (mt.cached > 0 && config.cachedInputUsdPerM == null)) {
       estimatedUsd = null;

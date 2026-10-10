@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeminiLiveRecognizer } from '@/features/recording/gemini-live-recognition';
 import { Pcm16kResampler } from '@/features/recording/pcm-resampler';
-import { FLASH_LIVE_MODEL } from '@/shared/transcription';
+import { LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
 class FakeWebSocket {
   static last: FakeWebSocket | undefined;
@@ -28,39 +28,20 @@ class FakeWebSocket {
 describe('Gemini live recognizer', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-  it('uses Flash Live, accumulates input deltas, rejects silent/generated text, and closes after Stop', async () => {
+  it('requests and sets up only the Transcribe Live model, with text output and no audio reply', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' }));
     vi.stubGlobal('fetch', fetchMock);
-    const onTranscript = vi.fn();
-    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'smart', FLASH_LIVE_MODEL);
+    const recognizer = new GeminiLiveRecognizer({ onTranscript: vi.fn(), onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'smart');
     FakeWebSocket.last = undefined;
     const starting = recognizer.start(17);
     await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
     const socket = FakeWebSocket.last!;
     socket.open(); socket.message({ setupComplete: {} }); await starting;
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe(FLASH_LIVE_MODEL);
-    expect(JSON.parse(socket.sent[0]).setup).toMatchObject({ model: `models/${FLASH_LIVE_MODEL}`, generationConfig: { responseModalities: ['AUDIO'] }, inputAudioTranscription: {} });
-    expect(JSON.parse(socket.sent[0]).setup.inputAudioTranscription).not.toHaveProperty('mode');
-    recognizer.pushPcm(new Float32Array(1600), 16000);
-    socket.message({ serverContent: { inputTranscription: { text: 'ええ。', finished: true }, modelTurn: { parts: [{ text: 'phantom reply' }] }, outputTranscription: { text: 'phantom reply' } } });
-    expect(onTranscript).not.toHaveBeenCalled();
-    recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-    socket.message({ serverContent: { inputTranscription: { text: '日本語を' }, outputTranscription: { text: 'assistant reply' } } });
-    socket.message({ serverContent: { inputTranscription: { text: '勉強します。' } } });
-    expect(onTranscript.mock.calls.map(call => call[0])).toEqual(['日本語を', '日本語を勉強します。']);
-    expect(onTranscript.mock.calls.map(call => call[1])).toEqual([false, false]);
-    const stopping = recognizer.stop(100);
-    const frameCount = socket.sent.length;
-    recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-    expect(socket.sent.length).toBe(frameCount);
-    socket.message({ serverContent: { inputTranscription: { finished: true } } });
-    await stopping;
-    expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['日本語を勉強します。', true]);
-    expect(new Set(onTranscript.mock.calls.map(call => call[3])).size).toBe(1);
-    expect(socket.readyState).toBe(3);
-    socket.message({ serverContent: { inputTranscription: { text: 'late', finished: true } } });
-    expect(onTranscript).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe(LIVE_TRANSCRIPTION_MODEL);
+    const setup = JSON.parse(socket.sent[0]).setup;
+    expect(setup).toMatchObject({ model: `models/${LIVE_TRANSCRIPTION_MODEL}`, generationConfig: { responseModalities: ['TEXT'] } });
+    await recognizer.stop(0);
   });
 
   it('uses the same smart mode for token constraints and WebSocket setup', async () => {
@@ -76,73 +57,6 @@ describe('Gemini live recognizer', () => {
       const socket = FakeWebSocket.last!;
       socket.open(); socket.message({ setupComplete: {} }); await starting;
       expect(JSON.parse(socket.sent[0]).setup.inputAudioTranscription.mode).toBe('SMART');
-    } finally { await recognizer.stop(0); }
-  });
-
-  it('keeps Flash input in one sentence when model turnComplete precedes the last input delta', async () => {
-    vi.stubGlobal('WebSocket', FakeWebSocket);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
-    const onTranscript = vi.fn();
-    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
-    FakeWebSocket.last = undefined;
-    const starting = recognizer.start(21);
-    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
-    const socket = FakeWebSocket.last!;
-    socket.open(); socket.message({ setupComplete: {} }); await starting;
-    try {
-      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-      socket.message({ serverContent: { inputTranscription: { text: '日本語を' } } });
-      socket.message({ serverContent: { turnComplete: true } });
-      socket.message({ serverContent: { inputTranscription: { text: '勉強します。', finished: true } } });
-      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['日本語を勉強します。', true]);
-      expect(new Set(onTranscript.mock.calls.map(call => call[3])).size).toBe(1);
-    } finally { await recognizer.stop(0); }
-  });
-
-  it('drains delayed Flash input after model turnComplete while Stop is waiting', async () => {
-    vi.stubGlobal('WebSocket', FakeWebSocket);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
-    const onTranscript = vi.fn();
-    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
-    FakeWebSocket.last = undefined;
-    const starting = recognizer.start(22);
-    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
-    const socket = FakeWebSocket.last!;
-    socket.open(); socket.message({ setupComplete: {} }); await starting;
-    recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-    const stopping = recognizer.stop(100);
-    socket.message({ serverContent: { turnComplete: true } });
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-    socket.message({ serverContent: { inputTranscription: { text: '最後の言葉。', finished: true } } });
-    await stopping;
-    expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最後の言葉。', true]);
-  });
-
-  it('applies a delayed Flash suffix to the closed sentence until fresh speech starts the next one', async () => {
-    vi.stubGlobal('WebSocket', FakeWebSocket);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
-    const onTranscript = vi.fn();
-    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', FLASH_LIVE_MODEL);
-    FakeWebSocket.last = undefined;
-    const starting = recognizer.start(23);
-    await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
-    const socket = FakeWebSocket.last!;
-    socket.open(); socket.message({ setupComplete: {} }); await starting;
-    try {
-      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-      socket.message({ serverContent: { inputTranscription: { text: '最初の文' } } });
-      recognizer.finalizeUtterance();
-      const firstId = onTranscript.mock.calls[0][3];
-      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最初の文', true]);
-      recognizer.pushPcm(new Float32Array(1600), 16000);
-      socket.message({ serverContent: { inputTranscription: { text: 'です。' } } });
-      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['最初の文です。', true]);
-      expect(onTranscript.mock.calls.at(-1)?.[3]).toBe(firstId);
-      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
-      socket.message({ serverContent: { inputTranscription: { text: '次の文です。', finished: true } } });
-      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['次の文です。', true]);
-      expect(onTranscript.mock.calls.at(-1)?.[3]).not.toBe(firstId);
-      expect(recognizer.diagnostics.status).toBe('listening');
     } finally { await recognizer.stop(0); }
   });
 
@@ -310,7 +224,6 @@ describe('Gemini live recognizer', () => {
       { onTranscript, onError: vi.fn(), onStateChange: vi.fn() },
       'ja-JP',
       'verbatim',
-      undefined,
       'vi-VN'
     );
     FakeWebSocket.last = undefined;
@@ -356,10 +269,10 @@ describe('Pcm16kResampler', () => {
     expect(output[1]).toBeCloseTo(source[3], 5);
   });
 
-  async function openRecognizer(model: string, epoch: number, onTranscript: ReturnType<typeof vi.fn>, target?: string) {
+  async function openRecognizer(epoch: number, onTranscript: ReturnType<typeof vi.fn>, target?: string) {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' })));
-    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', model as never, target);
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError: vi.fn(), onStateChange: vi.fn() }, 'ja-JP', 'verbatim', target);
     FakeWebSocket.last = undefined;
     const starting = recognizer.start(epoch);
     await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
@@ -368,19 +281,9 @@ describe('Pcm16kResampler', () => {
     return { recognizer, socket };
   }
 
-  it('shows Flash text from a quiet microphone that stays below the old 0.015 gate', async () => {
-    const onTranscript = vi.fn();
-    const { recognizer, socket } = await openRecognizer(FLASH_LIVE_MODEL, 31, onTranscript);
-    try {
-      recognizer.pushPcm(new Float32Array(1600).fill(0.008), 16000);
-      socket.message({ serverContent: { inputTranscription: { text: 'こんにちは' } } });
-      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['こんにちは', false]);
-    } finally { await recognizer.stop(0); }
-  });
-
   it('shows translated text immediately when it arrives before the source transcript', async () => {
     const onTranscript = vi.fn();
-    const { recognizer, socket } = await openRecognizer('gemini-3.5-transcribe-live', 32, onTranscript, 'vi');
+    const { recognizer, socket } = await openRecognizer(32, onTranscript, 'vi');
     try {
       socket.message({ serverContent: { outputTranscription: { text: 'Xin chào' } } });
       expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['Xin chào', false]);
@@ -392,7 +295,7 @@ describe('Pcm16kResampler', () => {
   });
 
   it('sends translationConfig inside setup.generationConfig, never at the top of setup', async () => {
-    const { recognizer, socket } = await openRecognizer('gemini-3.5-transcribe-live', 33, vi.fn(), 'vi');
+    const { recognizer, socket } = await openRecognizer(33, vi.fn(), 'vi');
     try {
       const setup = JSON.parse(socket.sent[0]).setup;
       expect(setup.generationConfig).toMatchObject({ responseModalities: ['TEXT'], translationConfig: { targetLanguageCode: 'vi' } });

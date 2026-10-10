@@ -4,6 +4,7 @@ import { AppDatabase, getDb, resetDbInstance } from '@/storage/db';
 import { createRecording, loadSettings, saveSettings, settingsUpdatedEvent, saveCaption, updateRecording, updateCaptionSpeaker, getCaptions } from '@/storage/recordings';
 import { DEFAULT_SETTINGS, type CaptionItem } from '@/shared/recording';
 import { cloudPayloadSchema } from '@/shared/cloud-recording';
+import { normalizeSpeechProvider } from '@/shared/transcription';
 
 beforeEach(() => {
   resetDbInstance(new AppDatabase(`transcription_settings_${Date.now()}_${Math.random()}`));
@@ -12,16 +13,51 @@ beforeEach(() => {
 afterEach(() => { resetDbInstance(); vi.unstubAllGlobals(); });
 
 describe('transcription settings and speaker persistence', () => {
-  it.each(['google', 'browser', 'google-transcribe', 'google-flash', 'google-flash-live', 'nemotron', 'soniox'])('preserves supported %s providers and migrates the removed browser provider', async (provider) => {
+  it.each(['google', 'browser', 'google-transcribe', 'google-flash', 'google-flash-live', 'nemotron', 'soniox'])('preserves supported %s providers and migrates the removed browser and Flash Live providers', async (provider) => {
     await getDb().settings.put({ key: 'speechProvider', value: provider });
-    expect(await loadSettings()).toMatchObject({ speechProvider: provider === 'browser' ? 'google-transcribe' : provider === 'google-flash' ? 'google-flash-live' : provider, transcriptionMode: 'verbatim', speakerCount: 1 });
+    const removed = ['browser', 'google-flash', 'google-flash-live'].includes(provider);
+    expect(await loadSettings()).toMatchObject({ speechProvider: removed ? 'google-transcribe' : provider, transcriptionMode: 'verbatim', speakerCount: 1 });
   });
 
-  it.each(['google-flash-live', 'soniox'] as const)('persists and broadcasts %s instead of normalizing it back to Transcribe', async (provider) => {
+  it.each(['google-flash', 'google-flash-live'])('normalizeSpeechProvider maps removed %s to Transcribe', (value) => {
+    expect(normalizeSpeechProvider(value)).toBe('google-transcribe');
+  });
+
+  it.each(['soniox', 'nemotron'] as const)('persists and broadcasts %s instead of normalizing it back to Transcribe', async (provider) => {
     const listener = vi.fn(); window.addEventListener(settingsUpdatedEvent, listener);
     await saveSettings({ speechProvider: provider });
     expect((await loadSettings()).speechProvider).toBe(provider);
     expect((listener.mock.calls[0][0] as CustomEvent).detail.speechProvider).toBe(provider);
+  });
+
+  it('loads a saved retired 3.1 translation model as 3.5 and keeps the summary model valid', async () => {
+    await getDb().settings.bulkPut([
+      { key: 'translationModel', value: 'google:gemini-3.1-flash-lite' },
+      { key: 'summaryModel', value: 'google:gemini-3.1-flash-lite' },
+      { key: 'imageModel', value: 'google:gemini-3.1-flash-lite-image' },
+    ]);
+    expect(await loadSettings()).toMatchObject({
+      translationModel: 'google:gemini-3.5-flash-lite',
+      summaryModel: DEFAULT_SETTINGS.summaryModel,
+      imageModel: 'google:gemini-3.1-flash-lite-image',
+    });
+  });
+
+  it('leaves current and unrelated model choices untouched when loading settings', async () => {
+    await getDb().settings.bulkPut([
+      { key: 'translationModel', value: 'openai:gpt-4o-mini' },
+      { key: 'summaryModel', value: 'google:gemini-3.8-flash' },
+    ]);
+    expect(await loadSettings()).toMatchObject({ translationModel: 'openai:gpt-4o-mini', summaryModel: 'google:gemini-3.8-flash' });
+    await getDb().settings.clear();
+    expect((await loadSettings()).translationModel).toBe('google:gemini-3.5-flash-lite');
+  });
+
+  it('never persists or broadcasts the retired translation model', async () => {
+    const listener = vi.fn(); window.addEventListener(settingsUpdatedEvent, listener);
+    await saveSettings({ translationModel: 'google:gemini-3.1-flash-lite' });
+    expect((await getDb().settings.get('translationModel'))?.value).toBe('google:gemini-3.5-flash-lite');
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.translationModel).toBe('google:gemini-3.5-flash-lite');
   });
 
   it('persists smart and eight speakers, and dispatches the exact normalized settings', async () => {

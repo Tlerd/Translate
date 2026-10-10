@@ -25,7 +25,7 @@ vi.mock('@google/genai', async (importOriginal) => {
 const request: TranslateRequest = {
   requestId: 'usage-request', recordingId: 'usage-recording', captionId: 7,
   sessionEpoch: 1, revision: 3, configRevision: 1,
-  modelKey: 'google:gemini-3.1-flash-lite', requestKind: 'final', sourceLanguage: 'ja', targetLanguage: 'vi',
+  modelKey: 'google:gemini-3.5-flash-lite', requestKind: 'final', sourceLanguage: 'ja', targetLanguage: 'vi',
   text: 'private source', context: 'private situation', glossary: 'private glossary',
 };
 

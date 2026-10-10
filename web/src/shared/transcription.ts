@@ -1,28 +1,21 @@
 export const TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe';
 export const LIVE_TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe-live';
-export const FLASH_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
-export type LiveSpeechModel = typeof LIVE_TRANSCRIPTION_MODEL | typeof FLASH_LIVE_MODEL;
-export type SpeechProvider = 'google' | 'google-transcribe' | 'google-flash-live' | 'nemotron' | 'soniox';
+export type SpeechProvider = 'google' | 'google-transcribe' | 'nemotron' | 'soniox';
 
 export function normalizeSpeechProvider(value: unknown): SpeechProvider {
   if (value === 'soniox') return 'soniox';
   if (value === 'nemotron') return 'nemotron';
-  if (value === 'google-flash' || value === 'google-flash-live') return 'google-flash-live';
+  // Removed Flash Live providers ('google-flash', 'google-flash-live') fall back to Transcribe.
   return value === 'google' ? value : 'google-transcribe';
 }
 
 export function isLiveSpeechProvider(provider: SpeechProvider): boolean {
-  return provider === 'google' || provider === 'google-flash-live' || provider === 'nemotron' || provider === 'soniox';
-}
-
-export function liveTranscriptionModel(provider: SpeechProvider): LiveSpeechModel {
-  return provider === 'google-flash-live' ? FLASH_LIVE_MODEL : LIVE_TRANSCRIPTION_MODEL;
+  return provider === 'google' || provider === 'nemotron' || provider === 'soniox';
 }
 
 export function speechProviderName(provider: SpeechProvider): string {
   if (provider === 'soniox') return 'Soniox · stt-rt-v5 (dịch trực tiếp, 60+ ngôn ngữ)';
   if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
-  if (provider === 'google-flash-live') return 'Gemini 3 Flash Live';
   return provider === 'google' ? 'Gemini 3.5 Translate Live' : 'Gemini 3.5 Transcribe';
 }
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;

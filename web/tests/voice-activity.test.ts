@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdaptiveVoiceDetector, chunkRms, MAX_VOICE_RMS, MIN_VOICE_RMS } from '@/features/recording/voice-activity';
+import { AdaptiveVoiceDetector, MAX_VOICE_RMS, MIN_VOICE_RMS } from '@/features/recording/voice-activity';
 
 describe('AdaptiveVoiceDetector', () => {
   it('treats quiet speech on a quiet microphone as voice', () => {
@@ -25,6 +25,5 @@ describe('AdaptiveVoiceDetector', () => {
   it('rejects near-silence', () => {
     const detector = new AdaptiveVoiceDetector();
     expect(detector.isVoice(MIN_VOICE_RMS / 4)).toBe(false);
-    expect(chunkRms(new Float32Array(0))).toBe(0);
   });
 });

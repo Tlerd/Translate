@@ -13,7 +13,7 @@ import {
   updateRecording,
 } from '@/storage/recordings';
 
-const MODEL = 'google:gemini-3.1-flash-lite';
+const MODEL = 'google:gemini-3.5-flash-lite';
 
 async function seed(id: string) {
   return createRecording({

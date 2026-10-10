@@ -13,6 +13,7 @@ import type {
   ClassroomMode,
 } from '@/shared/recording';
 import { DEFAULT_SETTINGS } from '@/shared/recording';
+import { canonicalModelKey, LEGACY_MODEL_KEYS } from '@/shared/ai-model-keys';
 import { isAllowedSpeakerLabel, normalizeSpeechProvider, normalizeSpeakerCount, normalizeTranscriptionMode, type SpeakerCount, type TranscriptionMode } from '@/shared/transcription';
 
 /** Upper bound used by library lists; effectively no limit for a personal library. */
@@ -528,15 +529,27 @@ function normalizeEarlySegmentTranslation(value: unknown, fallback: boolean = DE
   return fallback;
 }
 
+/** A retired translation model becomes its replacement; an empty value becomes the default. */
+function normalizeTranslationModel(value: unknown): string {
+  return typeof value === 'string' && value ? canonicalModelKey(value) : DEFAULT_SETTINGS.translationModel;
+}
+
+/** Retired models have no summary replacement (their successor is translate-only), so use the default. */
+function normalizeSummaryModel(value: unknown): string {
+  return typeof value === 'string' && value && !Object.prototype.hasOwnProperty.call(LEGACY_MODEL_KEYS, value)
+    ? value
+    : DEFAULT_SETTINGS.summaryModel;
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   const db = getDb();
   try {
     const records = await db.settings.toArray();
     const map = new Map(records.map((r) => [r.key, r.value]));
     return {
-      translationModel: map.get('translationModel') || DEFAULT_SETTINGS.translationModel,
+      translationModel: normalizeTranslationModel(map.get('translationModel')),
       translationThinkingLevel: map.get('translationThinkingLevel') || DEFAULT_SETTINGS.translationThinkingLevel,
-      summaryModel: map.get('summaryModel') || DEFAULT_SETTINGS.summaryModel,
+      summaryModel: normalizeSummaryModel(map.get('summaryModel')),
       imageModel: map.get('imageModel') || DEFAULT_SETTINGS.imageModel,
       imageEnabled: map.get('imageEnabled') === 'true',
       sourceLanguage: map.get('sourceLanguage') || DEFAULT_SETTINGS.sourceLanguage,
@@ -583,6 +596,8 @@ export const settingsUpdatedEvent = 'may-dich:settings-updated';
 export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
   const db = getDb();
   const normalized: Record<string, unknown> = { ...settings };
+  if (settings.translationModel !== undefined) normalized.translationModel = normalizeTranslationModel(settings.translationModel);
+  if (settings.summaryModel !== undefined) normalized.summaryModel = normalizeSummaryModel(settings.summaryModel);
   if (settings.speechProvider !== undefined) normalized.speechProvider = normalizeSpeechProvider(settings.speechProvider);
   if (settings.transcriptionMode !== undefined) normalized.transcriptionMode = normalizeTranscriptionMode(settings.transcriptionMode);
   if (settings.speakerCount !== undefined) normalized.speakerCount = normalizeSpeakerCount(settings.speakerCount);

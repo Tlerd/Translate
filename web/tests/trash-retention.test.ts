@@ -10,7 +10,7 @@ import {
   updateRecording,
 } from '@/storage/recordings';
 
-const MODEL = 'google:gemini-3.1-flash-lite';
+const MODEL = 'google:gemini-3.5-flash-lite';
 const DAY = 24 * 60 * 60 * 1000;
 
 // 'now' for every purge below; deletion times are measured back from it.

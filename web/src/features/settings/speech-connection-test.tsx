@@ -9,7 +9,6 @@ import { pcmWav } from '@/features/recording/gemini-transcribe-recognition';
 import { useRecording } from '@/features/recording/recording-context';
 import {
   isLiveSpeechProvider,
-  liveTranscriptionModel,
   TRANSCRIPTION_MODEL,
   speechProviderName,
 } from '@/shared/transcription';
@@ -60,7 +59,7 @@ export function SpeechConnectionTest() {
           ? new SonioxRecognizer(callbacks, state.sourceLanguage)
           : state.speechProvider === 'nemotron'
           ? new NemotronRecognizer(callbacks, state.sourceLanguage, state.mode === 'readingPractice' ? state.readingPauseMs : state.pauseMs)
-          : new GeminiLiveRecognizer(callbacks, state.sourceLanguage, state.transcriptionMode, liveTranscriptionModel(state.speechProvider));
+          : new GeminiLiveRecognizer(callbacks, state.sourceLanguage, state.transcriptionMode);
         live.current = recognizer;
         try {
           if (recognizer instanceof SonioxRecognizer) await recognizer.testConnection();
