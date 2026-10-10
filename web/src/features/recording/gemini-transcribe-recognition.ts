@@ -31,6 +31,8 @@ export class GeminiTranscribeRecognizer {
     private callbacks: SpeechRecognitionCallbacks, private language: string, private pauseMs = 900,
     private transcriptionMode: TranscriptionMode = 'verbatim', private speakerCount: SpeakerCount = 1,
     private offsetMs = 0,
+    /** Called with the duration of each audio segment actually posted for transcription (billed audio). */
+    private onBilledAudio?: (ms: number) => void,
   ) {}
 
   updateSettings(settings: { pauseMs?: number; transcriptionMode?: TranscriptionMode; speakerCount?: SpeakerCount }): void {
@@ -100,6 +102,7 @@ export class GeminiTranscribeRecognizer {
     this.chain = this.chain.then(async () => {
       try {
         if (this.cancelled) return;
+        try { this.onBilledAudio?.(Math.ceil(count / 16)); } catch { /* usage tracking must never affect transcription */ }
         const form = new FormData();
         form.set('audio', pcmWav(pcm), `${id}.wav`);
         form.set('durationMs', String(Math.ceil(count / 16)));

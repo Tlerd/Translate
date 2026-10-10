@@ -54,3 +54,33 @@ describe('usage-format helpers', () => {
     });
   });
 });
+
+import { combineEstimatedUsd, formatClock, formatDurationVi, formatUsdPerMinute, recordingCostText } from '@/features/usage/usage-format';
+
+describe('speech usage formatting', () => {
+  it('formats clocks and Vietnamese durations', () => {
+    expect(formatClock(754_000)).toBe('12:34');
+    expect(formatClock(3_723_000)).toBe('1:02:03');
+    expect(formatClock(754_000, true)).toBe('0:12:34');
+    expect(formatClock(0)).toBe('0:00');
+    expect(formatDurationVi(750_000)).toBe('12 phút 30 giây');
+    expect(formatDurationVi(3_723_000)).toBe('1 giờ 2 phút 3 giây');
+    expect(formatDurationVi(45_000)).toBe('45 giây');
+    expect(formatUsdPerMinute(0.005)).toBe('$0.0050');
+    expect(formatUsdPerMinute(0)).toBe('$0.00');
+  });
+
+  it('combines translation and speech cost, flagging unknown translation cost', () => {
+    expect(combineEstimatedUsd(0.02, 0.11)).toEqual({ usd: 0.13, partial: false });
+    expect(combineEstimatedUsd(null, 0.11)).toEqual({ usd: 0.11, partial: true });
+  });
+
+  it('builds the recording cost line from whichever sources have data', () => {
+    const translation = { totals: { requests: 40, estimatedUsd: 0.02 } } as never;
+    const speech = { totals: { sessions: 2, audioMs: 754_000, estimatedUsd: 0.11 } } as never;
+    expect(recordingCostText(translation, speech)).toBe('Nhận giọng 12:34 · ~$0.11 · Dịch 40 request · ~$0.02');
+    expect(recordingCostText(translation, null)).toBe('Dịch 40 request · ~$0.02');
+    expect(recordingCostText(null, speech)).toBe('Nhận giọng 12:34 · ~$0.11');
+    expect(recordingCostText({ totals: { requests: 0, estimatedUsd: 0 } } as never, { totals: { sessions: 0, audioMs: 0, estimatedUsd: 0 } } as never)).toBeNull();
+  });
+});

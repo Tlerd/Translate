@@ -9,8 +9,8 @@ import { RecordingWorkspace } from '@/features/recording/recording-workspace';
 import { InlineAudioPlayer } from '@/features/recording/inline-audio-player';
 import { MobileRecordingDetail } from '@/features/recording/mobile-recording-detail';
 import { useSidebarToggle } from '@/components/sidebar-context';
-import { fetchTranslationUsage } from '@/lib/api-client';
-import { formatTokens, formatUsd, formatSaigonDate } from '@/features/usage/usage-format';
+import { fetchSpeechUsage, fetchTranslationUsage } from '@/lib/api-client';
+import { formatSaigonDate, recordingCostText } from '@/features/usage/usage-format';
 import type { RecordingItem, CaptionItem, SummaryItem } from '@/shared/recording';
 import styles from './detail-header.module.css';
 
@@ -57,22 +57,14 @@ export default function RecordingDetailPage({
         }
         const fromStr = formatSaigonDate(fromDate);
         const toStr = formatSaigonDate(today);
-        const usageSummary = await fetchTranslationUsage({
-          from: fromStr,
-          to: toStr,
-          recordingId: id,
-        });
+        const query = { from: fromStr, to: toStr, recordingId: id };
+        // Either source may be unavailable (store off, request failed); show whatever loaded.
+        const [translation, speech] = await Promise.allSettled([fetchTranslationUsage(query), fetchSpeechUsage(query)]);
         if (!active || abortController.signal.aborted) return;
-        if (usageSummary.totals.requests > 0) {
-          const totalTokens =
-            usageSummary.totals.inputTokens +
-            usageSummary.totals.outputTokens +
-            usageSummary.totals.thinkingTokens;
-          const usdStr = usageSummary.totals.estimatedUsd != null ? `~${formatUsd(usageSummary.totals.estimatedUsd)}` : 'Chưa rõ';
-          setCostText(`Chi phí dịch buổi này: ${usageSummary.totals.requests} request · ${formatTokens(totalTokens)} token · ${usdStr}`);
-        } else {
-          setCostText(null);
-        }
+        setCostText(recordingCostText(
+          translation.status === 'fulfilled' ? translation.value : null,
+          speech.status === 'fulfilled' ? speech.value : null,
+        ));
       } catch {
         if (active) setCostText(null);
       }

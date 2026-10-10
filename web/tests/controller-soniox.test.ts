@@ -37,6 +37,9 @@ class Socket {
   message(value: unknown) { this.onmessage?.({ data: JSON.stringify(value) }); }
   close() { this.readyState = 3; this.onclose?.(); }
 }
+/** Soniox token requests only; speech-usage reports share the mocked fetch. */
+const tokenFetches = () => vi.mocked(fetch).mock.calls.filter(([url]) => !String(url).startsWith('/api/usage/'));
+
 describe('Soniox whole-lesson controller', () => {
   let controller: ClassroomController;
   let db: AppDatabase;
@@ -71,6 +74,26 @@ describe('Soniox whole-lesson controller', () => {
     expect(fixture.translate).toHaveBeenCalledOnce();
     expect(fixture.translate.mock.calls[0][0]).toMatchObject({ captionId: 1, text: 'finished sentence' });
     expect(controller.snapshot().captions[0]).toMatchObject({ source: 'finished sentence', state: 'done', isFinal: true });
+  });
+  it.each([
+    ['vi', true, 7000],
+    ['none', false, 7000],
+    ['ja-JP', false, 7000],
+  ])('bills Soniox open-stream time for target %s with translated=%s', async (targetLanguage, translated, audioMs) => {
+    await controller.start({ speechProvider: 'soniox', sourceLanguage: 'ja-JP', targetLanguage });
+    await vi.advanceTimersByTimeAsync(7000);
+    const stopping = controller.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    Socket.instances[0].message({ finished: true });
+    await vi.advanceTimersByTimeAsync(10);
+    await stopping;
+    const reports = vi.mocked(fetch).mock.calls
+      .filter(([url]) => String(url) === '/api/usage/speech')
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    const final = reports.find((report) => report.endedAt);
+    expect(final).toMatchObject({ provider: 'soniox', model: 'stt-rt-v5', translated });
+    expect(final.audioMs).toBeGreaterThanOrEqual(audioMs);
+    expect(final.audioMs).toBeLessThanOrEqual(audioMs + 100); // includes draining the final result
   });
   it('pause commits and translates remaining words while the microphone recorder continues', async () => {
     await controller.start({ speechProvider: 'soniox' });
@@ -112,7 +135,7 @@ describe('Soniox whole-lesson controller', () => {
     expect(controller.snapshot().speechState).toBe('listening');
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledOnce();
     expect(Recorder.instances).toHaveLength(1);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(tokenFetches()).toHaveLength(2);
     const recordingId = controller.snapshot().recordingId!;
     const stopping = controller.stop();
     await vi.advanceTimersByTimeAsync(0);
@@ -135,13 +158,13 @@ describe('Soniox whole-lesson controller', () => {
     expect(controller.snapshot().captions[0].startMs).toBeGreaterThanOrEqual(55 * 60000);
     await controller.pauseApi(); Socket.instances[1].message({ finished: true });
     await vi.advanceTimersByTimeAsync(60 * 60000);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(tokenFetches()).toHaveLength(2);
   });
   it('timestamps queued PCM from capture rather than the later socket open', async () => {
     let respond!: (response: Response) => void;
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { respond = resolve; })));
     const starting = controller.start({ speechProvider: 'soniox' });
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(tokenFetches()).toHaveLength(1));
     await vi.advanceTimersByTimeAsync(1000);
     fixture.pcm!(new Float32Array(1600), 16000);
     const capturedAt = controller.snapshot().durationMs;
@@ -155,12 +178,12 @@ describe('Soniox whole-lesson controller', () => {
   it('does not retry fatal errors in callbacks or initial start catch', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: { message: 'missing key', retryable: false } }, { status: 503 })));
     await controller.start({ speechProvider: 'soniox' }); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
-    await vi.advanceTimersByTimeAsync(10000); expect(fetch).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(10000); expect(tokenFetches()).toHaveLength(1);
     await controller.pauseApi();
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ token: 'fixture', expiresAt: new Date(Date.now() + 120000).toISOString(), model: SONIOX_MODEL, websocketUrl: SONIOX_WEBSOCKET_URL })));
     await controller.resumeApi();
     Socket.instances[0].message({ error_type: 'permission_denied', error_code: 403 });
-    await vi.advanceTimersByTimeAsync(10000); expect(fetch).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(10000); expect(tokenFetches()).toHaveLength(1);
   });
   it('cancels a pending resume immediately when paused again', async () => {
     await controller.start({ speechProvider: 'soniox' });
@@ -183,16 +206,16 @@ describe('Soniox whole-lesson controller', () => {
     await vi.advanceTimersByTimeAsync(55 * 60000);
     Socket.instances[0].message({ finished: true });
     await vi.advanceTimersByTimeAsync(10000);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(tokenFetches()).toHaveLength(2);
     expect(Socket.instances).toHaveLength(1);
   });
   it('retries network errors at most three times and cancels retries on pause', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: { message: 'network', retryable: true } }, { status: 502 })));
     await controller.start({ speechProvider: 'soniox' });
     await vi.advanceTimersByTimeAsync(30000);
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(tokenFetches()).toHaveLength(4);
     await controller.pauseApi();
     await vi.advanceTimersByTimeAsync(60000);
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(tokenFetches()).toHaveLength(4);
   });
 });

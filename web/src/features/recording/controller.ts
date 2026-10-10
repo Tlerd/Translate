@@ -6,9 +6,10 @@ import { AdaptiveVoiceDetector } from './voice-activity';
 import { chooseSpeakerLabel, SourceActivityTracker, SourceCutDetector } from './source-attribution';
 import { NemotronRecognizer } from './nemotron-recognition';
 import { SonioxRecognizer } from './soniox-recognition';
-import { canRetrySpeech, SONIOX_RENEW_AFTER_MS } from '@/shared/soniox';
+import { canRetrySpeech, SONIOX_RENEW_AFTER_MS, sonioxTranslationPair } from '@/shared/soniox';
 import { GeminiTranscribeRecognizer } from './gemini-transcribe-recognition';
 import { GeminiPcmCapture } from './gemini-pcm-capture';
+import { SpeechUsageReporter, type SpeechUsageKind } from './speech-usage-reporter';
 import { WebAudioRecorder } from './audio-recorder';
 import { DisplayCaptureError, requestDisplayAudio } from './audio-input';
 import { LiveUtteranceAssembler, type TranscriptSnapshot } from './utterance-assembler';
@@ -149,6 +150,8 @@ export class ClassroomController {
   private googleConnecting = false;
   private googleConnection: Promise<void> | null = null;
   private recognizerChange: Promise<void> = Promise.resolve();
+  private speechUsage: SpeechUsageReporter | null = null;
+  private speechStreams = new WeakMap<object, number>();
   private speechCallbacks: SpeechRecognitionCallbacks | null = null;
   private audioRecorder: WebAudioRecorder | null = null;
   private assembler: LiveUtteranceAssembler | null = null;
@@ -535,6 +538,11 @@ export class ClassroomController {
       throw err;
     }
 
+    // Billed speech time is reported separately and never blocks recording.
+    this.speechUsage?.finish();
+    this.speechUsage = new SpeechUsageReporter(recordingId);
+    this.speechUsage.start();
+
     // Speech Recognizer
     const callbacks: SpeechRecognitionCallbacks = {
         onTranscript: (text, isFinal, epoch, providerItemId, providerRevision, timing, translation) => {
@@ -744,6 +752,28 @@ export class ClassroomController {
     };
   }
 
+  private openSpeechStream(recognizer: object, kind: SpeechUsageKind): void {
+    const id = this.speechUsage?.openStream(kind);
+    if (id) this.speechStreams.set(recognizer, id);
+  }
+
+  /** Idempotent: stops billing for a live recognizer's stream. */
+  private closeSpeechStream(recognizer: object): void {
+    const id = this.speechStreams.get(recognizer);
+    if (id === undefined) return;
+    this.speechStreams.delete(recognizer);
+    this.speechUsage?.closeStream(id);
+  }
+
+  /** Stops a recognizer; its stream stays billed until the stop (including draining final results) completes. */
+  private async stopRecognizer(recognizer: { stop(timeoutMs?: number): Promise<void> }, timeoutMs?: number): Promise<void> {
+    try {
+      await (timeoutMs === undefined ? recognizer.stop() : recognizer.stop(timeoutMs));
+    } finally {
+      this.closeSpeechStream(recognizer);
+    }
+  }
+
   private async startTranscriber(epoch: number, offsetMs = 0): Promise<void> {
     if (epoch !== this.sessionEpoch || !this.speechCallbacks || this.stopping || this.apiState === 'paused' || this.apiState === 'pausing') return;
     if (isLiveSpeechProvider(this.state.speechProvider)) { await this.connectGoogleSpeech(epoch, this.state.sourceLanguage); return; }
@@ -755,6 +785,7 @@ export class ClassroomController {
       this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs,
       this.state.transcriptionMode, this.state.speakerCount,
       offsetMs,
+      (ms) => this.speechUsage?.addAudio({ provider: 'google-transcribe', translated: false }, ms),
     );
     this.speechRecognizer = recognizer;
     recognizer.start(epoch);
@@ -779,7 +810,12 @@ export class ClassroomController {
     // The callback closes over the instance so only that instance can update UI state.
     // eslint-disable-next-line prefer-const
     let recognizer!: GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer;
-    const callbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
+    const baseCallbacks = this.callbacksForRecognizer(() => this.speechRecognizer === recognizer);
+    // A failed stream is closed (and no longer billed) even when nobody calls stop().
+    const callbacks: SpeechRecognitionCallbacks = {
+      ...baseCallbacks,
+      onError: (message, errorEpoch, details) => { this.closeSpeechStream(recognizer); baseCallbacks.onError(message, errorEpoch, details); },
+    };
     const targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
     recognizer = this.state.speechProvider === 'soniox'
       ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
@@ -788,7 +824,12 @@ export class ClassroomController {
       : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, targetLanguage);
     this.speechRecognizer = recognizer;
     await recognizer.start(epoch, language, targetLanguage);
-    if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await recognizer.stop(0); return; }
+    this.openSpeechStream(recognizer, {
+      provider: this.state.speechProvider,
+      translated: this.state.speechProvider === 'soniox' ? sonioxTranslationPair(language, targetLanguage) !== null
+        : this.state.speechProvider === 'google' && targetLanguage !== undefined,
+    });
+    if (epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') { await this.stopRecognizer(recognizer, 0); return; }
     this.pcmReady = true;
     for (const item of this.pcmQueue) this.pushRecognitionAudio(item);
     this.pcmQueue = []; this.pcmQueueMs = 0;
@@ -796,7 +837,7 @@ export class ClassroomController {
       this.renewalTimer = null;
       if (this.state.state !== 'recording' || epoch !== this.sessionEpoch || this.stopping || (this.apiState as string) === 'paused' || (this.apiState as string) === 'pausing') return;
       this.pcmReady = false;
-      void recognizer.stop().then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
+      void this.stopRecognizer(recognizer).then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
         this.state.error = `Không nối lại được nhận giọng: ${error instanceof Error ? error.message : String(error)}. Audio vẫn được lưu.`;
         this.notify();
         if (canRetrySpeech(error)) this.scheduleGoogleRetry(epoch, language);
@@ -814,7 +855,7 @@ export class ClassroomController {
       if (this.renewalTimer) clearTimeout(this.renewalTimer);
       this.renewalTimer = null;
       const old = this.speechRecognizer;
-      void Promise.resolve(old?.stop(0)).then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
+      void Promise.resolve(old ? this.stopRecognizer(old, 0) : undefined).then(() => this.connectGoogleSpeech(epoch, language)).catch(error => {
         this.state.error = `Chưa nối lại được nhận giọng (${this.speechRetries}/3): ${error instanceof Error ? error.message : String(error)}. Audio vẫn lưu trên máy.`;
         this.notify(); if (canRetrySpeech(error)) this.scheduleGoogleRetry(epoch, language);
       });
@@ -851,7 +892,8 @@ export class ClassroomController {
     this.recognizerChange = this.recognizerChange.then(async () => {
       if (epoch !== this.sessionEpoch || this.stopping || this.state.state !== 'recording') return;
       await this.googleConnection?.catch(() => undefined);
-      await this.speechRecognizer?.stop();
+      const previous = this.speechRecognizer;
+      if (previous) await this.stopRecognizer(previous);
       this.speechRecognizer = null;
       this.clearSpeechTimers();
       await this.startTranscriber(epoch);
@@ -1141,7 +1183,7 @@ export class ClassroomController {
         console.warn('Lỗi dừng speech recognizer khi pause:', err);
       }
       this.speechRecognizer = null;
-      const drain = Promise.resolve().then(() => oldRecognizer.stop()).catch((err) => { console.warn('Recognizer drain failed after pause:', err); });
+      const drain = Promise.resolve().then(() => this.stopRecognizer(oldRecognizer)).catch((err) => { console.warn('Recognizer drain failed after pause:', err); });
       this.pendingRecognizerDrains.add(drain);
       void drain.finally(() => this.pendingRecognizerDrains.delete(drain));
     }
@@ -1175,6 +1217,9 @@ export class ClassroomController {
     this.pcmLastVoiceTime = 0;
     this.pcmPreRollBuffer = [];
     this.pcmPreRollMs = 0;
+
+    // Each resume is a new billed session.
+    this.speechUsage?.rollover();
 
     // 3. Start recognizer with whole-session offset
     this.apiState = 'active';
@@ -1267,10 +1312,13 @@ export class ClassroomController {
     this.clearSpeechTimers();
 
     if (this.speechRecognizer) {
-      try { await this.speechRecognizer.stop(); } catch (error) { stopErrors.push(String(error)); }
+      try { await this.stopRecognizer(this.speechRecognizer); } catch (error) { stopErrors.push(String(error)); }
       this.speechRecognizer = null;
     }
     await Promise.all([...this.pendingRecognizerDrains]);
+    // Every recognizer has drained, so the billed time is complete. Not awaited: the network never delays stopping.
+    this.speechUsage?.finish();
+    this.speechUsage = null;
 
     if (this.assembler) {
       this.assembler.finalizeCurrentUtterance(true);
@@ -1463,7 +1511,7 @@ export class ClassroomController {
       } catch (err) {
         console.warn('Lỗi finalize recognizer khi đổi chiều ngôn ngữ:', err);
       }
-      const drain = Promise.resolve().then(() => oldRecognizer.stop()).catch(() => {});
+      const drain = Promise.resolve().then(() => this.stopRecognizer(oldRecognizer)).catch(() => {});
       this.pendingRecognizerDrains.add(drain);
       void drain.finally(() => this.pendingRecognizerDrains.delete(drain));
 
