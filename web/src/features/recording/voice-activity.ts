@@ -3,13 +3,6 @@ export const MAX_VOICE_RMS = 0.015;
 /** Lowest RMS ever treated as speech; below this is electrical/room noise. */
 export const MIN_VOICE_RMS = 0.004;
 
-export function chunkRms(samples: Float32Array): number {
-  if (!samples.length) return 0;
-  let power = 0;
-  for (let i = 0; i < samples.length; i++) power += samples[i] * samples[i];
-  return Math.sqrt(power / samples.length);
-}
-
 /**
  * Speech gate that follows the microphone's noise floor. A fixed 0.015 gate
  * silently drops quiet laptop/phone microphones, so nothing reaches the

@@ -178,14 +178,14 @@ async function run() {
     check('Menu điện thoại mở/đóng, đóng khi bấm ra ngoài và chọn bản ghi');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${baseUrl}/settings`);
-    await page.locator('#speech-provider').selectOption('google-flash-live');
+    await page.locator('#speech-provider').selectOption('nemotron');
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
-    await waitUntil(async () => await input.inputValue() === 'ja' && await outputLanguage.inputValue() === 'es-419', 'Provider switches to supported input without losing saved output');
-    assert.equal(await input.locator('option').count(), 100);
+    await waitUntil(async () => await input.inputValue() === 'ja-JP' && await outputLanguage.inputValue() === 'es-419', 'Provider switches to supported input without losing saved output');
+    assert.equal(await input.locator('option').count(), 32);
     await page.reload();
-    await waitUntil(async () => await input.inputValue() === 'ja' && await outputLanguage.inputValue() === 'es-419', 'Model-specific language pair restored');
-    check('Flash Live hiện đủ 100 mã; đổi model giữ đầu ra và chọn đầu vào được hỗ trợ qua reload');
+    await waitUntil(async () => await input.inputValue() === 'ja-JP' && await outputLanguage.inputValue() === 'es-419', 'Model-specific language pair restored');
+    check('Nemotron hiện đủ 32 mã; đổi model giữ đầu ra và chọn đầu vào được hỗ trợ qua reload');
     assert.deepEqual(errors, []); check('Không có lỗi JavaScript chưa xử lý');
     fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify({ checks, elapsedMs, file: asset.file, playback, languageHints: hints, cloud: 'transport fixtures', media: 'real Chrome MediaRecorder, worker and IndexedDB', physicalIPhone: false }, null, 2));
   } catch (error) { await page.screenshot({ path: path.join(output, 'failure.png') }); throw error; }

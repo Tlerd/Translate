@@ -11,7 +11,7 @@ interface PcmCaptureFixture {
 }
 interface GoogleRecognizerFixture {
   mode?: string;
-  model?: string;
+  targetLanguage?: string;
   pauseMs?: number;
   callbacks: GoogleCallbacks;
   epoch: number;
@@ -77,7 +77,7 @@ vi.mock('@/features/recording/gemini-live-recognition', () => ({
     pushes: Array<{ samples: Float32Array; rate: number }> = [];
     stopImpl: () => Promise<void> = async () => undefined;
     finalOnStop: (() => void) | null = null;
-    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string, public model: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
+    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string, public targetLanguage?: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
     async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
     pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
     finalizeUtterance() {}
@@ -247,10 +247,10 @@ describe('ClassroomController Google speech integration', () => {
     expect(getUserMedia).toHaveBeenCalledOnce();
   });
 
-  it('routes Flash through Live and releases capture while a previous recognizer change is draining', async () => {
+  it('routes Translate Live through the Live recognizer and releases capture while a previous recognizer change is draining', async () => {
     const controller = new ClassroomController();
-    await controller.start({ speechProvider: 'google-flash-live' });
-    expect(shared.liveRecognizers[0].model).toBe('gemini-3.1-flash-live-preview');
+    await controller.start({ speechProvider: 'google' });
+    expect(shared.liveRecognizers).toHaveLength(1);
     expect(shared.recognizers).toHaveLength(0);
     let release!: () => void;
     shared.liveRecognizers[0].stopImpl = () => new Promise<void>(resolve => { release = resolve; });
@@ -289,14 +289,23 @@ describe('ClassroomController Google speech integration', () => {
     const controller = new ClassroomController();
     controller.setLanguages('yue-Hant-HK', 'vi');
     await controller.start({ speechProvider: 'google-transcribe' });
-    controller.setSpeechProvider('google-flash-live');
+    controller.setSpeechProvider('nemotron');
     expect(controller.snapshot()).toMatchObject({ sourceLanguage: 'yue-Hant-HK', speechProvider: 'google-transcribe' });
     expect(controller.snapshot().error).toContain('không hỗ trợ ngôn ngữ');
     controller.setLanguages('es-419', 'ja-JP');
     expect(controller.snapshot().sourceLanguage).toBe('yue-Hant-HK');
     await controller.stop();
-    controller.setSpeechProvider('google-flash-live');
-    expect(controller.snapshot().sourceLanguage).toBe('ja');
+    controller.setSpeechProvider('nemotron');
+    expect(controller.snapshot().sourceLanguage).toBe('ja-JP');
+  });
+
+  it('starts translation on 3.5 when a caller or saved setting still names the retired 3.1 model', async () => {
+    const controller = new ClassroomController();
+    controller.setTranslationModel('google:gemini-3.1-flash-lite');
+    expect(controller.snapshot().translationModelKey).toBe('google:gemini-3.5-flash-lite');
+    await controller.start({ speechProvider: 'google-transcribe', translationModelKey: 'google:gemini-3.1-flash-lite' });
+    expect(shared.createRecording).toHaveBeenCalledWith(expect.objectContaining({ translationModelKey: 'google:gemini-3.5-flash-lite' }));
+    await controller.stop();
   });
 
   it('rejects unsupported language options before creating a lesson or acquiring the microphone', async () => {

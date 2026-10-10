@@ -14,9 +14,14 @@ vi.mock('@google/genai', () => ({
   },
 }));
 import {
+  AI_MODELS_REGISTRY,
+  getModelConfig,
+  getModelPricing,
   getModelsForTask,
 } from '@/config/ai-models';
+import { canonicalModelKey } from '@/shared/ai-model-keys';
 import {
+  getPublicModelList,
   resolveTaskConfig,
   validateTwoModelsSeparation,
   AiConfigError,
@@ -104,6 +109,59 @@ describe('AI Config and Separation', () => {
     const imageModels = getModelsForTask('image');
     expect(imageModels.some((m) => m.key === 'google:gemini-3.1-flash-image')).toBe(true);
     expect(imageModels.some((m) => m.key === 'openai:gpt-image-2.5-sunburst')).toBe(true);
+  });
+});
+
+describe('Retired Gemini 3.1 Flash-Lite translation key', () => {
+  const LEGACY = 'google:gemini-3.1-flash-lite';
+  const CURRENT = 'google:gemini-3.5-flash-lite';
+
+  it('resolves an old client request to the 3.5 model instead of UNSUPPORTED_MODEL', () => {
+    const resolved = resolveTaskConfig('translate', LEGACY);
+    expect(resolved.model.key).toBe(CURRENT);
+    expect(resolved.model.modelId).toBe('gemini-3.5-flash-lite');
+  });
+
+  it('resolves a stale AI_TRANSLATION_MODEL environment value to 3.5', () => {
+    process.env.AI_TRANSLATION_MODEL = LEGACY;
+    expect(resolveTaskConfig('translate').model.key).toBe(CURRENT);
+    expect(() => validateTwoModelsSeparation()).not.toThrow();
+  });
+
+  it('accepts an old recording translationModelKey for the summary separation check', () => {
+    const resolved = resolveTaskConfig('summarize', 'google:gemini-3.8-flash', LEGACY);
+    expect(resolved.model.key).toBe('google:gemini-3.8-flash');
+  });
+
+  it('summarizes with the server summary model when an old client asks for 3.1 as the summary model', () => {
+    expect(resolveTaskConfig('summarize', LEGACY).model.key).toBe('google:gemini-3.8-flash');
+    expect(() => validateTwoModelsSeparation(CURRENT, LEGACY)).not.toThrow();
+  });
+
+  it('is not a selectable translation model and is absent from the public model list', () => {
+    expect(getModelsForTask('translate').map((m) => m.key)).not.toContain(LEGACY);
+    expect(getModelsForTask('summarize').map((m) => m.key)).not.toContain(LEGACY);
+    expect(AI_MODELS_REGISTRY[LEGACY]).toBeUndefined();
+    expect(getPublicModelList().map((m) => m.key)).not.toContain(LEGACY);
+    expect(getModelsForTask('translate').map((m) => m.key)).toContain(CURRENT);
+  });
+
+  it('maps through getModelConfig and canonicalModelKey, leaving other keys alone', () => {
+    expect(getModelConfig(LEGACY)?.key).toBe(CURRENT);
+    expect(canonicalModelKey(LEGACY)).toBe(CURRENT);
+    expect(canonicalModelKey('google:gemini-3.1-flash-lite-image')).toBe('google:gemini-3.1-flash-lite-image');
+    expect(canonicalModelKey('toString')).toBe('toString');
+    expect(canonicalModelKey(undefined)).toBeUndefined();
+  });
+
+  it('keeps the historical price for stored usage rows without exposing it as a model', () => {
+    expect(getModelPricing(LEGACY)).toMatchObject({ inputUsdPerM: 0.25, outputUsdPerM: 1.5, cachedInputUsdPerM: 0.025, pricingAsOf: '2026-10-05' });
+    expect(getModelPricing(CURRENT)).toMatchObject({ inputUsdPerM: 0.3, outputUsdPerM: 2.5 });
+    expect(getModelPricing('unknown:model')).toBeUndefined();
+  });
+
+  it('still keeps the image models untouched', () => {
+    expect(getModelConfig('google:gemini-3.1-flash-lite-image')?.allowedTasks).toEqual(['image']);
   });
 });
 

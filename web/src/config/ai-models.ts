@@ -1,5 +1,6 @@
 import 'server-only';
 import type { AiTask } from '@/shared/ai-contracts';
+import { canonicalModelKey } from '@/shared/ai-model-keys';
 
 export interface ModelRegistryEntry {
   key: string;
@@ -38,24 +39,6 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
     inputUsdPerM: 0.30,
     outputUsdPerM: 2.50,
     cachedInputUsdPerM: 0.03,
-    pricingAsOf: '2026-10-05',
-    thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-  },
-  'google:gemini-3.1-flash-lite': {
-    key: 'google:gemini-3.1-flash-lite',
-    provider: 'google',
-    modelId: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash-Lite · $0.25/$1.50 / 1M token',
-    capabilities: ['translate', 'summarize'],
-    allowedTasks: ['translate', 'summarize'],
-    endpointKind: 'google-generate-content',
-    enabled: true,
-    maxChars: 30000,
-    inputPrice: '$0.25/1M tokens',
-    outputPrice: '$1.50/1M tokens',
-    inputUsdPerM: 0.25,
-    outputUsdPerM: 1.50,
-    cachedInputUsdPerM: 0.025,
     pricingAsOf: '2026-10-05',
     thinkingLevels: ['minimal', 'low', 'medium', 'high'],
   },
@@ -141,8 +124,35 @@ export const AI_MODELS_REGISTRY: Record<string, ModelRegistryEntry> = {
   },
 };
 
+/** Resolves retired keys (see LEGACY_MODEL_KEYS) to the model that replaced them. */
 export function getModelConfig(key: string): ModelRegistryEntry | undefined {
-  return AI_MODELS_REGISTRY[key];
+  return AI_MODELS_REGISTRY[canonicalModelKey(key)];
+}
+
+export type ModelPricing = Pick<
+  ModelRegistryEntry,
+  'inputUsdPerM' | 'outputUsdPerM' | 'cachedInputUsdPerM' | 'pricingAsOf'
+>;
+
+/**
+ * Prices of retired models. Stored usage rows keep the model key they were
+ * recorded with, so their USD estimate must stay computable. These entries are
+ * deliberately outside AI_MODELS_REGISTRY and never appear in model pickers.
+ */
+const LEGACY_MODEL_PRICING: Record<string, ModelPricing> = {
+  'google:gemini-3.1-flash-lite': {
+    inputUsdPerM: 0.25,
+    outputUsdPerM: 1.50,
+    cachedInputUsdPerM: 0.025,
+    pricingAsOf: '2026-10-05',
+  },
+};
+
+/** Pricing for the exact key a usage row was recorded with (no alias resolution). */
+export function getModelPricing(key: string): ModelPricing | undefined {
+  return Object.prototype.hasOwnProperty.call(LEGACY_MODEL_PRICING, key)
+    ? LEGACY_MODEL_PRICING[key]
+    : AI_MODELS_REGISTRY[key];
 }
 
 export function getModelsForTask(task: AiTask): ModelRegistryEntry[] {

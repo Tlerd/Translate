@@ -25,7 +25,7 @@ export function SummaryPanel({
   summary,
   summaryIsStale = false,
   targetLanguage = 'vi',
-  translationModelKey = 'google:gemini-3.1-flash-lite',
+  translationModelKey = 'google:gemini-3.5-flash-lite',
   onSummaryGenerated,
   onSelectCaption,
 }: SummaryPanelProps) {

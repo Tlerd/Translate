@@ -118,6 +118,10 @@ export default function LiveRecordingPage() {
         : state.speechState === 'listening'
           ? { tone: 'live', label: 'Đang nghe' }
           : { tone: 'wait', label: 'Đang kết nối…' };
+  const latencyParts = [
+    state.finalizeLatencyMs !== null ? `Chốt câu ${Math.round(state.finalizeLatencyMs)} ms` : null,
+    state.translationLatencyMs !== null ? `Dịch ${Math.round(state.translationLatencyMs)} ms` : null,
+  ].filter((part): part is string => part !== null);
   const pair = `${state.sourceLanguage === 'auto' ? 'Tự nhận biết' : languageName(state.sourceLanguage)} → ${state.targetLanguage === 'none' ? 'Không dịch' : languageName(state.targetLanguage)}`;
 
   return (
@@ -129,6 +133,9 @@ export default function LiveRecordingPage() {
         <div className={styles.headerText}>
           <h1 className={styles.title}>{sessionTitle || 'Buổi ghi âm trực tiếp'}</h1>
           {isRecording && <p className={styles.subtitle}>{speechProviderName(state.speechProvider)} · {pair}{sourceSuffix}</p>}
+          {isRecording && latencyParts.length > 0 && (
+            <p className={styles.latency} aria-label="Độ trễ xử lý">{latencyParts.join(' · ')}</p>
+          )}
         </div>
         <div className={styles.headerEnd}>
           {showCaptureChip && (

@@ -147,7 +147,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   speechProvider: 'google-transcribe',
   transcriptionMode: 'verbatim',
   speakerCount: 1,
-  translationModel: 'google:gemini-3.1-flash-lite',
+  translationModel: 'google:gemini-3.5-flash-lite',
   translationThinkingLevel: 'auto',
   summaryModel: 'google:gemini-3.8-flash',
   imageModel: 'google:gemini-3.1-flash-image',
@@ -162,58 +162,3 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recentSourceLanguages: ['ja-JP', 'en-US', 'ko-KR'],
   recentTargetLanguages: ['vi', 'en', 'zh-Hans'],
 };
-
-export interface WebExportBundle {
-  schemaVersion: 1;
-  exportedAt: string;
-  recording: RecordingItem;
-  captions: CaptionItem[];
-  summary?: SummaryItem;
-  hasAudio: boolean;
-  audioFileName?: string;
-  hasImage: boolean;
-  imageFileName?: string;
-}
-
-/**
- * APK conversation.json structure matching app/lib/session_store.dart
- */
-export interface ApkSessionMeta {
-  id: string;
-  createdAt: string;
-  endedAt?: string;
-  mode?: string; // 'conversation' | 'classroom'
-  state: string; // 'recording' | 'stopped' | 'interrupted'
-  samples: number;
-  audioState?: string;
-  audioDeletedAt?: string;
-  config?: Record<string, unknown>;
-}
-
-export interface ApkSessionTurn {
-  id: number;
-  sessionId: string;
-  startSample: number;
-  endSample: number;
-  direction: string; // 'jaVi', 'viJa', etc.
-  source?: string;
-  target?: string;
-  targetSource?: string;
-  correctedTarget?: string;
-  liveBlockId?: number;
-  sourceRevision?: number;
-  targetSourceRevision?: number;
-  recognitionFinal?: number;
-  timingApproximate?: number;
-  state?: string;
-  skipReason?: string;
-  error?: string;
-}
-
-export interface ApkExportJson {
-  session: ApkSessionMeta;
-  audio?: string | null;
-  audioState?: string;
-  sampleRate: number; // usually 16000
-  turns: ApkSessionTurn[];
-}

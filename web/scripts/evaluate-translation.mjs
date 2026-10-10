@@ -34,8 +34,11 @@ const variants = await Promise.all([
   ['lean-v1', '9690936', await readFile(path.join(root, 'tests/fixtures/translation-prompt-lean-v1.txt'), 'utf8')],
   ['lean-fidelity-v6', 'working-tree', currentSource],
 ].map(async ([name, ref, source]) => ({ name, ref, sha256: createHash('sha256').update(source).digest('hex'), builder: await loadPure(source) })));
-const registry = await loadPure(await readFile(path.join(root, 'src/config/ai-models.ts'), 'utf8'));
-const modelId = args.model ?? 'gemini-3.1-flash-lite';
+// ai-models.ts imports the shared alias helper; inline it so the data: module needs no resolver.
+const modelKeysSource = await readFile(path.join(root, 'src/shared/ai-model-keys.ts'), 'utf8');
+const registrySource = (await readFile(path.join(root, 'src/config/ai-models.ts'), 'utf8')).replace(/import \{ canonicalModelKey \} from '@\/shared\/ai-model-keys';\n?/, '');
+const registry = await loadPure(`${modelKeysSource}\n${registrySource}`);
+const modelId = args.model ?? 'gemini-3.5-flash-lite';
 const model = registry.getModelConfig(`google:${modelId}`);
 if (!model || !model.allowedTasks.includes('translate') || !model.enabled) throw new Error('Unsupported translation model');
 const fixture = JSON.parse(await readFile(path.join(root, 'tests/fixtures/translation-quality.json'), 'utf8'));

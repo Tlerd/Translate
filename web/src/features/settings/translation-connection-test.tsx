@@ -26,10 +26,10 @@ const PRESET_SAMPLES = [
     text: 'こんにちは、本日の授業を始めます。よろしくお願いします。',
   },
   {
-    label: 'Gemini 3.1 Flash-Lite (Nhật)',
+    label: 'Gemini 3.5 Flash-Lite (Nhật)',
     source: 'ja',
     target: 'vi',
-    text: 'Gemini 3.1 Flash-Liteは、超低レイテンシかつ高コスト効率でリアルタイム翻訳に最適なモデルです。',
+    text: 'Gemini 3.5 Flash-Liteは、超低レイテンシかつ高コスト効率でリアルタイム翻訳に最適なモデルです。',
   },
   {
     label: 'Đàm phán thương mại (Nhật)',
@@ -53,12 +53,12 @@ const PRESET_SAMPLES = [
 
 export function TranslationConnectionTest() {
   const [modelData, setModelData] = useState<ModelsResponse | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>('google:gemini-3.1-flash-lite');
+  const [selectedModel, setSelectedModel] = useState<string>('google:gemini-3.5-flash-lite');
   const [thinkingLevel, setThinkingLevel] = useState<string>('auto');
   const [sourceLang, setSourceLang] = useState<string>('ja');
   const [targetLang, setTargetLang] = useState<string>('vi');
   const [inputText, setInputText] = useState<string>(
-    'Gemini 3.1 Flash-Liteは、超低レイテンシかつ高コスト効率でリアルタイム翻訳に最適なモデルです。'
+    'Gemini 3.5 Flash-Liteは、超低レイテンシかつ高コスト効率でリアルタイム翻訳に最適なモデルです。'
   );
   const [translatedText, setTranslatedText] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');

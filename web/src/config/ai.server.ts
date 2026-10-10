@@ -6,6 +6,7 @@ import {
   type ModelRegistryEntry,
 } from './ai-models';
 import type { AiTask, ModelInfo } from '@/shared/ai-contracts';
+import { canonicalModelKey, LEGACY_MODEL_KEYS } from '@/shared/ai-model-keys';
 
 export class AiConfigError extends Error {
   public code: string;
@@ -24,10 +25,21 @@ export interface ResolvedTaskConfig {
   timeoutMs: number;
 }
 
+/**
+ * A retired translation key (old client, stored recording, stale env var)
+ * resolves to its replacement. A retired key has no summary replacement because
+ * the model that replaced it is translate-only, so summaries use the server's
+ * summary model instead.
+ */
+function summaryModelKeyOrDefault(key: string | undefined): string {
+  const env = getServerEnv();
+  return !key || Object.prototype.hasOwnProperty.call(LEGACY_MODEL_KEYS, key) ? env.AI_SUMMARY_MODEL : key;
+}
+
 export function validateTwoModelsSeparation(translationOverride?: string, summaryOverride?: string): void {
   const env = getServerEnv();
-  const transKey = translationOverride || env.AI_TRANSLATION_MODEL;
-  const summKey = summaryOverride || env.AI_SUMMARY_MODEL;
+  const transKey = canonicalModelKey(translationOverride || env.AI_TRANSLATION_MODEL);
+  const summKey = summaryModelKeyOrDefault(summaryOverride);
 
   const transModel = getModelConfig(transKey);
   const summModel = getModelConfig(summKey);
@@ -57,11 +69,11 @@ export function resolveTaskConfig(
   }
 
   const env = getServerEnv();
-  let modelKey = requestedModelKey;
+  let modelKey = task === 'summarize' ? summaryModelKeyOrDefault(requestedModelKey) : canonicalModelKey(requestedModelKey);
 
   if (!modelKey) {
     if (task === 'translate') {
-      modelKey = env.AI_TRANSLATION_MODEL;
+      modelKey = canonicalModelKey(env.AI_TRANSLATION_MODEL);
     } else if (task === 'summarize') {
       modelKey = env.AI_SUMMARY_MODEL;
     } else if (task === 'image') {

@@ -1,8 +1,7 @@
-import { FLASH_LIVE_MODEL, LIVE_TRANSCRIPTION_MODEL, type LiveSpeechModel, type TranscriptionMode } from '@/shared/transcription';
+import { LIVE_TRANSCRIPTION_MODEL, type TranscriptionMode } from '@/shared/transcription';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
-import { chunkRms, MIN_VOICE_RMS } from './voice-activity';
 
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
 const SOCKET_OPEN = 1;
@@ -41,9 +40,6 @@ export class GeminiLiveRecognizer {
   private utteranceCounter = 0;
   private activeUtteranceId: string | null = null;
   private revision = 0;
-  private inputText = '';
-  private locallyClosedFlashInput = false;
-  private heardSpeech = false;
   private currentTranslation: string | undefined = undefined;
   private lastSourceText = '';
   private stopPromise: Promise<void> | null = null;
@@ -58,7 +54,6 @@ export class GeminiLiveRecognizer {
     callbacks: SpeechRecognitionCallbacks,
     languageCode = 'ja-JP',
     private transcriptionMode: TranscriptionMode = 'verbatim',
-    private model: LiveSpeechModel = LIVE_TRANSCRIPTION_MODEL,
     private targetLanguageCode?: string
   ) {
     this.callbacks = callbacks;
@@ -83,11 +78,8 @@ export class GeminiLiveRecognizer {
     this.utteranceCounter = 0;
     this.activeUtteranceId = null;
     this.revision = 0;
-    this.inputText = '';
     this.currentTranslation = undefined;
     this.lastSourceText = '';
-    this.locallyClosedFlashInput = false;
-    this.heardSpeech = false;
     this.resampler = null;
     this.diagnosticsValue = {
       status: 'connecting', connectedAt: null, sessionDeadline: null, audioBytesSent: 0,
@@ -101,7 +93,7 @@ export class GeminiLiveRecognizer {
       body: JSON.stringify({
         languageCode,
         transcriptionMode: this.transcriptionMode,
-        model: this.model,
+        model: LIVE_TRANSCRIPTION_MODEL,
         ...(this.targetLanguageCode ? { targetLanguageCode: this.targetLanguageCode } : {}),
       }),
       cache: 'no-store',
@@ -136,14 +128,13 @@ export class GeminiLiveRecognizer {
       socket.onopen = () => {
         if (generation !== this.connectionGeneration) return finish(new Error('Gemini session was superseded.'));
         const { responseModalities, translationConfig, ...config } = liveSpeechConfig(
-          this.model,
           this.transcriptionMode,
           languageCode,
           this.targetLanguageCode
         );
         socket.send(JSON.stringify({
           setup: {
-            model: `models/${this.model}`,
+            model: `models/${LIVE_TRANSCRIPTION_MODEL}`,
             // The Live API rejects translationConfig at the top of setup; it belongs in generationConfig.
             generationConfig: { responseModalities, ...(translationConfig ? { translationConfig } : {}) },
             ...config,
@@ -189,12 +180,6 @@ export class GeminiLiveRecognizer {
   /** Push raw Web Audio Float32 PCM at its native AudioContext sample rate. */
   public pushPcm(samples: Float32Array, inputRate: number): void {
     if (!this.socket || this.diagnosticsValue.status !== 'listening') return;
-    if (this.model === FLASH_LIVE_MODEL && samples.length && chunkRms(samples) >= MIN_VOICE_RMS) {
-      this.heardSpeech = true;
-      // A silence boundary seals the old caption, but buffered ASR can still
-      // correct it. Fresh microphone speech starts a new provider identity.
-      if (this.locallyClosedFlashInput) this.resetFlashInput();
-    }
     if (!this.resampler || this.resamplerInputRate !== inputRate) {
       this.resampler = new Pcm16kResampler(inputRate);
       this.resamplerInputRate = inputRate;
@@ -205,12 +190,6 @@ export class GeminiLiveRecognizer {
   /** Ask Gemini to finalize the current utterance after client-detected silence. */
   public finalizeUtterance(): void {
     if (this.diagnosticsValue.status !== 'listening' || this.socket?.readyState !== SOCKET_OPEN) return;
-    // Flash input may omit finished, especially when the dialogue model stays
-    // silent. Close its identity together with the classroom silence boundary.
-    if (this.model === FLASH_LIVE_MODEL && this.inputText && !this.locallyClosedFlashInput) {
-      this.emitTranscript(this.inputText, true);
-      this.locallyClosedFlashInput = true;
-    }
     this.socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
   }
 
@@ -282,22 +261,6 @@ export class GeminiLiveRecognizer {
     if (interimTrans) this.currentTranslation = interimTrans;
     if (finalTrans) this.currentTranslation = finalTrans;
 
-    // Flash Live streams input transcription deltas. Generated model turns and
-    // outputTranscription are never classroom speech, even during Stop.
-    if (this.model === FLASH_LIVE_MODEL) {
-      if (this.heardSpeech || this.inputText) {
-        if (typeof finalText === 'string' && finalText.length) {
-          this.inputText += finalText;
-          this.emitTranscript(this.inputText, this.locallyClosedFlashInput);
-        }
-        if (final && typeof final === 'object' && 'finished' in final && final.finished === true) {
-          this.finishFlashInput();
-        }
-      }
-      // Model generation/turn completion is independent of input ASR and can
-      // precede its last delta. It must neither close a sentence nor end Stop's drain.
-      return;
-    }
     if (typeof interimText === 'string' && interimText.length) {
       this.lastSourceText = interimText;
       this.emitTranscript(interimText, false, this.currentTranslation);
@@ -319,22 +282,6 @@ export class GeminiLiveRecognizer {
     if (content && 'turnComplete' in content && content.turnComplete && this.diagnosticsValue.status === 'draining') {
       this.finishDrain();
     }
-  }
-
-  private finishFlashInput(): void {
-    if (this.inputText.trim() && !this.locallyClosedFlashInput) this.emitTranscript(this.inputText, true);
-    this.resetFlashInput();
-    if (this.diagnosticsValue.status === 'draining') this.finishDrain();
-  }
-
-  private resetFlashInput(): void {
-    this.inputText = '';
-    this.locallyClosedFlashInput = false;
-    // Keep speech evidence for this connection: a later turn's audio can have
-    // arrived before an earlier turn's final transcript. Clearing it here
-    // would discard valid delayed input from the server.
-    this.activeUtteranceId = null;
-    this.revision = 0;
   }
 
   private emitTranscript(text: string, isFinal: boolean, translation?: string): void {
@@ -372,7 +319,6 @@ export class GeminiLiveRecognizer {
           this.drainResolver = finish;
           socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
         });
-        if (this.model === FLASH_LIVE_MODEL) this.finishFlashInput();
       }
       if (this.socket === socket) this.socket = null;
       try { socket?.close(1000, 'client stopped'); } catch { /* already closed */ }

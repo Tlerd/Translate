@@ -19,7 +19,6 @@ import type { ModelsResponse } from '@/shared/ai-contracts';
 import {
   SPEAKER_COUNTS,
   TRANSCRIPTION_MODEL,
-  FLASH_LIVE_MODEL,
   isLiveSpeechProvider,
   type SpeakerCount,
   type TranscriptionMode,
@@ -130,8 +129,7 @@ export function AiSettings() {
   };
 
   const swapDisabled = settings.sourceLanguage === 'auto' || settings.targetLanguage === 'none';
-  const transcriptionLocked =
-    settings.speechProvider === 'google-flash-live' || ['nemotron', 'soniox'].includes(settings.speechProvider);
+  const transcriptionLocked = ['nemotron', 'soniox'].includes(settings.speechProvider);
 
   return (
     <div className={styles.root}>
@@ -284,7 +282,6 @@ export function AiSettings() {
                 <option value="google">Gemini 3.5 Translate Live · trực tiếp</option>
                 <option value="soniox">Soniox · stt-rt-v5 · trực tiếp (dịch 60+ ngôn ngữ, tách người nói)</option>
                 <option value="google-transcribe">Gemini 3.5 Transcribe · theo đoạn</option>
-                <option value="google-flash-live">Gemini 3 Flash Live · trực tiếp</option>
                 <option value="nemotron">Nemotron 3.5 ASR · máy chủ riêng · trực tiếp</option>
               </select>
 
@@ -294,11 +291,6 @@ export function AiSettings() {
                     {isLiveSpeechProvider(settings.speechProvider) ? 'Trực tiếp' : 'Theo đoạn'}
                   </span>
                 </div>
-                {settings.speechProvider === 'google-flash-live' && (
-                  <p className={styles.providerText}>
-                    <code className={shared.code}>{FLASH_LIVE_MODEL}</code> kết nối Live API, hiện chữ trực tiếp. Tự động gia hạn kết nối cho các buổi học dài.
-                  </p>
-                )}
                 {settings.speechProvider === 'google' && (
                   <p className={styles.providerText}>
                     Gemini 3.5 Translate Live nhận diện giọng nói và dịch trực tiếp sang ngôn ngữ đích theo thời gian thực. Tự động gia hạn phiên kết nối cho các buổi học dài.
@@ -351,7 +343,7 @@ export function AiSettings() {
                 <select
                   id="speaker-count"
                   className={shared.control}
-                  disabled={settings.speechProvider === 'google-flash-live' || settings.speechProvider === 'nemotron'}
+                  disabled={settings.speechProvider === 'nemotron'}
                   value={settings.speakerCount}
                   onChange={(e) =>
                     setSettings({
@@ -374,7 +366,7 @@ export function AiSettings() {
                 ? 'Soniox nhận giọng thường; chưa bật smart Google, dịch Soniox hoặc phân biệt giọng tự động. Gán người nói thủ công khi cần.'
                 : settings.speechProvider === 'nemotron'
                 ? 'Nemotron nhận dạng nguyên văn. Gán người nói thủ công khi cần; chưa bật phân biệt giọng tự động.'
-                : 'Lưu ý: Chế độ Flash Live chỉ hỗ trợ verbatim và gán Speaker thủ công khi cần. Chi phí khoảng 0,005 USD/phút.'}
+                : 'Chế độ phiên âm áp dụng cho các bộ nhận giọng Gemini.'}
             </p>
           </div>
         </section>

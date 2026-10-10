@@ -44,7 +44,6 @@ function sortKey(name: string): string {
 }
 export const PRIMARY_INPUT_CODES = ['auto', 'vi-VN', 'ja-JP', 'en-US'] as const;
 export const TRANSCRIBE_LANGUAGES = catalogue(transcribeCodes);
-export const LIVE_LANGUAGES = catalogue(liveCodes);
 export const NEMOTRON_LANGUAGES = catalogue(NEMOTRON_LOCALES);
 export const SONIOX_LANGUAGES = catalogue(SONIOX_LOCALES);
 export const OUTPUT_LANGUAGES: LanguageOption[] = [
@@ -56,7 +55,7 @@ export function inputLanguages(provider: SpeechProvider): LanguageOption[] {
   let baseList: LanguageOption[];
   if (provider === 'soniox') baseList = SONIOX_LANGUAGES;
   else if (provider === 'nemotron') baseList = NEMOTRON_LANGUAGES;
-  else baseList = provider === 'google-flash-live' ? LIVE_LANGUAGES : TRANSCRIBE_LANGUAGES;
+  else baseList = TRANSCRIBE_LANGUAGES;
   return [autoOption, ...baseList];
 }
 export function inputLanguage(code: string, provider: SpeechProvider): string | null {
@@ -70,8 +69,4 @@ export function inputLanguage(code: string, provider: SpeechProvider): string | 
   const aliases: Record<string, string> = { 'zh-Hans': 'cmn-Hans-CN', 'cmn-Hans-CN': 'zh-Hans' };
   const alias = list.find(item => item.code === aliases[canonical]);
   return alias?.code ?? list.find(item => item.code.split('-')[0] === canonical.split('-')[0])?.code ?? null;
-}
-export function searchLanguages(list: LanguageOption[], query: string): LanguageOption[] {
-  const fold = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
-  return list.filter(item => fold(`${item.name} ${item.code}`).includes(fold(query.trim())));
 }

@@ -309,7 +309,7 @@ describe('translation-usage-store', () => {
       expect(result.avgInputTokensPerRequest).toBe(100);
     });
     it.each([
-      ['google:gemini-3.1-flash-lite', 0.07],
+      ['google:gemini-3.1-flash-lite', 0.07], // retired key: historical price kept
       ['google:gemini-3.5-flash-lite', 0.0945],
       ['google:gemini-3.8-flash', 0.19875],
     ])('separates cached input and bills thinking once for %s', async (modelKey, expected) => {
@@ -322,6 +322,21 @@ describe('translation-usage-store', () => {
         outputTokens: 10_000, thinkingTokens: 5_000, totalTokens: 1_015_000 });
       const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
       expect(result.totals.estimatedUsd).toBe(expected);
+    });
+
+    it('keeps the USD estimate of stored rows recorded with the retired 3.1 model next to current rows', async () => {
+      const fake = fakeUsageNeon();
+      neonMock.mockReturnValue(fake.sql);
+      const base = { recordingId: 'rec', captionId: 1, revision: 1, status: 'completed' as const, requestKind: 'final' as const, thinkingLevel: null,
+        durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
+        usageStatus: 'reported' as const, inputTokens: 1_000_000, cachedInputTokens: null, outputTokens: 1_000_000, thinkingTokens: null, totalTokens: 2_000_000 };
+      await insertTranslationUsage({ ...base, requestId: 'old', modelKey: 'google:gemini-3.1-flash-lite' });
+      await insertTranslationUsage({ ...base, requestId: 'new', modelKey: 'google:gemini-3.5-flash-lite' });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      // 3.1: 1M * $0.25 + 1M * $1.50; 3.5: 1M * $0.30 + 1M * $2.50. Rows are never rewritten to the new key.
+      expect(result.totals.estimatedUsd).toBe(4.55);
+      expect(result.byModel.find((m) => m.modelKey === 'google:gemini-3.1-flash-lite')?.estimatedUsd).toBe(1.75);
+      expect(result.byModel.find((m) => m.modelKey === 'google:gemini-3.5-flash-lite')?.estimatedUsd).toBe(2.8);
     });
 
     it('does not label an entirely unavailable request as zero cost', async () => {

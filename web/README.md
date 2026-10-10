@@ -7,7 +7,7 @@
 ### Hai phần sản phẩm độc lập
 1. **Phần A: Dịch sát nút (Live Translation):**
    - Ưu tiên model chi phí thấp, phản hồi nhanh theo từng cụm câu nói.
-   - Nhận giọng bằng Gemini Transcribe hoặc Flash Live; dịch theo luồng SSE.
+   - Nhận giọng bằng Gemini 3.5 Transcribe, Gemini 3.5 Translate Live hoặc Soniox; dịch theo luồng SSE.
    - Một **MediaRecorder** chạy liên tục từ đầu đến cuối buổi, lưu chunk vào IndexedDB (Dexie). **Dừng API** chỉ ngừng gửi audio mới; micro vẫn ghi, các câu đã nhận tiếp tục dịch.
    - Kết thúc buổi: worker Mediabunny chuẩn hóa metadata, timestamp và chỉ mục tua, kiểm chứng file rồi tự đưa vào hàng đợi upload private Blob. Một trình phát và nút **Tải toàn buổi** dùng thời lượng file thực; thời gian buổi học được hiển thị riêng nếu khác. Bản gốc trên máy được giữ.
    - Chữ gốc hiện ngay; các delta SSE cập nhật bản dịch khi request còn chạy. Scheduler giữ tối đa 1 request dịch đang chạy, gộp các bản chữ tạm và giữ hàng đợi câu đã chốt. Chỉ chữ tạm bị thay thế/quá hạn; các câu đã chốt được xử lý đầy đủ theo thứ tự.
@@ -26,7 +26,7 @@
 
 **Nemotron 3.5 ASR + NeMo-Speech.cpp** đã có trong ô chọn **Nhận giọng**, dùng WebSocket với máy chủ riêng. Hỗ trợ 32 locale dùng ngay, gồm Việt và Nhật, không cần huấn luyện lại; phần dịch chữ vẫn dùng model dịch đã chọn. Xem [hướng dẫn cài, chạy GPU/CPU và kết nối web đã deploy](docs/NEMOTRON-STT.md).
 
-Web hỗ trợ `gemini-3.5-transcribe-live` và **Gemini 3 Flash Live** (`gemini-3.1-flash-live-preview`) qua Live API WebSocket; `gemini-3.5-transcribe` qua Interactions API theo đoạn. Flash Live dùng token tạm bị ràng buộc đúng model, bật inputAudioTranscription và chỉ hiển thị lời nói đầu vào; bỏ qua câu trả lời và audio do model sinh. Flash Live không dùng chế độ verbatim/smart chuyên biệt của Transcribe và gán Speaker thủ công. Cấu hình cũ `google-flash` được tự chuyển sang `google-flash-live`, không còn dùng Generate Content cho nhận giọng Flash. Audio vào Flash Live ≈0,005 USD/phút; chữ ra 4,50 USD/triệu token và audio sinh thêm 0,018 USD/phút nếu có, chưa gồm dịch. Dừng ngắt thu PCM ngay; Live chờ kết quả cuối tối đa 5 giây, Transcribe theo đoạn tối đa 20 giây rồi hủy phần nhận giọng còn chờ (audio vẫn lưu). Đoạn im lặng không được gửi đi phiên âm. Với Flash Live, chốt câu theo khoảng nghỉ của lớp học và mở mã câu mới khi micro nhận lời nói tiếp; đuôi ASR đến muộn trước khi nói lại sửa câu vừa chốt. Không dùng turnComplete của câu trả lời model làm dấu kết thúc phiên âm đầu vào vì hai luồng không đảm bảo thứ tự.
+Web hỗ trợ `gemini-3.5-transcribe-live` qua Live API WebSocket và `gemini-3.5-transcribe` qua Interactions API theo đoạn. Gemini chỉ dùng thế hệ 3.5: Gemini 3 Flash Live (`gemini-3.1-flash-live-preview`) đã bỏ, cấu hình cũ `google-flash`/`google-flash-live` tự chuyển sang Gemini 3.5 Transcribe. Dừng ngắt thu PCM ngay; Live chờ kết quả cuối tối đa 5 giây, Transcribe theo đoạn tối đa 20 giây rồi hủy phần nhận giọng còn chờ (audio vẫn lưu). Đoạn im lặng không được gửi đi phiên âm.
 
 
 Live hỗ trợ verbatim/smart; chưa có diarization trực tiếp, nên gán Speaker thủ công hoặc chạy phân biệt lại sau buổi verbatim (thêm phí API). Phiên Live tự gia hạn trước giới hạn 10 phút. Tại **Cấu hình AI** (`/settings`), chọn:
@@ -43,7 +43,7 @@ Tham khảo [hướng dẫn phiên âm Google](https://ai.google.dev/gemini-api/
 
 ### Ngôn ngữ
 
-Hai ô **Ngôn ngữ đầu vào / Ngôn ngữ đầu ra** có tìm theo tên tiếng Việt hoặc mã, nút đổi chiều và số lựa chọn thực tế. Mặc định Nhật (`ja-JP`) → Việt (`vi`); lưu lựa chọn qua tải lại và vào từng buổi, khóa khi thu. Màn hình điện thoại nhỏ hiện chiều dịch gọn trong lúc ghi âm. Danh mục trong `src/shared/languages.ts` lấy theo bảng Google: Transcribe có 83 mã không trùng; Flash Live có 100 mã; đầu ra có 180 mã từ hợp hai danh mục. Đây là số lựa chọn gồm vùng/script, không phải 180 ngôn ngữ riêng biệt. Mã `es-419`, `yue-Hant-HK`, `cmn-Hans-CN` được giữ đầy đủ khi gửi API.
+Hai ô **Ngôn ngữ đầu vào / Ngôn ngữ đầu ra** có tìm theo tên tiếng Việt hoặc mã, nút đổi chiều và số lựa chọn thực tế. Mặc định Nhật (`ja-JP`) → Việt (`vi`); lưu lựa chọn qua tải lại và vào từng buổi, khóa khi thu. Màn hình điện thoại nhỏ hiện chiều dịch gọn trong lúc ghi âm. Danh mục trong `src/shared/languages.ts` lấy theo bảng Google: Transcribe có 83 mã không trùng; đầu ra có 180 mã. Đây là số lựa chọn gồm vùng/script, không phải 180 ngôn ngữ riêng biệt. Mã `es-419`, `yue-Hant-HK`, `cmn-Hans-CN` được giữ đầy đủ khi gửi API.
 
 Hội thoại hai chiều hiện ở giai đoạn [nghiên cứu phương án A/B](docs/BIDIRECTIONAL-CONVERSATION.md).
 

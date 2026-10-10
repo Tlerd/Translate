@@ -86,7 +86,7 @@ describe('provider SDK boundaries', () => {
     sdk.googleContent.mockResolvedValue({ text: 'translated' });
     await generateGoogleText({ apiKey: 'key', modelId: 'gemini-2.5-flash-lite', userPrompt: 'p', thinkingLevel: 'low' });
     expect(sdk.googleContent.mock.calls.at(-1)?.[0].config.thinkingConfig).toEqual({ thinkingBudget: 512 });
-    await generateGoogleText({ apiKey: 'key', modelId: 'gemini-3.1-flash-lite', userPrompt: 'p', thinkingLevel: 'minimal' });
+    await generateGoogleText({ apiKey: 'key', modelId: 'gemini-3.5-flash-lite', userPrompt: 'p', thinkingLevel: 'minimal' });
     expect(sdk.googleContent.mock.calls.at(-1)?.[0].config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
     sdk.googleImage.mockResolvedValue({ output_image: { data: Buffer.from('image').toString('base64') } });
     await generateGoogleImage('p', 'gemini-3.1-flash-lite-image', 'key', 'high');
@@ -103,7 +103,7 @@ describe('provider SDK boundaries', () => {
 
   it('explains restricted Gemini 2.5 access without silently switching models', async () => {
     sdk.googleContent.mockRejectedValue(new Error('This model is no longer available to new users.'));
-    await expect(generateGoogleText({ apiKey: 'key', modelId: 'gemini-2.5-flash-lite', userPrompt: 'p' })).rejects.toThrow(/Hãy chọn Gemini 3.1/);
+    await expect(generateGoogleText({ apiKey: 'key', modelId: 'gemini-2.5-flash-lite', userPrompt: 'p' })).rejects.toThrow(/Hãy chọn Gemini 3.5/);
     expect(sdk.googleContent).toHaveBeenCalledTimes(1);
   });
 

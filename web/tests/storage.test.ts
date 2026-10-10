@@ -21,12 +21,6 @@ import {
   getCustomFolders,
   saveCustomFolders,
 } from '@/storage/recordings';
-import {
-  exportRecordingData,
-  importWebBundle,
-  importApkExport,
-} from '@/storage/export-import';
-import type { ApkExportJson, WebExportBundle } from '@/shared/recording';
 
 describe('Storage Layer', () => {
   beforeEach(async () => {
@@ -248,94 +242,9 @@ describe('Storage Layer', () => {
     expect(await getSummary('rec_del_all')).toBeUndefined();
   });
 
-  it('exports and imports web session bundle', async () => {
-    await createRecording({
-      id: 'rec_export_test',
-      title: 'Buổi export web',
-      mode: 'lecture',
-      sourceLanguage: 'ja',
-      targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.5-flash-lite',
-    });
-    const { updateRecording } = await import('@/storage/recordings');
-    await updateRecording('rec_export_test', { state: 'stopped' });
-
-    await saveCaption({
-      id: 1,
-      recordingId: 'rec_export_test',
-      blockId: 1,
-      startMs: 100,
-      endMs: 1200,
-      source: 'おはようございます',
-      revision: 1,
-      isFinal: true,
-      translation: 'Chào buổi sáng',
-      targetSourceRevision: 1,
-      state: 'done',
-    });
-
-    const exportData = await exportRecordingData('rec_export_test');
-    expect(exportData.jsonString).toBeDefined();
-
-    const parsedBundle = JSON.parse(exportData.jsonString) as WebExportBundle;
-    expect(parsedBundle.recording.id).toBe('rec_export_test');
-    expect(parsedBundle.captions.length).toBe(1);
-
-    // Import into db (creates new unique ID if already exists)
-    const imported = await importWebBundle(parsedBundle);
-    expect(imported.id).not.toBe('rec_export_test');
-    expect(imported.title).toContain('(Bản nhập)');
-
-    const importedCaptions = await getCaptions(imported.id);
-    expect(importedCaptions.length).toBe(1);
-    expect(importedCaptions[0].translation).toBe('Chào buổi sáng');
-  });
-
-  it('imports APK conversation.json and converts 16kHz sample counts to ms', async () => {
-    const apkSampleJson: ApkExportJson = {
-      session: {
-        id: '1727500000000000',
-        createdAt: '2026-09-28T10:00:00.000Z',
-        endedAt: '2026-09-28T10:30:00.000Z',
-        mode: 'classroom',
-        state: 'stopped',
-        samples: 480000, // 480,000 samples @ 16kHz = 30,000 ms (30 seconds)
-        audioState: 'present',
-      },
-      audio: 'conversation.wav',
-      sampleRate: 16000,
-      turns: [
-        {
-          id: 1,
-          sessionId: '1727500000000000',
-          startSample: 16000, // 1000 ms
-          endSample: 48000,   // 3000 ms
-          direction: 'jaVi',
-          source: '日本語の授業を始めます',
-          target: 'Chúng ta bắt đầu tiết học tiếng Nhật',
-          recognitionFinal: 1,
-          sourceRevision: 1,
-          targetSourceRevision: 1,
-          state: 'done',
-        },
-      ],
-    };
-
-    const imported = await importApkExport(apkSampleJson);
-    expect(imported.durationMs).toBe(30000);
-    expect(imported.mode).toBe('lecture');
-
-    const captions = await getCaptions(imported.id);
-    expect(captions.length).toBe(1);
-    expect(captions[0].startMs).toBe(1000);
-    expect(captions[0].endMs).toBe(3000);
-    expect(captions[0].source).toBe('日本語の授業を始めます');
-    expect(captions[0].translation).toBe('Chúng ta bắt đầu tiết học tiếng Nhật');
-  });
-
   it('loads and saves settings', async () => {
     const initial = await loadSettings();
-    expect(initial.translationModel).toBe('google:gemini-3.1-flash-lite');
+    expect(initial.translationModel).toBe('google:gemini-3.5-flash-lite');
     expect(initial.pauseMs).toBe(900);
     expect(initial.readingPauseMs).toBe(900);
     expect(initial.translationHistoryTurns).toBe(6);
@@ -393,7 +302,7 @@ describe('Storage Layer', () => {
       mode: 'lecture',
       sourceLanguage: 'ja',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
 
     // Create Segment 1: Translating
@@ -500,7 +409,7 @@ describe('Storage Layer', () => {
       mode: 'lecture',
       sourceLanguage: 'ja',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     const { updateRecording } = await import('@/storage/recordings');
     await updateRecording('rec_legacy_no_segments', {
@@ -539,7 +448,7 @@ describe('Storage Layer', () => {
       mode: 'lecture',
       sourceLanguage: 'ja',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecording('rec_trash_1', { state: 'stopped' });
 
@@ -549,7 +458,7 @@ describe('Storage Layer', () => {
       mode: 'lecture',
       sourceLanguage: 'ja',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecording('rec_trash_2', { state: 'stopped' });
 
@@ -601,7 +510,7 @@ describe('Storage Layer', () => {
       mode: 'lecture',
       sourceLanguage: 'ja',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await updateRecordingFolder('rec_fld_1', 'Tiếng Nhật');
     expect((await getRecording('rec_fld_1'))?.folder).toBe('Tiếng Nhật');

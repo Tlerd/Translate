@@ -4,7 +4,7 @@
 
 | Thứ tự sử dụng | Model API | Giá vào / ra | Effort |
 |---|---|---|---|
-| Dịch mặc định, cân bằng tốc độ và chất lượng | `gemini-3.1-flash-lite` | $0.25 / $1.50 | minimal, low, medium, high |
+| Dịch mặc định (Gemini chỉ dùng 3.5; khóa cũ `gemini-3.1-flash-lite` tự chuyển sang đây) | `gemini-3.5-flash-lite` | $0.30 / $2.50 | minimal, low, medium, high |
 | Dịch tiết kiệm, tài khoản cũ còn được Google hỗ trợ | `gemini-2.5-flash-lite` | $0.10 / $0.40 | tắt thinking hoặc budget theo mức hỗ trợ |
 | Ảnh mặc định, tiết kiệm | `gemini-3.1-flash-lite-image` — Nano Banana 2 Lite | khoảng $0.0336 / ảnh 1K | minimal, high |
 | Ảnh nhiều lựa chọn độ phân giải | `gemini-3.1-flash-image` — Nano Banana 2 | khoảng $0.067 / ảnh 1K | minimal, high |

@@ -26,7 +26,7 @@ describe('LilysAI Collections & Recent Languages Storage', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     const r2 = await createRecording({
       id: 'rec_inbox_2',
@@ -34,7 +34,7 @@ describe('LilysAI Collections & Recent Languages Storage', () => {
       mode: 'lecture',
       sourceLanguage: 'en-US',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
 
     // Default category is inbox
@@ -60,7 +60,7 @@ describe('LilysAI Collections & Recent Languages Storage', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
     await createRecording({
       id: 'rec_f2',
@@ -68,7 +68,7 @@ describe('LilysAI Collections & Recent Languages Storage', () => {
       mode: 'lecture',
       sourceLanguage: 'ja-JP',
       targetLanguage: 'vi',
-      translationModelKey: 'google:gemini-3.1-flash-lite',
+      translationModelKey: 'google:gemini-3.5-flash-lite',
     });
 
     // Batch move to folder 'AI Study'
