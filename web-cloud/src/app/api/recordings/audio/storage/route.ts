@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyAuthGuard } from '@/server/http/guard';
-import { ownerEmail } from '@/server/auth-policy';
+import { authenticate } from '@/server/http/guard';
+import { isOwnerAccount } from '@/server/auth-policy';
 import { AudioRequestError, requireAudioStorage } from '@/server/cloud/audio-service';
 import { cleanupOrphanAudio, scanAudioStorage } from '@/server/cloud/audio-storage-report';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
@@ -15,9 +15,11 @@ function errorResponse(error: unknown, fallback: string) {
   const known = error instanceof AudioRequestError || error instanceof JsonRequestError;
   return NextResponse.json({ error: known ? error.message : fallback }, { status: known ? error.status : 503, headers });
 }
+/** The storage scan and orphan cleanup cover the whole bucket, so only the owner may run them. */
 async function account(req: Request): Promise<string | Response> {
-  const denied = await verifyAuthGuard(req); if (denied) return denied;
-  return ownerEmail() ?? NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
+  const auth = await authenticate(req); if (auth.denied) return auth.denied;
+  if (!auth.account) return NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
+  return isOwnerAccount(auth.account) ? auth.account : NextResponse.json({ error: 'Chỉ chủ ứng dụng mới xem và dọn được kho audio chung.' }, { status: 403, headers });
 }
 export async function GET(req: Request) {
   const owner = await account(req); if (typeof owner !== 'string') return owner;

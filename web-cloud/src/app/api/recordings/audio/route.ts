@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyAuthGuard } from '@/server/http/guard';
-import { ownerEmail } from '@/server/auth-policy';
+import { authenticate } from '@/server/http/guard';
 import { cloudRecordingIdSchema } from '@/shared/cloud-recording';
 import { audioFileSchema } from '@/shared/audio';
 import { listAudio, readAudio, reserveAudio } from '@/server/cloud/audio-store';
@@ -19,8 +18,8 @@ function errorResponse(error: unknown) {
   return NextResponse.json({ error: known ? error.message : 'Không đồng bộ được audio. Bản gốc trên máy vẫn được giữ.' }, { status: known ? error.status : 503, headers });
 }
 async function account(req: Request): Promise<string | Response> {
-  const denied = await verifyAuthGuard(req); if (denied) return denied;
-  return ownerEmail() ?? NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
+  const auth = await authenticate(req); if (auth.denied) return auth.denied;
+  return auth.account ?? NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
 }
 export async function GET(req: Request) {
   const owner = await account(req); if (typeof owner !== 'string') return owner;

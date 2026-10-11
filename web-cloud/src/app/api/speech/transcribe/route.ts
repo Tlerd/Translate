@@ -2,7 +2,8 @@ import { canonicalLanguage } from '@/shared/languages';
 import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { authenticate, makeErrorResponse } from '@/server/http/guard';
+import { speechLimitResponse } from '@/server/http/account-usage';
 import { diarizedTranscriptTurns, extractDiarizedWordSegments } from '@/server/ai/gemini-diarize';
 import { isSpeakerCount, TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
@@ -69,8 +70,10 @@ function parseDurationMs(value: FormDataEntryValue | null): number | null {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const overLimit = await speechLimitResponse(auth.account);
+  if (overLimit) return overLimit;
 
   const contentType = req.headers.get('content-type') ?? '';
   if (!contentType.toLowerCase().startsWith('multipart/form-data;')) {

@@ -1,5 +1,6 @@
 import { getServerEnv } from '@/config/env.server';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { authenticate, makeErrorResponse } from '@/server/http/guard';
+import { speechLimitResponse } from '@/server/http/account-usage';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
 import { publicOrigin } from '@/server/http/public-origin';
 import { inputLanguage } from '@/shared/languages';
@@ -10,8 +11,10 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const overLimit = await speechLimitResponse(auth.account);
+  if (overLimit) return overLimit;
   let body: unknown;
   try { body = await boundedJson(req, 2048); }
   catch (error) {

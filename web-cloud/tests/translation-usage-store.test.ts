@@ -36,6 +36,7 @@ interface StoredRow {
   total_tokens: number | null;
   created_at: string;
   prompt_version?: string;
+  owner_email?: string | null;
 }
 
 function fakeUsageSql() {
@@ -88,6 +89,7 @@ function fakeUsageSql() {
         total_tokens: totalTokens,
         created_at: new Date().toISOString(),
         prompt_version: String(values[19]),
+        owner_email: (values[20] as string | null) ?? null,
       };
       rows.push(row);
       return [];
@@ -103,6 +105,11 @@ function fakeUsageSql() {
       if (statement.includes('recording_id = ?')) {
         const recId = values[2] as string;
         filtered = filtered.filter((r) => r.recording_id === recId);
+      }
+
+      if (statement.includes('owner_email = ?')) {
+        const [all, owner] = values.slice(-2) as [boolean, string | null];
+        if (!all) filtered = filtered.filter((r) => r.owner_email === owner);
       }
 
       const dayFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -297,6 +304,21 @@ describe('translation-usage-store', () => {
   });
 
   describe('summarizeTranslationUsage', () => {
+    it('shows other accounts only their own rows and the owner every row, legacy ones included', async () => {
+      const fake = fakeUsageSql();
+      sqlClientMock.mockReturnValue(fake.sql);
+      const base: TranslationUsageRecord = { requestId: 'a', recordingId: 'rec', captionId: 1, revision: 1,
+        modelKey: 'google:gemini-3.5-flash-lite', status: 'completed', requestKind: 'final', thinkingLevel: null,
+        durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
+        usageStatus: 'reported', inputTokens: 100, outputTokens: 10, cachedInputTokens: null, thinkingTokens: null, totalTokens: 110 };
+      await insertTranslationUsage({ ...base, requestId: 'alice', ownerEmail: 'alice@example.com' });
+      await insertTranslationUsage({ ...base, requestId: 'bob', ownerEmail: 'bob@example.com' });
+      await insertTranslationUsage({ ...base, requestId: 'legacy' });
+      expect(fake.rows.map((r) => r.owner_email)).toEqual(['alice@example.com', 'bob@example.com', null]);
+      const range = { from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') };
+      expect((await summarizeTranslationUsage({ ...range, scope: { all: false, owner: 'alice@example.com' } })).totals.requests).toBe(1);
+      expect((await summarizeTranslationUsage({ ...range, scope: { all: true } })).totals.requests).toBe(3);
+    });
     it('averages input only across requests with complete metadata', async () => {
       const fake = fakeUsageSql();
       sqlClientMock.mockReturnValue(fake.sql);
@@ -306,7 +328,7 @@ describe('translation-usage-store', () => {
         usageStatus: 'reported', inputTokens: 100, outputTokens: 10, cachedInputTokens: null, thinkingTokens: null, totalTokens: 110 };
       await insertTranslationUsage(base);
       await insertTranslationUsage({ ...base, requestId: 'partial', status: 'aborted', usageStatus: 'unavailable', inputTokens: 1000, outputTokens: null });
-      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01'), scope: { all: true } });
       expect(result.totals.inputTokens).toBe(1100);
       expect(result.totals.unavailable).toBe(1);
       expect(result.avgInputTokensPerRequest).toBe(100);
@@ -323,7 +345,7 @@ describe('translation-usage-store', () => {
         durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
         usageStatus: 'reported', inputTokens: 1_000_000, cachedInputTokens: 900_000,
         outputTokens: 10_000, thinkingTokens: 5_000, totalTokens: 1_015_000 });
-      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01'), scope: { all: true } });
       expect(result.totals.estimatedUsd).toBe(expected);
     });
 
@@ -335,7 +357,7 @@ describe('translation-usage-store', () => {
         usageStatus: 'reported' as const, inputTokens: 1_000_000, cachedInputTokens: null, outputTokens: 1_000_000, thinkingTokens: null, totalTokens: 2_000_000 };
       await insertTranslationUsage({ ...base, requestId: 'old', modelKey: 'google:gemini-3.1-flash-lite' });
       await insertTranslationUsage({ ...base, requestId: 'new', modelKey: 'google:gemini-3.5-flash-lite' });
-      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01'), scope: { all: true } });
       // 3.1: 1M * $0.25 + 1M * $1.50; 3.5: 1M * $0.30 + 1M * $2.50. Rows are never rewritten to the new key.
       expect(result.totals.estimatedUsd).toBe(4.55);
       expect(result.byModel.find((m) => m.modelKey === 'google:gemini-3.1-flash-lite')?.estimatedUsd).toBe(1.75);
@@ -350,7 +372,7 @@ describe('translation-usage-store', () => {
         durationMs: 100, sourceChars: 1, systemChars: 1, payloadChars: 1, historyTurns: 0,
         usageStatus: 'unavailable', inputTokens: null, cachedInputTokens: null,
         outputTokens: null, thinkingTokens: null, totalTokens: null });
-      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01') });
+      const result = await summarizeTranslationUsage({ from: new Date('2020-01-01'), toExclusive: new Date('2030-01-01'), scope: { all: true } });
       expect(result.totals.estimatedUsd).toBeNull();
       expect(result.totals.unavailable).toBe(1);
     });
@@ -406,6 +428,7 @@ describe('translation-usage-store', () => {
       });
 
       const summary = await summarizeTranslationUsage({
+        scope: { all: true },
         from: new Date('2026-10-01T00:00:00.000Z'),
         toExclusive: new Date('2026-10-10T23:59:59.999Z'),
       });
@@ -458,6 +481,7 @@ describe('translation-usage-store', () => {
       });
 
       const summary = await summarizeTranslationUsage({
+        scope: { all: true },
         from: new Date('2026-10-01T00:00:00.000Z'),
         toExclusive: new Date('2026-10-10T23:59:59.999Z'),
       });

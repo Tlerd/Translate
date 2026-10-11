@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getServerEnv } from '@/config/env.server';
-import { verifyAuthGuard } from '@/server/http/guard';
+import { accountKey, authenticate } from '@/server/http/guard';
+import { speechLimitResponse } from '@/server/http/account-usage';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
 import { isAllowedOrigin } from '@/server/http/public-origin';
 import { checkRateLimit } from '@/server/http/rate-limit';
@@ -13,8 +14,8 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({ languageCode: z.string().max(24), recordingId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional() }).strict();
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) { guard.headers.set('Cache-Control', 'no-store'); return guard; }
+  const auth = await authenticate(req);
+  if (auth.denied) { auth.denied.headers.set('Cache-Control', 'no-store'); return auth.denied; }
   const origin = req.headers.get('origin');
   if (origin && !isAllowedOrigin(req, origin)) return sonioxErrorResponse(403, 'UNAUTHORIZED', 'Nguồn yêu cầu cấp phiên không hợp lệ.');
   let parsed: z.infer<typeof schema>;
@@ -25,8 +26,10 @@ export async function POST(req: Request): Promise<Response> {
   } catch (error) {
     return sonioxErrorResponse(error instanceof JsonRequestError ? error.status : 400, error instanceof JsonRequestError && error.status === 413 ? 'INPUT_TOO_LARGE' : 'INTERNAL_ERROR', 'Yêu cầu cấp phiên Soniox không hợp lệ.');
   }
-  const limit = await checkRateLimit('speech:soniox:owner', 10, 60);
+  const limit = await checkRateLimit(`speech:soniox:${accountKey(auth.account)}`, 10, 60);
   if (!limit.allowed) return sonioxErrorResponse(429, 'RATE_LIMIT_EXCEEDED', 'Quá nhiều lượt cấp phiên Soniox. Hãy chờ rồi thử lại.', true, { retryAfterMs: limit.retryAfterMs });
+  const overLimit = await speechLimitResponse(auth.account);
+  if (overLimit) return overLimit;
   const key = getServerEnv().SONIOX_API_KEY;
   if (!key) return sonioxErrorResponse(503, 'MISSING_CONFIG', 'Chưa cấu hình SONIOX_API_KEY ở server.');
   try {

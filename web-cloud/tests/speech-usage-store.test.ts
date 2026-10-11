@@ -7,6 +7,7 @@ vi.mock('@/server/cloud/sql', async (importOriginal) => ({
 }));
 
 import {
+  accountSpeechAudioMs,
   resetSpeechSchemaReadyForTest,
   summarizeSpeechUsage,
   upsertSpeechUsage,
@@ -21,6 +22,8 @@ interface Row {
   translated: boolean;
   audio_ms: number;
   started_at: string;
+  updated_at: string;
+  owner_email: string | null;
 }
 
 function fakeSql() {
@@ -30,18 +33,24 @@ function fakeSql() {
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const statement = strings.join('?');
     statements.push(statement);
-    if (statement.includes('CREATE TABLE') || statement.includes('CREATE INDEX')) return [];
+    if (statement.includes('CREATE TABLE') || statement.includes('CREATE INDEX') || statement.includes('ALTER TABLE')) return [];
     if (statement.includes('INSERT INTO speech_usage')) {
-      const [sessionId, recordingId, provider, model, translated, audioMs, startedAt] = values as [string, string, string, string, boolean, number, string];
+      const [sessionId, recordingId, provider, model, translated, audioMs, startedAt, ownerEmail] = values as [string, string, string, string, boolean, number, string, string | null];
       const existing = rows.find((r) => r.session_id === sessionId);
-      // ON CONFLICT (session_id) DO UPDATE SET audio_ms = GREATEST(...)
-      if (existing) existing.audio_ms = Math.max(existing.audio_ms, audioMs);
-      else rows.push({ session_id: sessionId, recording_id: recordingId, provider, model, translated, audio_ms: audioMs, started_at: startedAt });
+      // ON CONFLICT (session_id) DO UPDATE SET audio_ms = GREATEST(...) WHERE the owner matches
+      if (existing) {
+        if (existing.owner_email === ownerEmail) { existing.audio_ms = Math.max(existing.audio_ms, audioMs); existing.updated_at = new Date().toISOString(); }
+      } else rows.push({ session_id: sessionId, recording_id: recordingId, provider, model, translated, audio_ms: audioMs, started_at: startedAt, updated_at: new Date().toISOString(), owner_email: ownerEmail });
       return [];
+    }
+    if (statement.includes('owner_email = ? AND updated_at >= ?')) {
+      const [owner, from] = values as [string, string];
+      return [{ audio_ms: rows.filter((r) => r.owner_email === owner && r.updated_at >= from).reduce((sum, r) => sum + r.audio_ms, 0) }];
     }
     if (statement.includes('SELECT') && statement.includes('FROM speech_usage')) {
       const [from, toExclusive, recordingId] = values as [string, string, string | undefined];
-      const filtered = rows.filter((r) => r.started_at >= from && r.started_at < toExclusive && (!statement.includes('recording_id = ?') || r.recording_id === recordingId));
+      const [all, owner] = values.slice(-2) as [boolean, string | null];
+      const filtered = rows.filter((r) => r.started_at >= from && r.started_at < toExclusive && (!statement.includes('recording_id = ?') || r.recording_id === recordingId) && (all || r.owner_email === owner));
       const groups = new Map<string, { provider: string; model: string; translated: boolean; day: string; sessions: number; audio_ms: number }>();
       for (const r of filtered) {
         const day = dayOf(r.started_at);
@@ -64,6 +73,7 @@ const record = (over: Partial<Parameters<typeof upsertSpeechUsage>[0]> = {}) => 
   translated: false,
   audioMs: 60_000,
   startedAt: new Date('2026-10-05T03:00:00.000Z'),
+  ownerEmail: null,
   ...over,
 });
 
@@ -111,6 +121,7 @@ describe('speech-usage-store', () => {
     await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000005', provider: 'google', model: 'gemini-3.5-transcribe-live', audioMs: 60_000, startedAt: new Date('2026-09-01T00:00:00.000Z') })); // out of range
 
     const summary = await summarizeSpeechUsage({
+      scope: { all: true },
       from: new Date('2026-10-01T00:00:00.000+07:00'),
       toExclusive: new Date('2026-10-11T00:00:00.000+07:00'),
     });
@@ -133,6 +144,7 @@ describe('speech-usage-store', () => {
     await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000001', recordingId: 'rec-1', audioMs: 60_000 }));
     await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000002', recordingId: 'rec-2', audioMs: 120_000 }));
     const summary = await summarizeSpeechUsage({
+      scope: { all: true },
       from: new Date('2026-10-01T00:00:00.000+07:00'),
       toExclusive: new Date('2026-10-11T00:00:00.000+07:00'),
       recordingId: 'rec-2',
@@ -140,8 +152,23 @@ describe('speech-usage-store', () => {
     expect(summary.totals).toMatchObject({ sessions: 1, audioMs: 120_000 });
   });
 
+  it('keeps accounts apart in summaries, daily totals and conflicting session ids', async () => {
+    const range = { from: new Date('2026-10-01T00:00:00.000+07:00'), toExclusive: new Date('2026-10-11T00:00:00.000+07:00') };
+    await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000001', ownerEmail: 'alice@example.com', audioMs: 60_000 }));
+    await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000002', ownerEmail: 'bob@example.com', audioMs: 120_000 }));
+    await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000003', audioMs: 30_000 })); // before multi-user
+    // Another account reusing Alice's session id cannot raise her audio time.
+    await upsertSpeechUsage(record({ sessionId: '00000000-0000-4000-8000-000000000001', ownerEmail: 'bob@example.com', audioMs: 999_000 }));
+
+    expect((await summarizeSpeechUsage({ ...range, scope: { all: false, owner: 'alice@example.com' } })).totals.audioMs).toBe(60_000);
+    expect((await summarizeSpeechUsage({ ...range, scope: { all: false, owner: 'bob@example.com' } })).totals.audioMs).toBe(120_000);
+    expect((await summarizeSpeechUsage({ ...range, scope: { all: true } })).totals.audioMs).toBe(210_000);
+    expect(await accountSpeechAudioMs('alice@example.com', new Date(Date.now() - 60_000))).toBe(60_000);
+    expect(await accountSpeechAudioMs('alice@example.com', new Date(Date.now() + 60_000))).toBe(0);
+  });
+
   it('returns empty aggregates when nothing was recorded', async () => {
-    const summary = await summarizeSpeechUsage({ from: new Date('2026-10-01T00:00:00.000+07:00'), toExclusive: new Date('2026-10-02T00:00:00.000+07:00') });
+    const summary = await summarizeSpeechUsage({ from: new Date('2026-10-01T00:00:00.000+07:00'), toExclusive: new Date('2026-10-02T00:00:00.000+07:00'), scope: { all: true } });
     expect(summary.totals).toEqual({ sessions: 0, audioMs: 0, estimatedUsd: 0 });
     expect(summary.byProvider).toEqual([]);
     expect(summary.byDay).toEqual([]);

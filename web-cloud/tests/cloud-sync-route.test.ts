@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { guard, readCloudRecording, readCloudRecordingIndex, writeCloudRecording } = vi.hoisted(() => ({
   guard: vi.fn(), readCloudRecording: vi.fn(), readCloudRecordingIndex: vi.fn(), writeCloudRecording: vi.fn(),
 }));
-vi.mock('@/server/http/guard', () => ({ verifyAuthGuard: guard }));
+vi.mock('@/server/http/guard', () => ({ authenticate: guard }));
 vi.mock('@/server/cloud/recording-store', () => ({ readCloudRecording, readCloudRecordingIndex, writeCloudRecording }));
 
 import { GET, PUT } from '@/app/api/recordings/sync/route';
@@ -21,7 +21,7 @@ describe('/api/recordings/sync', () => {
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development');
     process.env.OWNER_EMAIL = 'Owner@example.com ';
-    guard.mockReset().mockResolvedValue(null);
+    guard.mockReset().mockResolvedValue({ account: 'owner@example.com' });
     readCloudRecording.mockReset().mockResolvedValue(null);
     readCloudRecordingIndex.mockReset().mockResolvedValue({ items: [], nextCursor: null });
     writeCloudRecording.mockReset().mockResolvedValue(null);
@@ -40,9 +40,20 @@ describe('/api/recordings/sync', () => {
     expect(await detail.json()).toMatchObject({ row: { id: 'rec-1', version: 1 } });
     expect(readCloudRecording).toHaveBeenCalledWith('owner@example.com', 'rec-1');
 
-    guard.mockResolvedValueOnce(new Response('denied', { status: 401 }));
+    guard.mockResolvedValueOnce({ denied: new Response('denied', { status: 401 }) });
     expect((await GET(new Request('http://localhost/api/recordings/sync'))).status).toBe(401);
     expect(readCloudRecordingIndex).toHaveBeenCalledOnce();
+  });
+
+  it('reads and writes under the signed-in account, never the owner', async () => {
+    guard.mockResolvedValue({ account: 'alice@example.com' });
+    await GET(new Request('http://localhost/api/recordings/sync'));
+    expect(readCloudRecordingIndex).toHaveBeenCalledWith('alice@example.com', null);
+    await PUT(new Request('http://localhost/api/recordings/sync', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: 'rec-1', expectedVersion: 0, payload: validPayload }),
+    }));
+    expect(writeCloudRecording).toHaveBeenCalledWith('alice@example.com', 'rec-1', 0, validPayload);
   });
 
   it('rejects oversized and malformed writes before reaching storage', async () => {
@@ -71,11 +82,10 @@ describe('/api/recordings/sync', () => {
 
   it('fails closed when production auth or owner configuration is absent', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    guard.mockResolvedValueOnce(new Response('denied', { status: 503 }));
+    guard.mockResolvedValueOnce({ denied: new Response('denied', { status: 503 }) });
     expect((await PUT(new Request('http://localhost/api/recordings/sync', { method: 'PUT', body: '{}' }))).status).toBe(503);
 
-    guard.mockResolvedValueOnce(null);
-    delete process.env.OWNER_EMAIL;
+    guard.mockResolvedValueOnce({ account: null });
     expect((await GET(new Request('http://localhost/api/recordings/sync'))).status).toBe(503);
     expect(readCloudRecordingIndex).not.toHaveBeenCalled();
   });

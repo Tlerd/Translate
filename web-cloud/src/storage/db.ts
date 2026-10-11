@@ -14,6 +14,8 @@ export interface SettingRecord {
   value: string;
 }
 
+export const DEFAULT_DB_NAME = 'may_dich_offline_db';
+
 export class AppDatabase extends Dexie {
   recordings!: EntityTable<RecordingItem, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'id'>;
@@ -28,7 +30,7 @@ export class AppDatabase extends Dexie {
   images!: EntityTable<ImageItem, 'id'>;
   settings!: EntityTable<SettingRecord, 'key'>;
 
-  constructor(dbName = 'may_dich_offline_db') {
+  constructor(dbName = DEFAULT_DB_NAME) {
     super(dbName);
 
     this.version(1).stores({
@@ -62,18 +64,26 @@ export class AppDatabase extends Dexie {
 }
 
 let dbInstance: AppDatabase | null = null;
+let dbName = DEFAULT_DB_NAME;
+
+/** Database name for an account namespace; the owner and local development keep the original name. */
+export function accountDbName(namespace?: string | null): string {
+  return namespace ? `${DEFAULT_DB_NAME}_${namespace}` : DEFAULT_DB_NAME;
+}
+
+/**
+ * Selects the signed-in account's local database before any read, so people
+ * sharing one browser never see or sync each other's recordings.
+ */
+export function selectAccountDb(namespace?: string | null): void {
+  const name = accountDbName(namespace);
+  if (name === dbName) return;
+  resetDbInstance();
+  dbName = name;
+}
 
 export function getDb(): AppDatabase {
-  if (typeof window === 'undefined') {
-    // If running in SSR or Node without window, return instance (may use fake-indexeddb in tests)
-    if (!dbInstance) {
-      dbInstance = new AppDatabase();
-    }
-    return dbInstance;
-  }
-  if (!dbInstance) {
-    dbInstance = new AppDatabase();
-  }
+  if (!dbInstance) dbInstance = new AppDatabase(dbName);
   return dbInstance;
 }
 

@@ -8,7 +8,11 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/http/guard', () => ({
-  verifyAuthGuard: (req: Request) => guard.verifyAuthGuard(req),
+  authenticate: async (req: Request) => {
+    const denied = await guard.verifyAuthGuard(req);
+    return denied ? { denied } : { account: 'owner@example.com' };
+  },
+  accountKey: (account: string | null) => account ?? 'local',
   makeErrorResponse: (status: number, code: string, message: string) =>
     new Response(JSON.stringify({ error: { code, message } }), { status, headers: { 'Content-Type': 'application/json' } }),
 }));
@@ -64,6 +68,7 @@ describe('POST /api/usage/speech', () => {
       translated: true,
       audioMs: 61_000,
       startedAt: new Date('2026-10-10T03:00:00.000Z'),
+      ownerEmail: 'owner@example.com',
     });
   });
 

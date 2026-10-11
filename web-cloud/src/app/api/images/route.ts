@@ -1,13 +1,14 @@
 import { GenerateImageRequestSchema } from '@/shared/ai-contracts';
 import { executeGenerateImage } from '@/server/ai/generate-image';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { accountKey, authenticate, makeErrorResponse } from '@/server/http/guard';
 import { checkRateLimit, acquireIdempotencyLock } from '@/server/http/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const account = accountKey(auth.account);
 
   let body: unknown;
   try {
@@ -28,7 +29,7 @@ export async function POST(req: Request): Promise<Response> {
   const data = parsed.data;
 
   // Rate limit
-  const rateLimit = await checkRateLimit(`img:${data.recordingId}`, 5, 60);
+  const rateLimit = await checkRateLimit(`img:${account}:${data.recordingId}`, 5, 60);
   if (!rateLimit.allowed) {
     return makeErrorResponse(
       429,
@@ -40,7 +41,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // Idempotency lock
-  const lockKey = `img:${data.recordingId}:${data.requestId}`;
+  const lockKey = `img:${account}:${data.recordingId}:${data.requestId}`;
   const acquired = await acquireIdempotencyLock(lockKey, 900);
   if (!acquired) {
     return makeErrorResponse(

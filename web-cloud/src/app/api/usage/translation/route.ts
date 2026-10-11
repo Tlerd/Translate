@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { authenticate, makeErrorResponse } from '@/server/http/guard';
+import { usageScope } from '@/server/http/account-usage';
 import { parseUsageRangeQuery, usageRangeBounds } from '@/server/http/usage-range';
 import { usageStoreEnabled, summarizeTranslationUsage } from '@/server/cloud/translation-usage-store';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
 
   if (!usageStoreEnabled()) {
     return makeErrorResponse(
@@ -34,6 +35,7 @@ export async function GET(req: Request): Promise<Response> {
       toExclusive: toDateExclusive,
       recordingId: parsed.data.recordingId,
       tz: 'Asia/Ho_Chi_Minh',
+      scope: usageScope(auth.account),
     });
 
     return NextResponse.json(summary, {

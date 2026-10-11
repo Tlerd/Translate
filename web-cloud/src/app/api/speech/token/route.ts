@@ -2,7 +2,8 @@ import { canonicalLanguage } from '@/shared/languages';
 import { GoogleGenAI } from '@google/genai';
 import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { authenticate, makeErrorResponse } from '@/server/http/guard';
+import { speechLimitResponse } from '@/server/http/account-usage';
 import { LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 
@@ -11,8 +12,10 @@ export const dynamic = 'force-dynamic';
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const overLimit = await speechLimitResponse(auth.account);
+  if (overLimit) return overLimit;
 
   let body: unknown;
   try {

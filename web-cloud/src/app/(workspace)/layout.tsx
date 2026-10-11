@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { WorkspaceProvider } from '@/components/workspace-provider';
 import { SignOutButton } from '@/components/sign-out-button';
 import { SessionRenewal } from '@/components/session-renewal';
-import { localAuthBypass, ownerSession } from '@/server/auth-policy';
+import { localAuthBypass, sessionAccount } from '@/server/auth-policy';
+import { localDataNamespace } from '@/server/account-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,12 @@ export default async function WorkspaceLayout({
 }) {
   const session = await auth();
   const localDevelopment = localAuthBypass();
-  if (!localDevelopment && !ownerSession(session)) redirect('/login');
-  const workspace = <WorkspaceProvider accountControls={<SignOutButton />}>{children}</WorkspaceProvider>;
+  const account = sessionAccount(session);
+  if (!localDevelopment && !account) redirect('/login');
+  const workspace = (
+    <WorkspaceProvider accountControls={<SignOutButton />} dataNamespace={localDevelopment ? null : localDataNamespace(account)}>
+      {children}
+    </WorkspaceProvider>
+  );
   return localDevelopment ? workspace : <SessionRenewal session={session}>{workspace}</SessionRenewal>;
 }

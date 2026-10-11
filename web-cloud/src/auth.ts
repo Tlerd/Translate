@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-import { ownerEmail, secureAuthCookies, SESSION_MAX_AGE } from '@/server/auth-policy';
+import { accessConfigured, allowedAccount, secureAuthCookies, SESSION_MAX_AGE } from '@/server/auth-policy';
 
 export const { handlers, signIn, signOut, auth } = NextAuth(request => ({
   trustHost: true,
@@ -20,9 +20,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth(request => ({
       // Google must assert that the account controls its email address.
       if (profile?.email_verified !== true) return false;
 
-      const owner = ownerEmail();
-      if (!owner) return process.env.NODE_ENV !== 'production';
-      return user.email?.trim().toLowerCase() === owner;
+      if (!accessConfigured()) return process.env.NODE_ENV !== 'production';
+      return Boolean(allowedAccount(user.email));
     },
   },
 }));
