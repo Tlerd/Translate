@@ -10,16 +10,18 @@ export function WorkspaceProvider({
   children,
   accountControls,
   dataNamespace = null,
+  accountEmail = null,
 }: {
   children: React.ReactNode;
   accountControls: React.ReactNode;
   dataNamespace?: string | null;
+  accountEmail?: string | null;
 }) {
   // Runs during render, before any child effect opens IndexedDB.
   selectAccountDb(dataNamespace);
   // CloudSyncStatus lives in the library navigator (sidebar footer), so it is not repeated here.
   return (
-    <AccountProvider accountControls={accountControls}>
+    <AccountProvider accountControls={accountControls} accountEmail={accountEmail}>
       <RecordingProvider>
         <AppShell accountControls={accountControls}>
           {children}

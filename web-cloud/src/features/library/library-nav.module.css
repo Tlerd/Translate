@@ -397,6 +397,24 @@
   font-weight: 600;
 }
 
+/* Signed-in account and sign-out, so a shared browser can switch people without opening Settings. */
+.account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.accountEmail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
 /* The cloud sync button keeps its own styles; here it only has to shrink inside the 290px sidebar. */
 .footer > button {
   min-width: 0;

@@ -32,6 +32,7 @@ import {
   renameCustomFolder,
 } from '@/storage/recordings';
 import { CloudSyncStatus } from '@/components/cloud-sync-status';
+import { useAccount } from '@/components/account-context';
 import { useLibrary } from './use-library';
 import { queryLibrary, FOLDER_NONE, type LibraryView } from './library-query';
 import { viewLabel } from './library-format';
@@ -72,6 +73,7 @@ function errorMessage(error: unknown): string {
 export function LibraryNav({ onCloseMobile, onToggleSidebar }: LibraryNavProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { accountControls, accountEmail } = useAccount();
   const searchParams = useSearchParams();
   // useLibrary reloads on its own (liveQuery and the sync event), so no polling is needed here.
   const { entries } = useLibrary();
@@ -427,6 +429,12 @@ export function LibraryNav({ onCloseMobile, onToggleSidebar }: LibraryNavProps) 
 
       <div className={styles.footer}>
         <CloudSyncStatus />
+        {accountControls && (
+          <div className={styles.account}>
+            <span className={styles.accountEmail} title={accountEmail ?? undefined}>{accountEmail ?? 'Đã đăng nhập'}</span>
+            {accountControls}
+          </div>
+        )}
         <div className={styles.footerLinks}>
           <Link
             href="/settings"
