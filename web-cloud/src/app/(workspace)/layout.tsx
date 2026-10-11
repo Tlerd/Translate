@@ -18,7 +18,11 @@ export default async function WorkspaceLayout({
   const account = sessionAccount(session);
   if (!localDevelopment && !account) redirect('/login');
   const workspace = (
-    <WorkspaceProvider accountControls={<SignOutButton />} dataNamespace={localDevelopment ? null : localDataNamespace(account)}>
+    <WorkspaceProvider
+      accountControls={localDevelopment ? undefined : <SignOutButton />}
+      accountEmail={localDevelopment ? null : account}
+      dataNamespace={localDevelopment ? null : localDataNamespace(account)}
+    >
       {children}
     </WorkspaceProvider>
   );

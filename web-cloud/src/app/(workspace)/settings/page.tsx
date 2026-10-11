@@ -40,7 +40,7 @@ const GROUPS: readonly SettingsGroupLink[] = [
 const GROUP_IDS = GROUPS.map((group) => group.id);
 
 export default function SettingsPage() {
-  const { accountControls } = useAccount();
+  const { accountControls, accountEmail } = useAccount();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { activeId, scrollToSection } = useSettingsSections(scrollRef, GROUP_IDS);
 
@@ -134,6 +134,7 @@ export default function SettingsPage() {
                 <div className={styles.settingRow}>
                   <span className={styles.settingLabel}>Phiên làm việc</span>
                   <div className={styles.accountSlot}>
+                    {accountEmail && <span className={styles.accountEmpty}>{accountEmail}</span>}
                     {accountControls || <span className={styles.accountEmpty}>Chưa đăng nhập</span>}
                   </div>
                 </div>
