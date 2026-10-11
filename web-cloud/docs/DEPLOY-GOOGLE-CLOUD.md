@@ -66,7 +66,7 @@ bash web-cloud/scripts/deploy-cloud-run.sh
 Script `web-cloud/scripts/deploy-cloud-run.sh` làm:
 
 1. Bật API Cloud Run, Cloud Build, Artifact Registry, Secret Manager; cấp quyền build cho service account mặc định.
-2. Hỏi cấu hình thường (email chủ, Client ID, Account ID R2, tên bucket) và lưu ở `~/.translate-web.conf`.
+2. Hỏi cấu hình thường (email chủ, email/tên miền được phép, hạn mức phút mỗi ngày, Client ID, Account ID R2, tên bucket) và lưu ở `~/.translate-web.conf`.
 3. Hỏi key bí mật (gõ ẩn) và lưu vào **Secret Manager**; `AUTH_SECRET` tự sinh.
 4. Tạo bucket R2 private và CORS cho đúng địa chỉ Cloud Run.
 5. Build bằng `web-cloud/Dockerfile` và deploy: Singapore, 1 vCPU, 1 GiB, timeout 300 giây, 0–2 instance, giữ CPU sau response.
@@ -79,6 +79,17 @@ Chạy lại bất cứ lúc nào để cập nhật code: key đã lưu đượ
 Script in ra redirect URI. Vào OAuth client ở bước A.4 → **Authorized redirect URIs** → thêm
 `https://translate-web-<PROJECT_NUMBER>.asia-southeast1.run.app/api/auth/callback/google` (giữ URI của Vercel) → **Save**.
 Đợi vài phút rồi mở `<URL>/app`, đăng nhập, thử dịch, ghi âm, đồng bộ, nghe lại trên thiết bị khác.
+
+## Thêm người dùng
+
+1. Sửa `ALLOWED_EMAILS` (danh sách email, cách nhau bằng dấu phẩy) hoặc `ALLOWED_DOMAINS` (ví dụ `truong.edu.vn`).
+   Nhanh nhất: Cloud Run → `translate-web` → **Edit & deploy new revision** → **Variables & Secrets** → sửa giá trị → **Deploy**.
+   Hoặc sửa dòng tương ứng trong `~/.translate-web.conf` rồi chạy lại script.
+2. Google Auth Platform → **Audience**: nếu app ở chế độ *Testing*, thêm email của từng người vào **Test users**
+   (tối đa 100), hoặc bấm **Publish app** để chuyển sang *In production*.
+3. Tùy chọn: `USER_DAILY_SPEECH_MINUTES=60` để giới hạn mỗi người 60 phút nhận giọng mỗi ngày (chủ ứng dụng không bị giới hạn).
+
+Mỗi người có bản ghi, audio và thống kê chi phí riêng. Chủ ứng dụng (`OWNER_EMAIL`) xem được tổng chi phí của mọi người. Xem thêm mục *Nhiều người dùng* trong `web-cloud/README.md`.
 
 ## Tự deploy khi push (tùy chọn)
 

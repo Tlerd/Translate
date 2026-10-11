@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { SummarizeRequestSchema } from '@/shared/ai-contracts';
 import { executeSummarize } from '@/server/ai/summarize';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { accountKey, authenticate, makeErrorResponse } from '@/server/http/guard';
 import { checkRateLimit, acquireIdempotencyLock } from '@/server/http/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const account = accountKey(auth.account);
 
   let body: unknown;
   try {
@@ -29,7 +30,7 @@ export async function POST(req: Request): Promise<Response> {
   const data = parsed.data;
 
   // Rate limit
-  const rateLimit = await checkRateLimit(`sum:${data.recordingId}`, 10, 60);
+  const rateLimit = await checkRateLimit(`sum:${account}:${data.recordingId}`, 10, 60);
   if (!rateLimit.allowed) {
     return makeErrorResponse(
       429,
@@ -41,7 +42,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // Idempotency lock: prevent double-clicks
-  const lockKey = `sum:${data.recordingId}:${data.requestId}`;
+  const lockKey = `sum:${account}:${data.recordingId}:${data.requestId}`;
   const acquired = await acquireIdempotencyLock(lockKey, 900);
   if (!acquired) {
     return makeErrorResponse(

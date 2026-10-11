@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyAuthGuard } from '@/server/http/guard';
-import { ownerEmail } from '@/server/auth-policy';
+import { authenticate } from '@/server/http/guard';
 import { readAudio, extendUploadLease } from '@/server/cloud/audio-store';
 import { AudioRequestError, requireAudioStorage, requireRecordingOwner } from '@/server/cloud/audio-service';
 import { presignPutUrl } from '@/server/cloud/object-storage';
@@ -18,8 +17,8 @@ const uploadSchema = z.object({ id: cloudRecordingIdSchema, version: z.number().
  * browser can only upload the size and media type registered at reservation time.
  */
 export async function POST(request: Request) {
-  const denied = await verifyAuthGuard(request); if (denied) return denied;
-  const owner = ownerEmail(); if (!owner) return NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
+  const auth = await authenticate(request); if (auth.denied) return auth.denied;
+  const owner = auth.account; if (!owner) return NextResponse.json({ error: 'Chưa cấu hình tài khoản cloud.' }, { status: 503, headers });
   try {
     requireAudioStorage();
     const body = uploadSchema.safeParse(await boundedJson(request, 8192));

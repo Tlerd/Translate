@@ -3,16 +3,15 @@ import { auth, signIn } from '@/auth';
 import { redirect } from 'next/navigation';
 import { AudioLines, ArrowRight } from 'lucide-react';
 import styles from '../welcome.module.css';
-import { ownerEmail, ownerSession } from '@/server/auth-policy';
+import { accessConfigured, sessionAccount } from '@/server/auth-policy';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await auth();
-  const owner = ownerEmail();
-  if (ownerSession(session)) redirect('/library');
+  if (sessionAccount(session)) redirect('/library');
   const { error } = await searchParams;
-  const configured = Boolean(process.env.AUTH_SECRET && process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && owner);
+  const configured = Boolean(process.env.AUTH_SECRET && process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && accessConfigured());
   const message = error === 'AccessDenied'
     ? 'Tài khoản này chưa được cấp quyền sử dụng. Hãy chọn tài khoản Google được cho phép.'
     : error ? 'Chưa thể đăng nhập. Hãy thử lại; nếu lỗi tiếp diễn, cần kiểm tra cấu hình đăng nhập trên server.' : undefined;

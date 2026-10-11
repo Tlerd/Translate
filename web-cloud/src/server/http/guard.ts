@@ -2,7 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getServerEnv } from '@/config/env.server';
-import { secureAuthCookies } from '@/server/auth-policy';
+import { accessConfigured, allowedAccount, secureAuthCookies } from '@/server/auth-policy';
 import type { ApiErrorResponse } from '@/shared/ai-contracts';
 
 export function makeErrorResponse(
@@ -30,27 +30,28 @@ export function makeErrorResponse(
   );
 }
 
+export type AuthResult =
+  | { account: string | null; denied?: undefined }
+  | { account?: undefined; denied: NextResponse<ApiErrorResponse> };
+
 /**
- * Verify the Auth.js encrypted session token and ensure it belongs to the
- * configured owner. A local, unconfigured development server remains usable.
+ * Verify the Auth.js encrypted session token and return the signed-in account
+ * when it is still allowed (owner, ALLOWED_EMAILS or ALLOWED_DOMAINS). The
+ * allowlist is re-checked on every request, so removing an email revokes it
+ * without waiting for the session to expire. A local, unconfigured development
+ * server stays usable with `account: null`.
  */
-export async function verifyAuthGuard(
-  req: Request
-): Promise<NextResponse<ApiErrorResponse> | null> {
+export async function authenticate(req: Request): Promise<AuthResult> {
   const env = getServerEnv();
   const production = process.env.NODE_ENV === 'production';
-  const authConfigured = Boolean(env.AUTH_SECRET || env.OWNER_EMAIL);
+  const configured = accessConfigured();
 
-  if (!production && !authConfigured) return null;
+  if (!production && !env.AUTH_SECRET && !configured) return { account: null };
 
-  // Both values are required to establish an owner-only trust boundary. This
-  // also makes production fail closed when deployment configuration is absent.
-  if (!env.AUTH_SECRET || !env.OWNER_EMAIL) {
-    return makeErrorResponse(
-      503,
-      'UNAUTHORIZED',
-      'Chưa cấu hình xác thực tài khoản chủ ứng dụng.'
-    );
+  // Both values are required to establish a trust boundary. This also makes
+  // production fail closed when deployment configuration is absent.
+  if (!env.AUTH_SECRET || !configured) {
+    return { denied: makeErrorResponse(503, 'UNAUTHORIZED', 'Chưa cấu hình xác thực tài khoản ứng dụng.') };
   }
 
   try {
@@ -59,15 +60,22 @@ export async function verifyAuthGuard(
       secret: env.AUTH_SECRET,
       secureCookie: secureAuthCookies(req.url, req.headers),
     });
-    const email = typeof token?.email === 'string' ? token.email.trim().toLowerCase() : '';
-    if (email && email === env.OWNER_EMAIL.trim().toLowerCase()) return null;
+    const account = allowedAccount(token?.email);
+    if (account) return { account };
   } catch {
     // Treat malformed or undecryptable cookies as unauthenticated.
   }
 
-  return makeErrorResponse(
-    401,
-    'UNAUTHORIZED',
-    'Yêu cầu xác thực tài khoản chủ ứng dụng.'
-  );
+  return { denied: makeErrorResponse(401, 'UNAUTHORIZED', 'Yêu cầu đăng nhập bằng tài khoản được cấp quyền.') };
+}
+
+export async function verifyAuthGuard(
+  req: Request
+): Promise<NextResponse<ApiErrorResponse> | null> {
+  return (await authenticate(req)).denied ?? null;
+}
+
+/** Key for per-account rate limits and locks; local development shares one key. */
+export function accountKey(account: string | null): string {
+  return account ?? 'local';
 }

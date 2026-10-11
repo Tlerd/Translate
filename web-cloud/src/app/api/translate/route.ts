@@ -6,14 +6,15 @@ import {
   insertTranslationUsage,
   type TranslationUsageRecord,
 } from '@/server/cloud/translation-usage-store';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { accountKey, authenticate, makeErrorResponse } from '@/server/http/guard';
 import { checkRateLimit } from '@/server/http/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
+  const account = accountKey(auth.account);
 
   let body: unknown;
   try {
@@ -34,7 +35,7 @@ export async function POST(req: Request): Promise<Response> {
   const data = parsed.data;
 
   // Rate limit
-  const rateLimitKey = `translate:${data.recordingId}`;
+  const rateLimitKey = `translate:${account}:${data.recordingId}`;
   const rateLimit = await checkRateLimit(rateLimitKey, 120, 60);
   if (!rateLimit.allowed) {
     return makeErrorResponse(
@@ -84,7 +85,7 @@ export async function POST(req: Request): Promise<Response> {
         const rec = await usageRecordPromise;
         if (rec) {
           try {
-            await insertTranslationUsage(rec);
+            await insertTranslationUsage({ ...rec, ownerEmail: auth.account });
           } catch (e: unknown) {
             console.warn(
               '[translation-usage] persist failed',

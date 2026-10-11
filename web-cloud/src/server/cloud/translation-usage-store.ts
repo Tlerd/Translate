@@ -24,7 +24,12 @@ export interface TranslationUsageRecord {
   thinkingTokens: number | null;
   totalTokens: number | null;
   promptVersion?: string;
+  /** Signed-in account; null only on an unconfigured local development server. */
+  ownerEmail?: string | null;
 }
+
+/** Whose usage a summary covers: the owner sees every account, others only their own. */
+export type UsageScope = { all: true } | { all: false; owner: string };
 
 export function usageStoreEnabled(): boolean {
   const hasDb = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
@@ -67,6 +72,8 @@ async function ensureSchema(): Promise<ReturnType<typeof database>> {
       await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_created_at ON translation_usage(created_at)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_translation_usage_recording_id ON translation_usage(recording_id)`;
       await sql`ALTER TABLE translation_usage ADD COLUMN IF NOT EXISTS prompt_version text NOT NULL DEFAULT 'legacy-unknown'`;
+      // Rows written before multi-user support keep owner_email NULL and are visible to the owner only.
+      await sql`ALTER TABLE translation_usage ADD COLUMN IF NOT EXISTS owner_email text`;
     })().catch((err) => {
       schemaReadyPromise = null;
       throw err;
@@ -83,12 +90,12 @@ export async function insertTranslationUsage(r: TranslationUsageRecord): Promise
       request_id, recording_id, caption_id, revision, model_key, status,
       request_kind, thinking_level, duration_ms, source_chars, system_chars,
       payload_chars, history_turns, usage_status, input_tokens, output_tokens,
-      cached_input_tokens, thinking_tokens, total_tokens, prompt_version
+      cached_input_tokens, thinking_tokens, total_tokens, prompt_version, owner_email
     ) VALUES (
       ${r.requestId}, ${r.recordingId}, ${r.captionId}, ${r.revision}, ${r.modelKey}, ${r.status},
       ${r.requestKind}, ${r.thinkingLevel}, ${r.durationMs}, ${r.sourceChars}, ${r.systemChars},
       ${r.payloadChars}, ${r.historyTurns}, ${r.usageStatus}, ${r.inputTokens}, ${r.outputTokens},
-      ${r.cachedInputTokens}, ${r.thinkingTokens}, ${r.totalTokens}, ${r.promptVersion ?? 'legacy-unknown'}
+      ${r.cachedInputTokens}, ${r.thinkingTokens}, ${r.totalTokens}, ${r.promptVersion ?? 'legacy-unknown'}, ${r.ownerEmail ?? null}
     )
     ON CONFLICT (request_id) DO NOTHING
   `;
@@ -182,9 +189,11 @@ export async function summarizeTranslationUsage(q: {
   toExclusive?: Date;
   recordingId?: string;
   tz?: 'Asia/Ho_Chi_Minh';
+  scope: UsageScope;
 }): Promise<UsageSummary> {
   const sql = await ensureSchema();
   const toExclusive = q.toExclusive ?? q.to ?? new Date();
+  const scopeOwner = q.scope.all ? null : q.scope.owner;
 
   const rawRows = q.recordingId
     ? await sql`
@@ -206,6 +215,7 @@ export async function summarizeTranslationUsage(q: {
         WHERE created_at >= ${q.from.toISOString()}
           AND created_at < ${toExclusive.toISOString()}
           AND recording_id = ${q.recordingId}
+          AND (${q.scope.all}::boolean OR owner_email = ${scopeOwner}::text)
         GROUP BY model_key, request_kind, status, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, recording_id
         ORDER BY day ASC
       `
@@ -227,6 +237,7 @@ export async function summarizeTranslationUsage(q: {
         FROM translation_usage
         WHERE created_at >= ${q.from.toISOString()}
           AND created_at < ${toExclusive.toISOString()}
+          AND (${q.scope.all}::boolean OR owner_email = ${scopeOwner}::text)
         GROUP BY model_key, request_kind, status, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, recording_id
         ORDER BY day ASC
       `;

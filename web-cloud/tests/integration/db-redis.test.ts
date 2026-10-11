@@ -5,7 +5,7 @@ import type { CloudPayload } from '@/shared/cloud-recording';
 import { closeSqlPool } from '@/server/cloud/sql';
 import { database, readCloudRecording, readCloudRecordingIndex, writeCloudRecording } from '@/server/cloud/recording-store';
 import { insertTranslationUsage, resetSchemaReadyForTest, summarizeTranslationUsage } from '@/server/cloud/translation-usage-store';
-import { resetSpeechSchemaReadyForTest, summarizeSpeechUsage, upsertSpeechUsage } from '@/server/cloud/speech-usage-store';
+import { accountSpeechAudioMs, resetSpeechSchemaReadyForTest, summarizeSpeechUsage, upsertSpeechUsage } from '@/server/cloud/speech-usage-store';
 import { acquireIdempotencyLock, checkRateLimit } from '@/server/http/rate-limit';
 
 // Real-service checks. Run with e.g.
@@ -108,23 +108,29 @@ describe.skipIf(!DATABASE_URL)('postgres through the pg-backed sql client', () =
     const base = { recordingId, captionId: 1, revision: 1, modelKey: 'google:gemini-3.5-flash-lite', status: 'completed' as const, requestKind: 'final' as const, thinkingLevel: null, durationMs: 100, sourceChars: 10, systemChars: 5, payloadChars: 20, historyTurns: 0, usageStatus: 'reported' as const, outputTokens: 20, cachedInputTokens: 0, thinkingTokens: 0, totalTokens: 120 };
     await insertTranslationUsage({ ...base, requestId: `${run}-a`, inputTokens: 100 });
     await insertTranslationUsage({ ...base, requestId: `${run}-a`, inputTokens: 999 }); // ON CONFLICT DO NOTHING
-    await insertTranslationUsage({ ...base, requestId: `${run}-b`, inputTokens: 50, status: 'failed' });
-    const summary = await summarizeTranslationUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId });
+    await insertTranslationUsage({ ...base, requestId: `${run}-b`, inputTokens: 50, status: 'failed', ownerEmail: owner });
+    const summary = await summarizeTranslationUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId, scope: { all: true } });
     expect(summary.totals.requests).toBe(2);
     expect(summary.totals.inputTokens).toBe(150);
     expect(summary.totals.byStatus).toMatchObject({ completed: 1, failed: 1 });
     expect(summary.byRecording[0]?.recordingId).toBe(recordingId);
+    const own = await summarizeTranslationUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId, scope: { all: false, owner } });
+    expect(own.totals.requests).toBe(1);
   });
 
   it('upserts and summarises speech usage, only ever raising audio time', async () => {
     const recordingId = `${recordingPrefix}-sp`;
-    const record = { sessionId: randomUUID(), recordingId, provider: 'soniox' as const, model: 'stt-rt-v5', translated: true, audioMs: 60_000, startedAt: new Date() };
+    const record = { sessionId: randomUUID(), recordingId, provider: 'soniox' as const, model: 'stt-rt-v5', translated: true, audioMs: 60_000, startedAt: new Date(), ownerEmail: owner };
     await upsertSpeechUsage(record);
     await upsertSpeechUsage({ ...record, audioMs: 30_000 });
     await upsertSpeechUsage({ ...record, audioMs: 90_000 });
-    const summary = await summarizeSpeechUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId });
+    await upsertSpeechUsage({ ...record, audioMs: 500_000, ownerEmail: otherOwner }); // another account cannot raise it
+    const summary = await summarizeSpeechUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId, scope: { all: false, owner } });
     expect(summary.totals.sessions).toBe(1);
     expect(summary.totals.audioMs).toBe(90_000);
+    expect(await accountSpeechAudioMs(owner, new Date(Date.now() - 3_600_000))).toBeGreaterThanOrEqual(90_000);
+    const others = await summarizeSpeechUsage({ from: new Date(Date.now() - 3_600_000), toExclusive: new Date(Date.now() + 3_600_000), recordingId, scope: { all: false, owner: otherOwner } });
+    expect(others.totals.sessions).toBe(0);
   });
 });
 

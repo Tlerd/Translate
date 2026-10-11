@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyAuthGuard, makeErrorResponse } from '@/server/http/guard';
+import { authenticate, makeErrorResponse } from '@/server/http/guard';
+import { usageScope } from '@/server/http/account-usage';
 import { boundedJson, JsonRequestError } from '@/server/http/bounded-json';
 import { parseUsageRangeQuery, usageRangeBounds } from '@/server/http/usage-range';
 import { usageStoreEnabled, summarizeSpeechUsage, upsertSpeechUsage } from '@/server/cloud/speech-usage-store';
@@ -25,8 +26,8 @@ const SpeechUsageSchema = z
   .strict();
 
 export async function POST(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
 
   let body: unknown;
   try {
@@ -57,6 +58,7 @@ export async function POST(req: Request): Promise<Response> {
       translated: d.translated,
       audioMs: d.audioMs,
       startedAt: new Date(d.startedAt),
+      ownerEmail: auth.account,
     });
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: unknown) {
@@ -66,8 +68,8 @@ export async function POST(req: Request): Promise<Response> {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  const guard = await verifyAuthGuard(req);
-  if (guard) return guard;
+  const auth = await authenticate(req);
+  if (auth.denied) return auth.denied;
 
   if (!usageStoreEnabled()) {
     return makeErrorResponse(
@@ -88,7 +90,7 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const { from, toExclusive } = usageRangeBounds(parsed.data.from, parsed.data.to);
-    const summary = await summarizeSpeechUsage({ from, toExclusive, recordingId: parsed.data.recordingId });
+    const summary = await summarizeSpeechUsage({ from, toExclusive, recordingId: parsed.data.recordingId, scope: usageScope(auth.account) });
     return NextResponse.json(summary, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

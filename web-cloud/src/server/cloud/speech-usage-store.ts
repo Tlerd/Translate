@@ -1,11 +1,11 @@
 import 'server-only';
 import { database } from './recording-store';
-import { usageStoreEnabled } from './translation-usage-store';
+import { usageStoreEnabled, type UsageScope } from './translation-usage-store';
 import { estimateSpeechUsd, roundUsd, SPEECH_PROVIDER_IDS, speechUsdPerMinute } from '@/shared/speech-pricing';
 import type { SpeechUsageSummary } from '@/shared/usage';
 import type { SpeechProvider } from '@/shared/transcription';
 
-export { usageStoreEnabled };
+export { usageStoreEnabled, type UsageScope };
 
 export interface SpeechUsageRecord {
   sessionId: string;
@@ -15,6 +15,8 @@ export interface SpeechUsageRecord {
   translated: boolean;
   audioMs: number;
   startedAt: Date;
+  /** Signed-in account; null only on an unconfigured local development server. */
+  ownerEmail: string | null;
 }
 
 let schemaReadyPromise: Promise<void> | null = null;
@@ -39,6 +41,9 @@ async function ensureSchema(): Promise<ReturnType<typeof database>> {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_speech_usage_started_at ON speech_usage(started_at)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_speech_usage_recording_id ON speech_usage(recording_id)`;
+      // Rows written before multi-user support keep owner_email NULL and are visible to the owner only.
+      await sql`ALTER TABLE speech_usage ADD COLUMN IF NOT EXISTS owner_email text`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_speech_usage_owner_updated_at ON speech_usage(owner_email, updated_at)`;
     })().catch((err) => {
       schemaReadyPromise = null;
       throw err;
@@ -52,11 +57,12 @@ async function ensureSchema(): Promise<ReturnType<typeof database>> {
 export async function upsertSpeechUsage(r: SpeechUsageRecord): Promise<void> {
   const sql = await ensureSchema();
   await sql`
-    INSERT INTO speech_usage (session_id, recording_id, provider, model, translated, audio_ms, started_at, updated_at)
-    VALUES (${r.sessionId}, ${r.recordingId}, ${r.provider}, ${r.model}, ${r.translated}, ${r.audioMs}, ${r.startedAt.toISOString()}, now())
+    INSERT INTO speech_usage (session_id, recording_id, provider, model, translated, audio_ms, started_at, updated_at, owner_email)
+    VALUES (${r.sessionId}, ${r.recordingId}, ${r.provider}, ${r.model}, ${r.translated}, ${r.audioMs}, ${r.startedAt.toISOString()}, now(), ${r.ownerEmail})
     ON CONFLICT (session_id) DO UPDATE SET
       audio_ms = GREATEST(speech_usage.audio_ms, EXCLUDED.audio_ms),
       updated_at = now()
+    WHERE speech_usage.owner_email IS NOT DISTINCT FROM EXCLUDED.owner_email
   `;
 }
 
@@ -74,9 +80,11 @@ export async function summarizeSpeechUsage(q: {
   to?: Date;
   toExclusive?: Date;
   recordingId?: string;
+  scope: UsageScope;
 }): Promise<SpeechUsageSummary> {
   const sql = await ensureSchema();
   const toExclusive = q.toExclusive ?? q.to ?? new Date();
+  const scopeOwner = q.scope.all ? null : q.scope.owner;
 
   const rawRows = q.recordingId
     ? await sql`
@@ -91,6 +99,7 @@ export async function summarizeSpeechUsage(q: {
         WHERE started_at >= ${q.from.toISOString()}
           AND started_at < ${toExclusive.toISOString()}
           AND recording_id = ${q.recordingId}
+          AND (${q.scope.all}::boolean OR owner_email = ${scopeOwner}::text)
         GROUP BY provider, model, translated, (started_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
         ORDER BY day ASC
       `
@@ -105,6 +114,7 @@ export async function summarizeSpeechUsage(q: {
         FROM speech_usage
         WHERE started_at >= ${q.from.toISOString()}
           AND started_at < ${toExclusive.toISOString()}
+          AND (${q.scope.all}::boolean OR owner_email = ${scopeOwner}::text)
         GROUP BY provider, model, translated, (started_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
         ORDER BY day ASC
       `;
@@ -170,4 +180,18 @@ export async function summarizeSpeechUsage(q: {
     byProvider,
     byDay,
   };
+}
+
+/**
+ * Audio time of the account's sessions reported since `from`; used for the per-account
+ * daily limit. Filters on the server-set updated_at so a client cannot backdate startedAt.
+ */
+export async function accountSpeechAudioMs(owner: string, from: Date): Promise<number> {
+  const sql = await ensureSchema();
+  const rows = await sql`
+    SELECT COALESCE(SUM(audio_ms), 0)::bigint AS audio_ms
+    FROM speech_usage
+    WHERE owner_email = ${owner} AND updated_at >= ${from.toISOString()}
+  `;
+  return Number(rows[0]?.audio_ms ?? 0);
 }

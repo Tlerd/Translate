@@ -10,7 +10,11 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/http/guard', () => ({
-  verifyAuthGuard: (req: Request) => guard.verifyAuthGuard(req),
+  authenticate: async (req: Request) => {
+    const denied = await guard.verifyAuthGuard(req);
+    return denied ? { denied } : { account: 'owner@example.com' };
+  },
+  accountKey: (account: string | null) => account ?? 'local',
   makeErrorResponse: (status: number, code: string, message: string) => {
     return new Response(JSON.stringify({ error: { code, message } }), {
       status,

@@ -35,7 +35,8 @@ vi.mock('@/server/cloud/translation-usage-store', () => ({
 }));
 
 vi.mock('@/server/http/guard', () => ({
-  verifyAuthGuard: vi.fn(async () => null),
+  authenticate: vi.fn(async () => ({ account: 'owner@example.com' })),
+  accountKey: (account: string | null) => account ?? 'local',
   makeErrorResponse: vi.fn(),
 }));
 

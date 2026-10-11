@@ -133,13 +133,16 @@ AI_SUMMARY_MODEL=google:gemini-3.8-flash
 AI_IMAGE_MODEL=google:gemini-3.1-flash-image
 AI_IMAGE_ENABLED=false
 
-# Đăng nhập: AUTH_SECRET và OWNER_EMAIL bắt buộc khi production;
-# AUTH_GOOGLE_ID/SECRET cần để đăng nhập Google.
+# Đăng nhập: AUTH_SECRET và ít nhất một trong OWNER_EMAIL / ALLOWED_EMAILS /
+# ALLOWED_DOMAINS bắt buộc khi production; AUTH_GOOGLE_ID/SECRET cần để đăng nhập Google.
 AUTH_SECRET=
 AUTH_URL=
 AUTH_GOOGLE_ID=
 AUTH_GOOGLE_SECRET=
 OWNER_EMAIL=
+ALLOWED_EMAILS=
+ALLOWED_DOMAINS=
+USER_DAILY_SPEECH_MINUTES=
 DATABASE_URL=
 REDIS_URL=
 S3_ENDPOINT=
@@ -151,7 +154,24 @@ S3_SECRET_ACCESS_KEY=
 
 *Lưu ý an toàn:* Không commit file `.env.local` hoặc bất kỳ secret key nào lên GitHub repository.
 
-Guard giải mã và kiểm tra hạn token Auth.js cùng email chủ tài khoản; cookie/header tùy ý không cấp quyền. Production thiếu cấu hình xác thực trả lỗi và không gọi AI. Local development chỉ bỏ xác thực khi cả `AUTH_SECRET` và `OWNER_EMAIL` đều chưa cấu hình. Mở `/api/auth/signin` để đăng nhập Google; email đã xác minh phải khớp `OWNER_EMAIL`.
+Guard giải mã và kiểm tra hạn token Auth.js, rồi kiểm tra email với danh sách được phép ở **mỗi request**; cookie/header tùy ý không cấp quyền. Production thiếu cấu hình xác thực trả lỗi và không gọi AI. Local development chỉ bỏ xác thực khi `AUTH_SECRET`, `OWNER_EMAIL`, `ALLOWED_EMAILS` và `ALLOWED_DOMAINS` đều trống. Mở `/api/auth/signin` để đăng nhập Google; email phải được Google xác minh.
+
+### Nhiều người dùng
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `OWNER_EMAIL` | Chủ ứng dụng (quản trị viên): luôn đăng nhập được, xem chi phí của mọi người, kiểm tra/dọn kho audio chung, không bị giới hạn phút. |
+| `ALLOWED_EMAILS` | Email khác được đăng nhập, cách nhau bằng dấu phẩy, chấm phẩy hoặc xuống dòng. |
+| `ALLOWED_DOMAINS` | Tên miền được đăng nhập, ví dụ `truong.edu.vn`. So khớp chính xác, không gồm tên miền con. |
+| `USER_DAILY_SPEECH_MINUTES` | Số phút nhận giọng mỗi người được dùng mỗi ngày (0 giờ theo giờ Việt Nam). Để trống thì không giới hạn. |
+
+- **Dữ liệu tách theo email đăng nhập.** Bản ghi (`recording_sync`), audio (`recording_audio` và đường dẫn trong bucket) dùng email của phiên đăng nhập làm khóa; người này không đọc hay ghi được bản ghi của người khác.
+- **Dữ liệu trên trình duyệt cũng tách riêng.** Mỗi tài khoản có IndexedDB riêng (`may_dich_offline_db_<mã băm email>`), nên nhiều người dùng chung một trình duyệt không thấy hay đồng bộ nhầm bản ghi của nhau. Chủ ứng dụng giữ IndexedDB cũ, nên dữ liệu đã có không bị mất.
+- **Chi phí.** `speech_usage` và `translation_usage` có thêm cột `owner_email` (tự thêm khi API chạy). Mỗi người chỉ thấy chi phí của mình; chủ ứng dụng thấy tổng, gồm cả dữ liệu cũ trước khi có nhiều người dùng.
+- **Giới hạn tần suất** (dịch, tóm tắt, ảnh, cấp phiên Soniox) tính riêng cho từng người.
+- **Hạn mức phút nhận giọng** được kiểm tra khi cấp phiên Soniox, Gemini Live, Nemotron và mỗi lần gửi Gemini Transcribe. Số phút lấy từ báo cáo của trình duyệt, nên đây là hạn mức mềm để tránh dùng quá tay, không phải hàng rào chống người cố tình gian lận. Phiên đang chạy không bị ngắt giữa chừng; lần cấp phiên hoặc gia hạn kế tiếp sẽ bị từ chối. Cần Postgres và `TRANSLATION_USAGE_STORE=on`; nếu database lỗi, nhận giọng vẫn hoạt động.
+- **Thu hồi quyền:** xóa email khỏi danh sách rồi deploy lại; request kế tiếp của người đó bị từ chối, không phải chờ phiên 30 ngày hết hạn.
+- **Google OAuth:** nếu màn hình đồng ý OAuth (**Google Auth Platform → Audience**) đang ở chế độ *Testing*, chỉ các email trong **Test users** (tối đa 100) đăng nhập được. Thêm từng người vào đó, hoặc chuyển sang *In production*. App chỉ xin quyền email/hồ sơ cơ bản.
 
 Trên production, đặt `AUTH_URL=<URL Cloud Run hoặc tên miền riêng>` và callback Google `<URL đó>/api/auth/callback/google`. Layout, login và API dùng cùng quy tắc tài khoản/cookie; Auth.js giữ thời hạn 30 ngày. Client gia hạn qua endpoint Auth.js có ghi cookie khi quay lại tab và mỗi 5 phút lúc có mạng. Nguyên nhân redirect sai trên production chưa được xác nhận; kết quả và giới hạn kiểm chứng có trong tài liệu nghiệm thu mới.
 

@@ -42,7 +42,17 @@ ask() { # ask VAR "prompt" [default]
   printf -v "$var" '%s' "$current"
   printf '%s=%q\n' "$var" "$current" >> "$CONF"
 }
-ask OWNER_EMAIL "Email Google được phép đăng nhập (OWNER_EMAIL)"
+ask_optional() { # ask_optional VAR "prompt": Enter để bỏ trống; câu trả lời được lưu, kể cả khi trống
+  local var=$1 prompt=$2 current
+  if grep -q "^$var=" "$CONF" 2>/dev/null; then echo "✓ $var=${!var:-(trống)}"; return; fi
+  read -rp "$prompt (Enter để bỏ trống): " current
+  printf -v "$var" '%s' "$current"
+  printf '%s=%q\n' "$var" "$current" >> "$CONF"
+}
+ask OWNER_EMAIL "Email Google của chủ ứng dụng (OWNER_EMAIL, quản trị viên)"
+ask_optional ALLOWED_EMAILS "Email khác được đăng nhập, cách nhau bằng dấu phẩy (ALLOWED_EMAILS)"
+ask_optional ALLOWED_DOMAINS "Tên miền được đăng nhập, ví dụ truong.edu.vn (ALLOWED_DOMAINS)"
+ask_optional USER_DAILY_SPEECH_MINUTES "Số phút nhận giọng mỗi ngày cho mỗi người (USER_DAILY_SPEECH_MINUTES)"
 ask AUTH_GOOGLE_ID "Google OAuth Client ID (AUTH_GOOGLE_ID, dạng ...apps.googleusercontent.com)"
 ask R2_ACCOUNT_ID "Cloudflare Account ID (trang R2 → Account Details)"
 ask S3_BUCKET "Tên bucket audio" "translate-audio"
@@ -110,6 +120,9 @@ yaml NODE_ENV production
 yaml TRANSLATION_USAGE_STORE "on"
 yaml AUTH_URL "$URL"
 yaml OWNER_EMAIL "$OWNER_EMAIL"
+yaml ALLOWED_EMAILS "${ALLOWED_EMAILS:-}"
+yaml ALLOWED_DOMAINS "${ALLOWED_DOMAINS:-}"
+yaml USER_DAILY_SPEECH_MINUTES "${USER_DAILY_SPEECH_MINUTES:-}"
 yaml AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
 yaml AI_IMAGE_ENABLED "$AI_IMAGE_ENABLED"
 yaml S3_ENDPOINT "$S3_ENDPOINT"

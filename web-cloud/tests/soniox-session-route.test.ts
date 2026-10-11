@@ -25,7 +25,7 @@ describe('Soniox temporary session route', () => {
     expect(url).toBe('https://api.soniox.com/v1/auth/temporary-api-key');
     expect(options).toMatchObject({ headers: { Authorization: 'Bearer server-only-secret' }, cache: 'no-store', redirect: 'error' });
     expect(JSON.parse(options!.body as string)).toEqual({ usage_type: 'transcribe_websocket', expires_in_seconds: 120, single_use: true, max_session_duration_seconds: 3600, client_reference_id: 'lesson:recording-1' });
-    expect(checkRateLimit).toHaveBeenCalledWith('speech:soniox:owner', 10, 60);
+    expect(checkRateLimit).toHaveBeenCalledWith('speech:soniox:local', 10, 60);
   });
   it('requires configured owner authentication on production and a valid session when configured', async () => {
     vi.stubEnv('NODE_ENV', 'production');
