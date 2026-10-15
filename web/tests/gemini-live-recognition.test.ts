@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeminiLiveRecognizer } from '@/features/recording/gemini-live-recognition';
 import { Pcm16kResampler } from '@/features/recording/pcm-resampler';
-import { LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
+import { LIVE_TRANSCRIPTION_MODEL, TRANSLATE_LIVE_MODEL } from '@/shared/transcription';
 
 class FakeWebSocket {
   static last: FakeWebSocket | undefined;
@@ -215,45 +215,103 @@ describe('Gemini live recognizer', () => {
     expect(onTranscript.mock.calls[1][0]).toBe('finalizing words, complete.');
   });
 
-  it('passes translation text from outputTranscription to onTranscript', async () => {
+  async function openTranslate(epoch: number, onTranscript: ReturnType<typeof vi.fn>, onError = vi.fn()) {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ token: 'token', websocketUrl: 'wss://example.test/live' }));
     vi.stubGlobal('fetch', fetchMock);
-    const onTranscript = vi.fn();
-    const recognizer = new GeminiLiveRecognizer(
-      { onTranscript, onError: vi.fn(), onStateChange: vi.fn() },
-      'ja-JP',
-      'verbatim',
-      'vi-VN'
-    );
+    const recognizer = new GeminiLiveRecognizer({ onTranscript, onError, onStateChange: vi.fn() }, 'ja-JP', 'verbatim', 'vi', TRANSLATE_LIVE_MODEL);
     FakeWebSocket.last = undefined;
-    const starting = recognizer.start(25);
+    const starting = recognizer.start(epoch);
     await vi.waitFor(() => expect(FakeWebSocket.last).toBeDefined());
     const socket = FakeWebSocket.last!;
     socket.open();
+    return { recognizer, socket, starting, fetchMock };
+  }
+
+  it('streams Live Translate input and translation deltas immediately in one caption', async () => {
+    const onTranscript = vi.fn();
+    const { recognizer, socket, starting, fetchMock } = await openTranslate(25, onTranscript);
+    expect(JSON.parse(socket.sent[0]).setup).toEqual({
+      model: `models/${TRANSLATE_LIVE_MODEL}`,
+      generationConfig: { responseModalities: ['AUDIO'], translationConfig: { targetLanguageCode: 'vi', echoTargetLanguage: true } },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ model: TRANSLATE_LIVE_MODEL, targetLanguageCode: 'vi' });
     socket.message({ setupComplete: {} });
     await starting;
+    try {
+      // Shape recorded from the real API: separate input and output deltas, no final.
+      socket.message({ serverContent: { inputTranscription: { text: 'こんにちは', languageCode: 'ja' } } });
+      socket.message({ serverContent: { outputTranscription: { text: 'Xin ', languageCode: 'vi' } } });
+      socket.message({ serverContent: { inputTranscription: { text: '、元気？' }, outputTranscription: { text: 'chào, khỏe không?' } } });
+      socket.message({ serverContent: { outputTranscription: { languageCode: 'vi' } } });
+      socket.message({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: 'AAAA' } }] } } });
+      expect(onTranscript.mock.calls.map(call => [call[0], call[1], call[6]])).toEqual([
+        ['こんにちは', false, undefined],
+        ['こんにちは', false, 'Xin '],
+        ['こんにちは、元気？', false, 'Xin chào, khỏe không?'],
+      ]);
+      expect(new Set(onTranscript.mock.calls.map(call => call[3])).size).toBe(1);
+      recognizer.finalizeUtterance();
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['こんにちは、元気？', true]);
+      expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ realtimeInput: { audioStreamEnd: true } });
+    } finally { await recognizer.stop(0); }
+  });
 
-    expect(JSON.parse(socket.sent[0]).setup.generationConfig.translationConfig).toMatchObject({
-      targetLanguageCode: 'vi-VN',
-      echoTargetLanguage: true,
-    });
+  it('keeps lagging Live Translate words in the closed caption until the delay passes', async () => {
+    const onTranscript = vi.fn();
+    const { recognizer, socket, starting } = await openTranslate(26, onTranscript);
+    socket.message({ setupComplete: {} }); await starting;
+    vi.useFakeTimers();
+    try {
+      socket.message({ serverContent: { inputTranscription: { text: '歴史を説明し' }, outputTranscription: { text: 'Lịch sử' } } });
+      recognizer.finalizeUtterance();
+      const firstId = onTranscript.mock.calls.at(-1)?.[3];
+      // The next sentence starts at once, but Gemini's text trails audio by about a second.
+      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+      vi.advanceTimersByTime(300);
+      socket.message({ serverContent: { inputTranscription: { text: 'ます。' }, outputTranscription: { text: ' trà.' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['歴史を説明します。', true]);
+      expect(onTranscript.mock.calls.at(-1)?.[3]).toBe(firstId);
+      expect(onTranscript.mock.calls.at(-1)?.[6]).toBe('Lịch sử trà.');
+      // The closed caption ended a sentence: the next input opens a new caption.
+      socket.message({ serverContent: { inputTranscription: { text: 'お茶は' }, outputTranscription: { text: ' Trà' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['お茶は', false]);
+      expect(onTranscript.mock.calls.at(-1)?.[6]).toBe('Trà');
+      expect(onTranscript.mock.calls.at(-1)?.[3]).not.toBe(firstId);
+    } finally { vi.useRealTimers(); await recognizer.stop(0); }
+  });
 
-    socket.message({
-      serverContent: {
-        inputTranscription: { text: 'こんにちは' },
-        outputTranscription: { text: 'Xin chào' },
-      },
-    });
-    expect(onTranscript).toHaveBeenCalledWith(
-      'こんにちは',
-      true,
-      25,
-      expect.any(String),
-      1,
-      undefined,
-      'Xin chào'
-    );
+  it('opens a new Live Translate caption after resumed speech or a long quiet gap', async () => {
+    const onTranscript = vi.fn();
+    const { recognizer, socket, starting } = await openTranslate(27, onTranscript);
+    socket.message({ setupComplete: {} }); await starting;
+    vi.useFakeTimers();
+    try {
+      socket.message({ serverContent: { inputTranscription: { text: '一つ目' } } });
+      recognizer.finalizeUtterance();
+      const firstId = onTranscript.mock.calls.at(-1)?.[3];
+      recognizer.pushPcm(new Float32Array(1600).fill(0.2), 16000);
+      vi.advanceTimersByTime(1100);
+      socket.message({ serverContent: { inputTranscription: { text: '二つ目' } } });
+      const secondId = onTranscript.mock.calls.at(-1)?.[3];
+      expect(secondId).not.toBe(firstId);
+      recognizer.finalizeUtterance();
+      // A quiet microphone gives no speech evidence; only a long gap opens a new caption.
+      vi.advanceTimersByTime(2600);
+      socket.message({ serverContent: { inputTranscription: { text: '三つ目' } } });
+      expect(onTranscript.mock.calls.at(-1)?.slice(0, 2)).toEqual(['三つ目', false]);
+      expect(onTranscript.mock.calls.at(-1)?.[3]).not.toBe(secondId);
+    } finally { vi.useRealTimers(); await recognizer.stop(0); }
+  });
+
+  it('marks a setup rejected after the socket opened, without reporting a session error', async () => {
+    const onError = vi.fn();
+    const { socket, starting } = await openTranslate(28, vi.fn(), onError);
+    socket.close(1008, 'model not found');
+    await expect(starting).rejects.toMatchObject({ setupRejected: true });
+    expect(onError).not.toHaveBeenCalled();
   });
 });
 
@@ -294,11 +352,11 @@ describe('Pcm16kResampler', () => {
     } finally { await recognizer.stop(0); }
   });
 
-  it('sends translationConfig inside setup.generationConfig, never at the top of setup', async () => {
+  it('never sends translationConfig to Transcribe Live, which does not translate', async () => {
     const { recognizer, socket } = await openRecognizer(33, vi.fn(), 'vi');
     try {
       const setup = JSON.parse(socket.sent[0]).setup;
-      expect(setup.generationConfig).toMatchObject({ responseModalities: ['TEXT'], translationConfig: { targetLanguageCode: 'vi' } });
+      expect(setup.generationConfig).toEqual({ responseModalities: ['TEXT'] });
       expect(setup).not.toHaveProperty('translationConfig');
     } finally { await recognizer.stop(0); }
   });

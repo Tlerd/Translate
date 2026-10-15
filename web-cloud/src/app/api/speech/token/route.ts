@@ -4,7 +4,7 @@ import { getServerEnv } from '@/config/env.server';
 import { googleProviderErrorResponse } from '@/server/ai/google-provider-error';
 import { authenticate, makeErrorResponse } from '@/server/http/guard';
 import { speechLimitResponse } from '@/server/http/account-usage';
-import { LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
+import { LIVE_TRANSCRIPTION_MODEL, TRANSLATE_LIVE_MODEL, liveApiVersion } from '@/shared/transcription';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +73,7 @@ export async function POST(req: Request): Promise<Response> {
   // The token is bound to the model the browser will connect to, so a stale client that still asks for a
   // retired model (e.g. Flash Live) must fail clearly instead of getting a token for a different model.
   const model = typeof body === 'object' && body !== null && 'model' in body ? body.model : LIVE_TRANSCRIPTION_MODEL;
-  if (model !== LIVE_TRANSCRIPTION_MODEL) return makeErrorResponse(400, 'UNSUPPORTED_MODEL', 'Model nhận giọng Live không còn được hỗ trợ. Hãy tải lại trang để dùng phiên bản mới.');
+  if (model !== LIVE_TRANSCRIPTION_MODEL && model !== TRANSLATE_LIVE_MODEL) return makeErrorResponse(400, 'UNSUPPORTED_MODEL', 'Model nhận giọng Live không còn được hỗ trợ. Hãy tải lại trang để dùng phiên bản mới.');
 
   const apiKey = getServerEnv().GOOGLE_API_KEY;
   if (!apiKey) {
@@ -82,7 +82,8 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     const now = Date.now();
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
+    const apiVersion = liveApiVersion(model);
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion } });
     const token = await ai.authTokens.create({
       config: {
         uses: 1,
@@ -91,6 +92,7 @@ export async function POST(req: Request): Promise<Response> {
         liveConnectConstraints: {
           model,
           config: liveSpeechConfig(
+            model,
             transcriptionMode,
             languageCode as string | undefined,
             targetLanguageCode as string | undefined
@@ -104,7 +106,7 @@ export async function POST(req: Request): Promise<Response> {
       {
         token: token.name,
         model,
-        websocketUrl: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained',
+        websocketUrl: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.${apiVersion}.GenerativeService.BidiGenerateContentConstrained`,
         expiresAt: new Date(now + SESSION_LIMIT_MS).toISOString(),
         sessionLimitMs: SESSION_LIMIT_MS,
       },

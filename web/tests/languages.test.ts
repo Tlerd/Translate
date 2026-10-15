@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalLanguage, inputLanguage, inputLanguages, languageName, NEMOTRON_LANGUAGES, OUTPUT_LANGUAGES, TRANSCRIBE_LANGUAGES } from '@/shared/languages';
 import { liveSpeechConfig } from '@/shared/live-speech-config';
+import { LIVE_TRANSCRIPTION_MODEL } from '@/shared/transcription';
 
 describe('model language catalogues', () => {
   it('offers Soniox its 50+ non-Indian languages, keeping locale aliases for Japanese and Vietnamese', () => {
@@ -50,9 +51,9 @@ describe('model language catalogues', () => {
     expect(inputLanguage('vi', 'google-transcribe')).toBe('vi-VN');
   });
   it('sends the selected language in the Live model configuration', () => {
-    expect(liveSpeechConfig('verbatim', 'yue-Hant-HK').inputAudioTranscription?.languageCodes).toEqual(['yue-Hant-HK']);
-    expect(liveSpeechConfig('verbatim', 'auto').inputAudioTranscription?.languageCodes).toEqual([]);
-    expect(liveSpeechConfig('verbatim', 'ja').responseModalities).toEqual(['TEXT']);
+    expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'yue-Hant-HK').inputAudioTranscription?.languageCodes).toEqual(['yue-Hant-HK']);
+    expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'auto').inputAudioTranscription?.languageCodes).toEqual([]);
+    expect(liveSpeechConfig(LIVE_TRANSCRIPTION_MODEL, 'verbatim', 'ja').responseModalities).toEqual(['TEXT']);
   });
   it('supports none option for turning off translation in output languages and auto for input languages', () => {
     expect(canonicalLanguage('none')).toBe('none');

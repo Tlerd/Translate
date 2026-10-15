@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:browser": "node scripts/browser-smoke.cjs",
     "test:nemotron:browser": "node scripts/nemotron-browser-smoke.cjs",
+    "test:gemini:browser": "node scripts/gemini-translate-browser-smoke.cjs",
     "test:auth": "node scripts/auth-smoke.cjs",
     "test:audio": "node scripts/audio-smoke.cjs"
   },

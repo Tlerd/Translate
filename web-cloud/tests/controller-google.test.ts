@@ -10,6 +10,7 @@ interface PcmCaptureFixture {
   emit: (samples?: Float32Array, rate?: number) => void;
 }
 interface GoogleRecognizerFixture {
+  model?: string;
   mode?: string;
   targetLanguage?: string;
   pauseMs?: number;
@@ -32,6 +33,7 @@ const shared = vi.hoisted(() => ({
   events: [] as string[],
   recognizers: [] as GoogleRecognizerFixture[],
   liveRecognizers: [] as GoogleRecognizerFixture[],
+  liveStartFailures: [] as Error[],
   nemotronRecognizers: [] as GoogleRecognizerFixture[],
   captures: [] as PcmCaptureFixture[],
   recorders: [] as RecorderFixture[],
@@ -78,8 +80,12 @@ vi.mock('@/features/recording/gemini-live-recognition', () => ({
     pushes: Array<{ samples: Float32Array; rate: number }> = [];
     stopImpl: () => Promise<void> = async () => undefined;
     finalOnStop: (() => void) | null = null;
-    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string, public targetLanguage?: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
-    async start(epoch: number) { this.epoch = epoch; shared.events.push('recognizer.start'); }
+    constructor(callbacks: GoogleCallbacks, _language: string, public mode: string, public targetLanguage?: string, public model?: string) { this.callbacks = callbacks; shared.liveRecognizers.push(this); }
+    async start(epoch: number) {
+      this.epoch = epoch; shared.events.push('recognizer.start');
+      const failure = shared.liveStartFailures.shift();
+      if (failure) throw failure;
+    }
     pushPcm(samples: Float32Array, rate: number) { this.pushes.push({ samples, rate }); }
     finalizeUtterance() {}
     updateSettings = vi.fn();
@@ -173,6 +179,7 @@ describe('ClassroomController Google speech integration', () => {
 
   beforeEach(() => {
     shared.liveRecognizers.length = 0;
+    shared.liveStartFailures.length = 0;
     shared.nemotronRecognizers.length = 0;
     shared.events.length = 0; shared.recognizers.length = 0; shared.captures.length = 0; shared.recorders.length = 0;
     shared.createRecording.mockReset().mockResolvedValue(recording);
@@ -246,6 +253,35 @@ describe('ClassroomController Google speech integration', () => {
     expect(shared.nemotronRecognizers[3].pushes).toHaveLength(1);
     await controller.stop();
     expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+
+  it('routes a translated Gemini Live session to the translate model', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google', sourceLanguage: 'ja-JP', targetLanguage: 'vi' });
+    expect(shared.liveRecognizers[0]).toMatchObject({ model: 'gemini-3.5-live-translate-preview', targetLanguage: 'vi' });
+    await controller.stop();
+  });
+
+  it('uses Transcribe Live without native translation when no target language is set', async () => {
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google', targetLanguage: 'none' });
+    expect(shared.liveRecognizers[0].model).toBe('gemini-3.5-transcribe-live');
+    expect(shared.liveRecognizers[0].targetLanguage).toBeUndefined();
+    await controller.stop();
+  });
+
+  it('falls back to Transcribe Live plus text translation when the translate model rejects setup', async () => {
+    shared.liveStartFailures.push(Object.assign(new Error('model not found'), { setupRejected: true }));
+    const controller = new ClassroomController();
+    await controller.start({ speechProvider: 'google', sourceLanguage: 'ja-JP', targetLanguage: 'vi' });
+    await vi.waitFor(() => expect(shared.liveRecognizers).toHaveLength(2));
+    const fallback = shared.liveRecognizers[1];
+    expect(fallback.model).toBe('gemini-3.5-transcribe-live');
+    expect(fallback.targetLanguage).toBeUndefined();
+    expect(controller.snapshot().error).toBeNull();
+    fallback.emit('こんにちは。', true);
+    await vi.waitFor(() => expect(shared.streamTranslate).toHaveBeenCalled());
+    await controller.stop();
   });
 
   it('routes Translate Live through the Live recognizer and releases capture while a previous recognizer change is draining', async () => {

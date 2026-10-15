@@ -573,7 +573,7 @@ async function run() {
     await page.getByRole('button', { name: 'Lưu cài đặt', exact: true }).click();
     await page.getByRole('link', { name: 'Về phòng học', exact: true }).click();
     await page.getByRole('button', { name: 'Bắt đầu thu', exact: true }).click();
-    await page.getByText('Nhận giọng: Gemini 3.5 Transcribe Live · smart', { exact: true }).waitFor();
+    await page.getByText('Nhận giọng: Gemini 3.5 Live Translate · smart', { exact: true }).waitFor();
     await waitUntil(() => page.evaluate(() => window.__liveSockets.at(-1)?.mode === 'SMART'), 'Live smart socket setup');
     await page.evaluate(() => window.__liveSockets.at(-1).say('私は音楽が好きです。'));
     await page.getByText('Tôi thích âm nhạc.', { exact: true }).waitFor();

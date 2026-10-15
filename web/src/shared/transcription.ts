@@ -1,5 +1,29 @@
 export const TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe';
 export const LIVE_TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe-live';
+/** Speech-to-speech translation model; Transcribe Live ignores translationConfig and never translates. */
+export const TRANSLATE_LIVE_MODEL = 'gemini-3.5-live-translate-preview';
+export type LiveSpeechModel = typeof LIVE_TRANSCRIPTION_MODEL | typeof TRANSLATE_LIVE_MODEL;
+
+/** BCP-47 base subtag, e.g. 'vi-VN' -> 'vi'. */
+export function baseLanguage(code: string | undefined): string | undefined {
+  return code ? code.split('-')[0].toLowerCase() : undefined;
+}
+
+/** True when a target language is set and differs from a known source language. */
+export function needsLiveTranslation(sourceLanguage?: string, targetLanguage?: string): boolean {
+  if (!targetLanguage || targetLanguage === 'none') return false;
+  return !sourceLanguage || sourceLanguage === 'auto' || baseLanguage(sourceLanguage) !== baseLanguage(targetLanguage);
+}
+
+/** Gemini Live model for the 'google' provider: Live Translate when a translation is needed. */
+export function liveSpeechModel(sourceLanguage?: string, targetLanguage?: string): LiveSpeechModel {
+  return needsLiveTranslation(sourceLanguage, targetLanguage) ? TRANSLATE_LIVE_MODEL : LIVE_TRANSCRIPTION_MODEL;
+}
+
+/** Live Translate ephemeral tokens work only on v1beta; Transcribe Live keeps v1alpha. */
+export function liveApiVersion(model: LiveSpeechModel): 'v1alpha' | 'v1beta' {
+  return model === TRANSLATE_LIVE_MODEL ? 'v1beta' : 'v1alpha';
+}
 export type SpeechProvider = 'google' | 'google-transcribe' | 'nemotron' | 'soniox';
 
 export function normalizeSpeechProvider(value: unknown): SpeechProvider {
@@ -16,7 +40,7 @@ export function isLiveSpeechProvider(provider: SpeechProvider): boolean {
 export function speechProviderName(provider: SpeechProvider): string {
   if (provider === 'soniox') return 'Soniox · stt-rt-v5 (dịch trực tiếp, 60+ ngôn ngữ)';
   if (provider === 'nemotron') return 'Nemotron 3.5 ASR';
-  return provider === 'google' ? 'Gemini 3.5 Transcribe Live' : 'Gemini 3.5 Transcribe';
+  return provider === 'google' ? 'Gemini 3.5 Live Translate' : 'Gemini 3.5 Transcribe';
 }
 export const SPEAKER_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type SpeakerCount = typeof SPEAKER_COUNTS[number];

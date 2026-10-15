@@ -34,7 +34,7 @@ import type {
   AudioSegmentKind,
 } from '@/shared/recording';
 import { canonicalModelKey } from '@/shared/ai-model-keys';
-import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
+import { isAllowedSpeakerLabel, isSpeakerCount, normalizeTranscriptionMode, isLiveSpeechProvider, LIVE_TRANSCRIPTION_MODEL, liveSpeechModel, TRANSLATE_LIVE_MODEL, type SpeakerCount, type SpeechProvider, type TranscriptionMode } from '@/shared/transcription';
 
 /** Silence sent to Gemini after speech stops before the utterance is closed (Live API guide: at least 500 ms). */
 const GEMINI_SILENCE_TAIL_MS = 600;
@@ -139,6 +139,8 @@ export class ClassroomController {
 
   private speechRecognizer: GeminiTranscribeRecognizer | GeminiLiveRecognizer | NemotronRecognizer | SonioxRecognizer | null = null;
   private pcmCapture: GeminiPcmCapture | null = null;
+  /** Set when Live Translate refused setup; the session then uses Transcribe Live plus text translation. */
+  private nativeTranslateUnavailable = false;
   private releaseRecordingLock: (() => void) | null = null;
   private pcmPreparation: Promise<void> | null = null;
   private pcmAttached = false;
@@ -182,7 +184,7 @@ export class ClassroomController {
   private pcmPreRollMs = 0;
   private hasPendingTranscript = false;
   private providerSpeechEnded = false;
-  private seenSpeechSnapshots = new Map<string, { text: string; isFinal: boolean; revision: number }>();
+  private seenSpeechSnapshots = new Map<string, { text: string; isFinal: boolean; revision: number; translation?: string }>();
   private speechItemLocations = new Map<string, { captionId: number; blockId: number; startMs: number }>();
   private captionSpeakers = new Map<number, string>();
   private pendingCaptionWrites = new Set<Promise<void>>();
@@ -397,6 +399,7 @@ export class ClassroomController {
     this.hasPendingTranscript = false;
     this.providerSpeechEnded = false;
     this.speechRetries = 0;
+    this.nativeTranslateUnavailable = false;
     this.captionRevisions.clear();
     this.seenSpeechSnapshots.clear();
     this.speechItemLocations.clear();
@@ -576,11 +579,12 @@ export class ClassroomController {
           this.speechRetries = 0;
           const previousSnapshot = this.seenSpeechSnapshots.get(providerItemId);
           if (previousSnapshot && providerRevision <= previousSnapshot.revision) return;
-          if (previousSnapshot?.text === text && previousSnapshot.isFinal === isFinal) {
+          // A native-translation provider can update only the translation of an unchanged source.
+          if (previousSnapshot?.text === text && previousSnapshot.isFinal === isFinal && previousSnapshot.translation === translation) {
             this.seenSpeechSnapshots.set(providerItemId, { ...previousSnapshot, revision: providerRevision });
             return;
           }
-          this.seenSpeechSnapshots.set(providerItemId, { text, isFinal, revision: providerRevision });
+          this.seenSpeechSnapshots.set(providerItemId, { text, isFinal, revision: providerRevision, translation });
           if (this.seenSpeechSnapshots.size > 256) {
             const oldestId = this.seenSpeechSnapshots.keys().next().value;
             if (oldestId) this.seenSpeechSnapshots.delete(oldestId);
@@ -835,14 +839,29 @@ export class ClassroomController {
       ...baseCallbacks,
       onError: (message, errorEpoch, details) => { this.closeSpeechStream(recognizer); baseCallbacks.onError(message, errorEpoch, details); },
     };
-    const targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
+    let targetLanguage = this.state.targetLanguage !== 'none' ? this.state.targetLanguage : undefined;
+    let liveModel = liveSpeechModel(language, targetLanguage);
+    if (this.nativeTranslateUnavailable) liveModel = LIVE_TRANSCRIPTION_MODEL;
+    // Only Live Translate translates natively; Transcribe Live leaves translation to the text scheduler.
+    if (this.state.speechProvider === 'google' && liveModel !== TRANSLATE_LIVE_MODEL) targetLanguage = undefined;
     recognizer = this.state.speechProvider === 'soniox'
       ? new SonioxRecognizer(callbacks, language, this.state.recordingId ?? undefined, targetLanguage, this.state.speakerCount, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
       : this.state.speechProvider === 'nemotron'
       ? new NemotronRecognizer(callbacks, language, this.state.mode === 'readingPractice' ? this.state.readingPauseMs : this.state.pauseMs)
-      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, targetLanguage);
+      : new GeminiLiveRecognizer(callbacks, language, this.state.transcriptionMode, targetLanguage, liveModel);
     this.speechRecognizer = recognizer;
-    await recognizer.start(epoch, language, targetLanguage);
+    try {
+      await recognizer.start(epoch, language, targetLanguage);
+    } catch (error) {
+      if (this.state.speechProvider !== 'google' || liveModel !== TRANSLATE_LIVE_MODEL || !(error as { setupRejected?: boolean } | null)?.setupRejected) throw error;
+      // The key may lack the preview translate model. Keep the class running on
+      // Transcribe Live; captions are translated by the text model instead.
+      console.warn('Gemini Live Translate unavailable, using Transcribe Live:', error);
+      this.nativeTranslateUnavailable = true;
+      this.googleConnecting = false;
+      if (this.speechRecognizer === recognizer) this.speechRecognizer = null;
+      return this.openGoogleSpeech(epoch, language);
+    }
     this.openSpeechStream(recognizer, {
       provider: this.state.speechProvider,
       translated: this.state.speechProvider === 'soniox' ? sonioxTranslationPair(language, targetLanguage) !== null
@@ -1006,7 +1025,8 @@ export class ClassroomController {
     const existingIndex = this.state.captions.findIndex((c) => c.id === snapshot.captionId);
     const previous = existingIndex >= 0 ? this.state.captions[existingIndex] : undefined;
     let sourceHistory = previous?.sourceHistory;
-    if (previous?.isFinal && previous.source !== snapshot.text) {
+    // Streaming providers append late words to a closed sentence; only a real correction is history.
+    if (previous?.isFinal && previous.source !== snapshot.text && !snapshot.text.startsWith(previous.source)) {
       const history = [...(sourceHistory ?? []), { text: previous.source, revision: previous.revision }];
       sourceHistory = history.length > 20 ? [history[0], ...history.slice(-19)] : history;
     }

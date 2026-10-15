@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createToken } = vi.hoisted(() => ({ createToken: vi.fn() }));
 vi.mock('@google/genai', () => ({
-  Modality: { TEXT: 'TEXT' },
+  Modality: { TEXT: 'TEXT', AUDIO: 'AUDIO' },
   AudioTranscriptionConfigMode: { VERBATIM: 'VERBATIM', SMART: 'SMART' },
   GoogleGenAI: class {
     authTokens = { create: createToken };
@@ -55,15 +55,29 @@ describe('POST /api/speech/token', () => {
       .toEqual({ languageCodes: ['vi-VN'], mode: 'SMART' });
   });
 
-  it('constrains Live credentials to translationConfig when targetLanguageCode is provided', async () => {
+  it('mints v1beta Live Translate credentials with translated output transcription', async () => {
+    const response = await POST(new Request('http://localhost/api/speech/token', {
+      method: 'POST', body: JSON.stringify({ model: 'gemini-3.5-live-translate-preview', languageCode: 'ja-JP', targetLanguageCode: 'vi-VN' }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      model: 'gemini-3.5-live-translate-preview',
+      websocketUrl: expect.stringContaining('.v1beta.GenerativeService.BidiGenerateContentConstrained'),
+    });
+    const constraints = createToken.mock.calls[0][0].config.liveConnectConstraints;
+    expect(constraints).toMatchObject({
+      model: 'gemini-3.5-live-translate-preview',
+      config: { responseModalities: ['AUDIO'], inputAudioTranscription: {}, outputAudioTranscription: {} },
+    });
+    expect(constraints.config.translationConfig).toEqual({ targetLanguageCode: 'vi', echoTargetLanguage: true });
+  });
+
+  it('keeps Transcribe Live text-only because it does not translate', async () => {
     const response = await POST(new Request('http://localhost/api/speech/token', {
       method: 'POST', body: JSON.stringify({ languageCode: 'ja-JP', targetLanguageCode: 'vi-VN' }),
     }));
     expect(response.status).toBe(200);
-    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config.translationConfig).toEqual({
-      targetLanguageCode: 'vi-VN',
-      echoTargetLanguage: true,
-    });
+    expect(createToken.mock.calls[0][0].config.liveConnectConstraints.config).not.toHaveProperty('translationConfig');
   });
 
   it('mints Transcribe Live credentials by default with text output only', async () => {

@@ -1,12 +1,27 @@
-import { LIVE_TRANSCRIPTION_MODEL, type TranscriptionMode } from '@/shared/transcription';
-import { liveSpeechConfig } from '@/shared/live-speech-config';
+import { LIVE_TRANSCRIPTION_MODEL, TRANSLATE_LIVE_MODEL, type LiveSpeechModel, type TranscriptionMode } from '@/shared/transcription';
+import { liveSetupMessage, liveSpeechConfig } from '@/shared/live-speech-config';
 import type { SpeechRecognitionCallbacks } from './speech-recognition';
 import { floatToPcm16, Pcm16kResampler } from './pcm-resampler';
 
 const SESSION_LIMIT_MS = 10 * 60 * 1000;
 const SOCKET_OPEN = 1;
 const MAX_DRAIN_MS = 5000;
+/** Live Translate sends no final; its last deltas arrive within about two seconds of audioStreamEnd. */
+const TRANSLATE_DRAIN_MS = 3000;
+/** Live Translate input text trails the audio by about this long. */
+const TRANSCRIPT_LAG_MS = 1000;
+/** Without microphone evidence of new speech, a gap this long after a silence boundary starts a new caption. */
+const QUIET_NEW_UTTERANCE_MS = 2500;
+/** A closed caption that ends a sentence takes no lagging words; the next input starts a new one. */
+const SENTENCE_END = /[。．.!?！？]\s*$/;
+/** Microphone RMS that counts as speech for caption boundaries. */
+const SPEECH_RMS = 0.015;
 let connectionSequence = 0;
+
+/** Thrown when Gemini opened the socket but refused the session setup. */
+export class GeminiSetupRejectedError extends Error {
+  readonly setupRejected = true;
+}
 
 interface TokenResponse {
   token: string;
@@ -42,6 +57,12 @@ export class GeminiLiveRecognizer {
   private revision = 0;
   private currentTranslation: string | undefined = undefined;
   private lastSourceText = '';
+  // Live Translate streams appended deltas; these hold the open caption.
+  private inputText = '';
+  private outputText = '';
+  private locallyClosed = false;
+  private closedAt = 0;
+  private speechResumedAt = 0;
   private stopPromise: Promise<void> | null = null;
   private drainResolver: (() => void) | null = null;
   private sessionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,7 +75,8 @@ export class GeminiLiveRecognizer {
     callbacks: SpeechRecognitionCallbacks,
     languageCode = 'ja-JP',
     private transcriptionMode: TranscriptionMode = 'verbatim',
-    private targetLanguageCode?: string
+    private targetLanguageCode?: string,
+    private model: LiveSpeechModel = LIVE_TRANSCRIPTION_MODEL
   ) {
     this.callbacks = callbacks;
     this.languageCode = languageCode;
@@ -80,6 +102,7 @@ export class GeminiLiveRecognizer {
     this.revision = 0;
     this.currentTranslation = undefined;
     this.lastSourceText = '';
+    this.resetTranslateCaption();
     this.resampler = null;
     this.diagnosticsValue = {
       status: 'connecting', connectedAt: null, sessionDeadline: null, audioBytesSent: 0,
@@ -93,7 +116,7 @@ export class GeminiLiveRecognizer {
       body: JSON.stringify({
         languageCode,
         transcriptionMode: this.transcriptionMode,
-        model: LIVE_TRANSCRIPTION_MODEL,
+        model: this.model,
         ...(this.targetLanguageCode ? { targetLanguageCode: this.targetLanguageCode } : {}),
       }),
       cache: 'no-store',
@@ -117,6 +140,7 @@ export class GeminiLiveRecognizer {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      let opened = false;
       const setupTimeout = setTimeout(() => finish(new Error('Timed out waiting for Gemini session setup.')), 12_000);
       const finish = (error?: Error) => {
         if (settled) return;
@@ -127,35 +151,30 @@ export class GeminiLiveRecognizer {
       };
       socket.onopen = () => {
         if (generation !== this.connectionGeneration) return finish(new Error('Gemini session was superseded.'));
-        const { responseModalities, translationConfig, ...config } = liveSpeechConfig(
-          this.transcriptionMode,
-          languageCode,
-          this.targetLanguageCode
-        );
-        socket.send(JSON.stringify({
-          setup: {
-            model: `models/${LIVE_TRANSCRIPTION_MODEL}`,
-            // The Live API rejects translationConfig at the top of setup; it belongs in generationConfig.
-            generationConfig: { responseModalities, ...(translationConfig ? { translationConfig } : {}) },
-            ...config,
-          },
-        }));
+        opened = true;
+        socket.send(JSON.stringify(liveSetupMessage(
+          this.model,
+          liveSpeechConfig(this.model, this.transcriptionMode, languageCode, this.targetLanguageCode)
+        )));
       };
       socket.onmessage = (event) => {
         if (generation !== this.connectionGeneration) return;
-        this.handleMessage(event.data, finish, generation);
+        this.handleMessage(event.data, (error) => finish(error && opened ? new GeminiSetupRejectedError(error.message) : error), generation);
       };
+      // Before setupComplete, failures only reject start(); the caller decides
+      // whether to retry or fall back, so no session error is reported twice.
       socket.onerror = () => {
-        this.fail('Kết nối Gemini nhận giọng bị lỗi.', epoch, generation);
+        if (this.diagnosticsValue.status !== 'connecting') this.fail('Kết nối Gemini nhận giọng bị lỗi.', epoch, generation);
         finish(new Error('Gemini WebSocket connection failed.'));
       };
       socket.onclose = (event) => {
         if (generation === this.connectionGeneration && this.diagnosticsValue.status === 'draining') {
           this.finishDrain();
-        } else if (generation === this.connectionGeneration && this.diagnosticsValue.status !== 'stopped') {
+        } else if (generation === this.connectionGeneration && this.diagnosticsValue.status !== 'stopped' && this.diagnosticsValue.status !== 'connecting') {
           this.fail(`Gemini đã đóng kết nối (${event.code}).`, epoch, generation);
         }
-        finish(new Error(event.reason || 'Gemini WebSocket closed before setup completed.'));
+        const detail = `Gemini từ chối cấu hình phiên (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
+        finish(opened ? new GeminiSetupRejectedError(detail) : new Error(event.reason || 'Gemini WebSocket closed before setup completed.'));
       };
     }).catch((error: unknown) => {
       socket.close();
@@ -180,6 +199,12 @@ export class GeminiLiveRecognizer {
   /** Push raw Web Audio Float32 PCM at its native AudioContext sample rate. */
   public pushPcm(samples: Float32Array, inputRate: number): void {
     if (!this.socket || this.diagnosticsValue.status !== 'listening') return;
+    if (this.model === TRANSLATE_LIVE_MODEL && this.locallyClosed && !this.speechResumedAt && samples.length) {
+      let power = 0;
+      for (const sample of samples) power += sample * sample;
+      // Text for audio before the boundary is still arriving; split later, in handleTranslateDeltas.
+      if (Math.sqrt(power / samples.length) >= SPEECH_RMS) this.speechResumedAt = Date.now();
+    }
     if (!this.resampler || this.resamplerInputRate !== inputRate) {
       this.resampler = new Pcm16kResampler(inputRate);
       this.resamplerInputRate = inputRate;
@@ -190,7 +215,20 @@ export class GeminiLiveRecognizer {
   /** Ask Gemini to finalize the current utterance after client-detected silence. */
   public finalizeUtterance(): void {
     if (this.diagnosticsValue.status !== 'listening' || this.socket?.readyState !== SOCKET_OPEN) return;
+    // Live Translate never sends a final; the silence boundary closes its caption.
+    if (this.model === TRANSLATE_LIVE_MODEL && this.inputText && !this.locallyClosed) {
+      this.emitTranscript(this.inputText, true, this.translationText);
+      this.locallyClosed = true;
+      this.closedAt = Date.now();
+      this.speechResumedAt = 0;
+    }
     this.socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+  }
+
+  private get translationText(): string | undefined {
+    // Gemini prefixes each translated delta with a space, including a sentence's first one.
+    const text = this.outputText.trimStart();
+    return text || undefined;
   }
 
   private resamplerInputRate = 0;
@@ -209,7 +247,9 @@ export class GeminiLiveRecognizer {
       return;
     }
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000) as unknown as number[]);
+    }
     socket.send(JSON.stringify({
       realtimeInput: {
         audio: { data: btoa(binary), mimeType: 'audio/pcm;rate=16000' },
@@ -237,13 +277,17 @@ export class GeminiLiveRecognizer {
       const detail = 'message' in message.error && typeof message.error.message === 'string'
         ? message.error.message
         : 'Gemini Live API error.';
-      this.fail(detail, this.epoch, generation);
+      if (this.diagnosticsValue.status !== 'connecting') this.fail(detail, this.epoch, generation);
       setupDone(new Error(detail));
       return;
     }
     const content = message.serverContent && typeof message.serverContent === 'object'
       ? message.serverContent as Record<string, unknown>
       : undefined;
+    if (this.model === TRANSLATE_LIVE_MODEL) {
+      this.handleTranslateDeltas(content);
+      return;
+    }
     const interim = content?.interimInputTranscription;
     const final = content?.inputTranscription;
     const interimText = interim && typeof interim === 'object' && 'text' in interim ? interim.text : undefined;
@@ -284,6 +328,45 @@ export class GeminiLiveRecognizer {
     }
   }
 
+  /**
+   * Live Translate sends input and translated output as separate appended
+   * deltas while the speaker talks, with no final. Show every delta at once.
+   */
+  private handleTranslateDeltas(content: Record<string, unknown> | undefined): void {
+    if (!content) return;
+    const deltaText = (value: unknown) => value && typeof value === 'object' && 'text' in value && typeof value.text === 'string' ? value.text : '';
+    const input = deltaText(content.inputTranscription);
+    const output = deltaText(content.outputTranscription);
+    if (input) {
+      const now = Date.now();
+      if (this.locallyClosed && (
+        SENTENCE_END.test(this.inputText)
+        || (this.speechResumedAt && now - this.speechResumedAt >= TRANSCRIPT_LAG_MS)
+        || now - this.closedAt >= QUIET_NEW_UTTERANCE_MS
+      )) this.resetTranslateCaption();
+      this.inputText += input;
+    }
+    if (output) this.outputText += output;
+    if ((input || output) && this.inputText.trim()) this.emitTranscript(this.inputText, this.locallyClosed, this.translationText);
+    if (this.diagnosticsValue.status === 'draining' && (content.turnComplete || content.generationComplete)) this.finishTranslateCaption();
+  }
+
+  private finishTranslateCaption(): void {
+    if (this.inputText.trim() && !this.locallyClosed) this.emitTranscript(this.inputText, true, this.translationText);
+    this.resetTranslateCaption();
+    if (this.diagnosticsValue.status === 'draining') this.finishDrain();
+  }
+
+  private resetTranslateCaption(): void {
+    this.inputText = '';
+    this.outputText = '';
+    this.locallyClosed = false;
+    this.closedAt = 0;
+    this.speechResumedAt = 0;
+    this.activeUtteranceId = null;
+    this.revision = 0;
+  }
+
   private emitTranscript(text: string, isFinal: boolean, translation?: string): void {
     if (!this.activeUtteranceId) {
       this.activeUtteranceId = `gemini-${this.epoch}-${this.connectionId}-${++this.utteranceCounter}`;
@@ -315,10 +398,11 @@ export class GeminiLiveRecognizer {
             if (this.drainResolver === finish) this.drainResolver = null;
             resolve();
           };
-          const drainTimeout = setTimeout(finish, Math.max(0, Math.min(drainMs, MAX_DRAIN_MS)));
+          const drainTimeout = setTimeout(finish, Math.max(0, Math.min(drainMs, this.model === TRANSLATE_LIVE_MODEL ? TRANSLATE_DRAIN_MS : MAX_DRAIN_MS)));
           this.drainResolver = finish;
           socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
         });
+        if (this.model === TRANSLATE_LIVE_MODEL) this.finishTranslateCaption();
       }
       if (this.socket === socket) this.socket = null;
       try { socket?.close(1000, 'client stopped'); } catch { /* already closed */ }
